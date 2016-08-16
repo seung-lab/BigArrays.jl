@@ -1,4 +1,4 @@
-module BoundingBox
+
 
 export BoundingBox
 
@@ -14,6 +14,4 @@ function Base.size(bb::BoundingBox)
         push!(sz, length(idx))
     end
     (sz...)
-end
-
 end

@@ -1,6 +1,8 @@
+module AlignedBackend
+using ..BigArray
 using HDF5
 
-include("../boundingbox.jl")
+include("../types.jl")
 
 # register item of one section / hdf5 file
 typealias Tsecreg Dict{Symbol, Union{AbstractString, Int}}
@@ -131,3 +133,5 @@ function Base.getindex(A::AlignedBigArray, idx::Union{UnitRange, Int, Colon}...)
     end
     buf
 end
+
+end # end of module AlignedBackend
