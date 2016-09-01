@@ -19,7 +19,7 @@ type BigArray{C} <: AbstractArray
   chksz   ::Vector
 end
 
-function BigArray(ctx=store_context, fname::AbstractString="/tmp/bigarray",
+function BigArray(ctx=context, fname::AbstractString="/tmp/bigarray",
                   blksz::Vector=[4096,4096,512], chksz::Vector=[256,256,32])
   @show ctx
   BigArray{typeof(ctx)}(ctx, fname, blksz, chksz)

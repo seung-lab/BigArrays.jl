@@ -1,7 +1,3 @@
-
-
-export BoundingBox
-
 # type of bounding box
 typealias BoundingBox Tuple{UnitRange, UnitRange, UnitRange}
 

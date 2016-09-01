@@ -25,9 +25,9 @@ end
 # initialize the context
 function init(;kw_args...)
   @show kw_args
-  global store_context
-  store_context = H5sContext(;kw_args...)
-  @show store_context
+  global context
+  context = H5sContext(;kw_args...)
+  @show context
 end
 
 typealias H5sBigArray BigArray{H5sContext}
