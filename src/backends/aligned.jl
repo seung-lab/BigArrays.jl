@@ -1,8 +1,10 @@
-module AlignedBackend
+module AlignedBigArrays
 using ..BigArray
 using HDF5
 
 include("../types.jl")
+
+export AlignedBigArray
 
 # register item of one section / hdf5 file
 typealias Tsecreg Dict{Symbol, Union{AbstractString, Int}}

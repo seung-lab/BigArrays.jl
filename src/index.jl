@@ -13,7 +13,7 @@ function blockid(idx::UnitRange, bsz::Int)
     bid1
 end
 
-function blockid(idxs::Tuple, blocksz::Vector)
+function blockid(idxs::Tuple, blocksz::Union{Vector, Tuple})
     bidx = blockid(idxs[1], blocksz[1])
     bidy = blockid(idxs[2], blocksz[2])
     bidz = blockid(idxs[3], blocksz[3])
@@ -99,7 +99,7 @@ function gidx2blkidx(gidx::Union{UnitRange, Int}, bsz::Int)
     gidx - (bid-1)*bsz
 end
 
-function gidx2blkidx(gidxs::Tuple, blocksz::Vector)
+function gidx2blkidx(gidxs::Tuple, blocksz::Union{Vector, Tuple})
     @assert length(gidxs) == length(blocksz)
     blkix = gidx2blkidx(gidxs[1], blocksz[1])
     blkiy = gidx2blkidx(gidxs[2], blocksz[2])

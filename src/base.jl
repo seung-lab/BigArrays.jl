@@ -13,14 +13,14 @@ type BigArray{C} <: AbstractArray
 
   fname   ::AbstractString
   # block is a file
-  blksz   ::Vector
+  blockSize   ::Vector
   # the block file was continuously sub divided by chunks
   # chunk is a small 3D subvolume insize a block file
-  chksz   ::Vector
+  chunkSize   ::Vector
 end
 
 function BigArray(ctx=context, fname::AbstractString="/tmp/bigarray",
-                  blksz::Vector=[4096,4096,512], chksz::Vector=[256,256,32])
+                  blockSize::Vector=[4096,4096,512], chunkSize::Vector=[256,256,32])
   @show ctx
-  BigArray{typeof(ctx)}(ctx, fname, blksz, chksz)
+  BigArray{typeof(ctx)}(ctx, fname, blockSize, chunkSize)
 end

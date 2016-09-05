@@ -1,90 +1,92 @@
-module H5sBackend
+module H5sBigArrays
 using ..BigArray
 using HDF5
 using JSON
 
 include("../types.jl")
+include("../index.jl")
+
+export H5sBigArray, boundingbox
 
 #import ..BigArrays: Context, BigArray
 
 """
-context for constructing h5s big array
+definition of h5s big array
 """
-immutable H5sContext <: Context
-  compression ::AbstractString
+type H5sBigArray <: AbstractBigArray
+  dir             ::AbstractString
+  blockSize       ::NTuple{3, Int}
+  chunkSize       ::NTuple{3, Int}
+  compression     ::Symbol
 end
-
-function H5sContext(;compression::AbstractString="deflate")
-  H5sContext(compression)
-end
-
-function H5sContext(config::Tbaconf)
-  H5sContext(;compression=config[:compression])
-end
-
-# initialize the context
-function init(;kw_args...)
-  @show kw_args
-  global context
-  context = H5sContext(;kw_args...)
-  @show context
-end
-
-typealias H5sBigArray BigArray{H5sContext}
 
 """
-transform context to string
+default constructor
 """
-function ba2str(ba::H5sBigArray)
+function H5sBigArray()
+  H5sBigArray(string(tempname(), ".h5sbigarray"))
+end
+
+"""
+construct from a register file, which defines file architecture
+"""
+function H5sBigArray(dir::AbstractString; blockSize=(4096, 4096, 512), chunkSize=(128,128,16), compression=:deflate)
+  configFile = joinpath(dir, "config.json")
+  if isfile(configFile)
+    # string format of config
+    strreg = readall(configFile)
+    config = JSON.parse(strreg, dicttype=Dict{Symbol, Any})
+    ba = H5sBigArray(dir, config[:blockSize], config[:chunkSize])
+  else
+    if !isdir(dir)
+      mkdir(dir)
+    end
+    ba = H5sBigArray(dir, blockSize, chunkSize, compression)
+    updateconfigfile(ba)
+  end
+  ba
+end
+
+
+"""
+transform bigarray to string
+"""
+function ba2dict(ba::H5sBigArray)
   d = Dict{Symbol, Any}()
-  d[:fname] = ba.fname
-  d[:blksz] = ba.blksz
-  d[:chksz] = ba.chksz
-  d[:compression] = ba.context.compression
-  JSON.json(a)
+  d[:fname] = ba.dir
+  d[:blockSize] = ba.blockSize
+  d[:chunkSize] = ba.chunkSize
+  d[:compression] = ba.compression
+end
+
+function ba2str(ba::H5sBigArray)
+  d = ba2dict(ba)
+  JSON.json(d)
 end
 
 """
 update the config.json file
 """
 function updateconfigfile(ba::H5sBigArray)
-  fconfig = joinpath(dirname(ba.fname), "config.json")
-  if !isdir(dirname(ba.fname))
-    mkdir(dirname(ba.fname))
+  configFile = joinpath(dirname(ba.dir), "config.json")
+  if !isdir(ba.dir)
+    mkdir(ba.dir)
   end
   str = ba2str(ba)
-  save(fconfig, str)
-end
-"""
-default constructor
-"""
-function H5sBigArray()
-  ctx = H5sContext()
 
-  ba = H5sBigArray(ctx, "/tmp/h5sbigarray")
-  updateconfigfile(ba)
-  return ba
-end
-
-"""
-construct from a register file, which defines file architecture
-"""
-function H5sBigArray(fname::AbstractString)
-  @assert isdir(fname)
-  # string format of config
-  strreg = readall(joinpath(fname, "config.json"))
-  config = JSON.parse(strreg, dicttype=Tbaconf)
-  ctx = H5sContext(config[:compression])
-  H5sBigArray(ctx, fname, config[:blksz], config[:chksz])
+  # write to text file
+  f = open(configFile, "w")
+  write(f, str)
+  close(f)
 end
 
 """
 element type of big array
 """
 function Base.eltype(A::H5sBigArray)
-  files = readdir(dirname(A.prefix))
+  files = readdir(A.dir)
   for file in files
-    fname = joinpath(dirname(A.prefix), file)
+    fname = joinpath(A.dir, file)
     if ishdf5(fname)
       f = h5open(fname)
       ret = eltype(f["main"])
@@ -98,7 +100,7 @@ end
 number of dimension
 """
 function Base.ndims(A::H5sBigArray)
-  for file in readdir(dirname(A.prefix))
+  for file in readdir(A.dir)
     if ishdf5(file)
       f = h5open(file)
       ret = ndims(f["main"])
@@ -111,11 +113,11 @@ end
 """
 bounding box of the whole volume
 """
-function BoundingBox(A::H5sBigArray)
+function boundingbox(A::H5sBigArray)
   x1 = Inf;   x2 = -Inf;
   y1 = Inf;   y2 = -Inf;
   z1 = Inf;   z2 = -Inf;
-  for file in readdir(dirname(A.prefix))
+  for file in readdir(A.dir)
     if ishdf5(file)
       f = h5open(file)
       origin = f["origin"]
@@ -131,7 +133,8 @@ function BoundingBox(A::H5sBigArray)
   end
   (Int64(x1):Int64(x2), Int64(y1):Int64(y2), Int64(z1):Int64(z2))
 end
-bbox(A::H5sBigArray) = BoundingBox(A::H5sBigArray)
+
+bbox(A::H5sBigArray) = boundingbox(A::H5sBigArray)
 
 """
 compute size from bounding box
@@ -165,18 +168,18 @@ function Base.getindex(A::H5sBigArray, idx::Union{UnitRange, Int}...)
   sz = length(idx[3])
   # create buffer
   buf = zeros(eltype(A), (sx,sy,sz))
-  for giz in TGIdxs(idx[3], A.blksz[3])
-    for giy in TGIdxs(idx[2], A.blksz[2])
-      for gix in TGIdxs(idx[1], A.blksz[1])
+  for giz in TGIdxs(idx[3], A.blockSize[3])
+    for giy in TGIdxs(idx[2], A.blockSize[2])
+      for gix in TGIdxs(idx[1], A.blockSize[1])
         # get block id
-        bidx, bidy, bidz = blockid((gix,giy,giz), A.blksz)
+        bidx, bidy, bidz = blockid((gix,giy,giz), A.blockSize)
         # get hdf5 file name
-        fname = "$(A.prefix)$(bidx)_$(bidy)_$(bidz).h5"
+        fname = joinpath(A.dir, "chunk_$(bidx)_$(bidy)_$(bidz).h5")
         # if have data fill with data,
         # if not, no need to change, keep as zero
         if isfile(fname) && ishdf5(fname)
           # compute index in hdf5
-          blkix, blkiy, blkiz = gidx2blkidx((gix,giy,giz), A.blksz)
+          blkix, blkiy, blkiz = gidx2blkidx((gix,giy,giz), A.blockSize)
           # compute index in buffer
           bufix, bufiy, bufiz = gidx2bufidx((gix,giy,giz), idx)
           # assign data value, preserve existing value
@@ -200,15 +203,15 @@ function Base.setindex!(A::H5sBigArray, buf::Array, idx::Union{UnitRange, Int}..
   @assert length(idx[2]) == size(buf, 2)
   @assert length(idx[3]) == size(buf, 3)
 
-  for giz in TGIdxs(idx[3], A.blksz[3])
-    for giy in TGIdxs(idx[2], A.blksz[2])
-      for gix in TGIdxs(idx[1], A.blksz[1])
+  for giz in TGIdxs(idx[3], A.blockSize[3])
+    for giy in TGIdxs(idx[2], A.blockSize[2])
+      for gix in TGIdxs(idx[1], A.blockSize[1])
         # get block id
-        bidx, bidy, bidz = blockid((gix,giy,giz), A.blksz)
+        bidx, bidy, bidz = blockid((gix,giy,giz), A.blockSize)
         # get hdf5 file name
-        fname = "$(A.prefix)$(bidx)_$(bidy)_$(bidz).h5"
+        fname = joinpath(A.dir, "chunk_$(bidx)_$(bidy)_$(bidz).h5")
         # compute index in hdf5
-        blkix, blkiy, blkiz = gidx2blkidx((gix,giy,giz), A.blksz)
+        blkix, blkiy, blkiz = gidx2blkidx((gix,giy,giz), A.blockSize)
         # compute index in buffer
         bufix, bufiy, bufiz = gidx2bufidx((gix,giy,giz), idx)
         # put buffer subarray to hdf5, reserve existing values
@@ -216,36 +219,35 @@ function Base.setindex!(A::H5sBigArray, buf::Array, idx::Union{UnitRange, Int}..
           try
               if isfile(fname) && ishdf5(fname)
                   f = h5open(fname, "r+")
+                  @assert eltype(f["main"])==eltype(buf)
               else
                   f = h5open(fname, "w")
               end
+
+              # assign values
+              if A.compression == :deflate
+                dset = d_create(f, "main", datatype(eltype(buf)),
+                      dataspace(A.blockSize[1], A.blockSize[2], A.blockSize[3]),
+                      "chunk", (A.chunkSize[1],A.chunkSize[2],A.chunkSize[3]),
+                      "shuffle", (), "deflate", 3)
+              elseif A.compression == :blosc
+                dset = d_create(f, "main", datatype(eltype(buf)),
+                      dataspace(A.blockSize[1], A.blockSize[2], A.blockSize[3]),
+                      "chunk", (A.chunkSize[1],A.chunkSize[2],A.chunkSize[3]),
+                      "blosc", 3)
+              end
+              # @show idx
+              info("save ($gix, $giy, $giz) from buffer ($bufix, $bufiy, $bufiz) to ($blkix, $blkiy, $blkiz) of $(fname)")
+              # @show bufix, bufiy, bufiz
+              # @show blkix, blkiy, blkiz
+              dset[blkix, blkiy, blkiz] = buf[bufix, bufiy, bufiz]
+              close(f)
+              break
           catch
-              warn("unable to open $fname, will try later...")
+              warn("open and write $fname failed, will try 5 seconds later...")
               sleep(5)
           end
         end
-        if exists(f, "main")
-          dset = f["main"]
-          @assert eltype(dset)==eltype(buf)
-        else
-          if A.context.compression == "deflate"
-            dset = d_create(f, "main", datatype(eltype(buf)),
-                  dataspace(A.blksz[1], A.blksz[2], A.blksz[3]),
-                  "chunk", (A.chksz[1],A.chksz[2],A.chksz[3]),
-                  "shuffle", (), "deflate", 3)
-          elseif A.context.compression == "blosc"
-            dset = d_create(f, "main", datatype(eltype(buf)),
-                  dataspace(A.blksz[1], A.blksz[2], A.blksz[3]),
-                  "chunk", (A.chksz[1],A.chksz[2],A.chksz[3]),
-                  "blosc", 3)
-          end
-        end
-        # @show idx
-        info("save ($gix, $giy, $giz) from buffer ($bufix, $bufiy, $bufiz) to ($blkix, $blkiy, $blkiz) of $(fname)")
-        # @show bufix, bufiy, bufiz
-        # @show blkix, blkiy, blkiz
-        dset[blkix, blkiy, blkiz] = buf[bufix, bufiy, bufiz]
-        close(f)
       end
     end
   end
