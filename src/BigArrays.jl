@@ -7,4 +7,5 @@ include("BoundingBox.jl")
 include("index.jl")
 include("base.jl")
 include("backends.jl")
+include("chunk.jl")
 end
