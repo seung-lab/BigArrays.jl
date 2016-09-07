@@ -1,5 +1,5 @@
 module AlignedBigArrays
-using ..BigArray
+using ..BigArrays
 using HDF5
 
 include("../types.jl")

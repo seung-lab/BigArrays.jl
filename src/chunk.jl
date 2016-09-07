@@ -3,13 +3,48 @@ using HDF5
 
 abstract AbstractChunk
 
-#include(joinpath(Pkg.dir(), "EMIRT/plugins/cloud.jl"))
-export Chunk, crop_border, physical_offset, save, savechunk, readchunk
+export Chunk, blendchunk, crop_border, physical_offset, save, savechunk, readchunk
 
 type Chunk <: AbstractChunk
-    data::Union{Array, SegMST}                  # could be 3-5 Dimension dataay
+    data::Union{Array, SegMST} # could be 3 or 4 Dimensional array
     origin::Vector{UInt32}     # measured by voxel number
     voxelsize::Vector{UInt32}  # physical size of each voxel
+end
+
+"""
+blend chunk to BigArray
+"""
+function blendchunk(ba::AbstractBigArray, chunk::Chunk)
+  x1 = chunk.origin[1];   x2 = x1 + size(chunk)[1] - 1
+  y1 = chunk.origin[2];   y2 = y1 + size(chunk)[2] - 1
+  z1 = chunk.origin[3];   z2 = z1 + size(chunk)[3] - 1
+  if ndims(chunk) == 3 && isa(chunk.data, Array)
+    ba[x1:x2, y1:y2, z1:z2] = chunk.data
+  elseif ndims(chunk) == 3 && isa(chunk.data, SegMST)
+    ba[x1:x2, y1:y2, z1:z2] = chunk.data.segmentation
+  elseif ndims(chunk) == 4
+    ba[x1:x2, y1:y2, z1:z2, :] = chunk.data
+  end
+end
+
+function Base.size( chunk::Chunk )
+  if isa(chunk.data, Array)
+    return size(chunk.data)
+  elseif isa(chunk.data, SegMST)
+    return size(chunk.data.segmentation)
+  else
+    error("the chunk data type is invalid: $(typeof(chunk.data))")
+  end
+end
+
+function Base.ndims( chunk::Chunk )
+  if isa(chunk.data, Array)
+    return ndims(chunk.data)
+  elseif isa(chunk.data, SegMST)
+    return ndims(chunk.data.segmentation)
+  else
+    error("the chunk data type is invalid: $(typeof(chunk.data))")
+  end
 end
 
 """

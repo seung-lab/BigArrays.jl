@@ -1,14 +1,14 @@
 module H5sBigArrays
-using ..BigArray
+using ..BigArrays
 using HDF5
 using JSON
 
-include("../types.jl")
-include("../index.jl")
+# import BigArrays.
+# include("../types.jl")
+# include("../index.jl")
+const H5DatasetName = "main"
 
 export H5sBigArray, boundingbox
-
-#import ..BigArrays: Context, BigArray
 
 """
 definition of h5s big array
@@ -17,7 +17,7 @@ type H5sBigArray <: AbstractBigArray
   dir             ::AbstractString
   blockSize       ::NTuple{3, Int}
   chunkSize       ::NTuple{3, Int}
-  compression     ::Symbol
+  compression     ::Symbol          # deflate || blosc
 end
 
 """
@@ -89,7 +89,7 @@ function Base.eltype(A::H5sBigArray)
     fname = joinpath(A.dir, file)
     if ishdf5(fname)
       f = h5open(fname)
-      ret = eltype(f["main"])
+      ret = eltype(f[H5DatasetName])
       close(f)
       return ret
     end
@@ -103,7 +103,7 @@ function Base.ndims(A::H5sBigArray)
   for file in readdir(A.dir)
     if ishdf5(file)
       f = h5open(file)
-      ret = ndims(f["main"])
+      ret = ndims(f[H5DatasetName])
       close(f)
       return ret
     end
@@ -121,7 +121,7 @@ function boundingbox(A::H5sBigArray)
     if ishdf5(file)
       f = h5open(file)
       origin = f["origin"]
-      sz = ndims(f["main"])
+      sz = ndims(f[H5DatasetName])
 
       x1 = min(x1, origin[1])
       y1 = min(y1, origin[2])
@@ -159,18 +159,26 @@ end
 extract chunk from a bigarray
 only works for 3D now.
 """
-function Base.getindex(A::H5sBigArray, idx::Union{UnitRange, Int}...)
+function Base.getindex(A::H5sBigArray, idxes::Union{UnitRange, Int, Colon}...)
   # only support 3D image now, could support arbitrary dimensions in the future
-  @assert length(idx) == 3
+  @assert length(idxes) == 3 || length(idxes)==4
   # allocate memory
-  sx = length(idx[1])
-  sy = length(idx[2])
-  sz = length(idx[3])
+  sx = length(idxes[1])
+  sy = length(idxes[2])
+  sz = length(idxes[3])
+  if length(idxes) == 4
+    # only support
+    sc = 3
+  end
   # create buffer
-  buf = zeros(eltype(A), (sx,sy,sz))
-  for giz in TGIdxs(idx[3], A.blockSize[3])
-    for giy in TGIdxs(idx[2], A.blockSize[2])
-      for gix in TGIdxs(idx[1], A.blockSize[1])
+  if length(idxes)==3
+    buf = zeros(eltype(A), (sx,sy,sz))
+  else
+    buf = zeros(eltype(A), (sx,sy,sz,sc))
+  end
+  for giz in GlobalIndex(idxes[3], A.blockSize[3])
+    for giy in GlobalIndex(idxes[2], A.blockSize[2])
+      for gix in GlobalIndex(idxes[1], A.blockSize[1])
         # get block id
         bidx, bidy, bidz = blockid((gix,giy,giz), A.blockSize)
         # get hdf5 file name
@@ -179,12 +187,18 @@ function Base.getindex(A::H5sBigArray, idx::Union{UnitRange, Int}...)
         # if not, no need to change, keep as zero
         if isfile(fname) && ishdf5(fname)
           # compute index in hdf5
-          blkix, blkiy, blkiz = gidx2blkidx((gix,giy,giz), A.blockSize)
+          blkix, blkiy, blkiz = globalIndexes2blockIndexes((gix,giy,giz), A.blockSize)
           # compute index in buffer
-          bufix, bufiy, bufiz = gidx2bufidx((gix,giy,giz), idx)
+          bufix, bufiy, bufiz = globalIndexes2bufferIndexes((gix,giy,giz), idxes)
           # assign data value, preserve existing value
           info("read ($(gix), $giy, $giz) from ($(blkix), $(blkiy), $(blkiz)) of $(fname) to buffer ($bufix, $bufiy, $bufiz)")
-          buf[bufix, bufiy, bufiz] = h5read(fname, "main", (blkix,blkiy,blkiz))
+          if length(idxes)==3
+            buf[bufix, bufiy, bufiz] = h5read(fname, H5DatasetName, (blkix,blkiy,blkiz))
+          else
+            f = h5open(fname)
+            buf[bufix, bufiy, bufiz, :] = f[H5DatasetName][blkix, blkiy, blkiz, :]
+            close(f)
+          end
         end
       end
     end
@@ -196,51 +210,72 @@ end
 """
 put small array to big array
 """
-function Base.setindex!(A::H5sBigArray, buf::Array, idx::Union{UnitRange, Int}...)
+function Base.setindex!(A::H5sBigArray, buf::Array, idxes::Union{UnitRange, Int, Colon}...)
   # only support 3D now
-  @assert length(idx)==3
-  @assert length(idx[1]) == size(buf, 1)
-  @assert length(idx[2]) == size(buf, 2)
-  @assert length(idx[3]) == size(buf, 3)
+  @assert ndims(buf)==3 || ndims(buf)==4 || size(buf,4)==3
+  @assert length(idxes)==3 || length(idxes)==4
+  @assert length(idxes[1]) == size(buf, 1)
+  @assert length(idxes[2]) == size(buf, 2)
+  @assert length(idxes[3]) == size(buf, 3)
 
-  for giz in TGIdxs(idx[3], A.blockSize[3])
-    for giy in TGIdxs(idx[2], A.blockSize[2])
-      for gix in TGIdxs(idx[1], A.blockSize[1])
+  for giz in GlobalIndex(idxes[3], A.blockSize[3])
+    for giy in GlobalIndex(idxes[2], A.blockSize[2])
+      for gix in GlobalIndex(idxes[1], A.blockSize[1])
         # get block id
         bidx, bidy, bidz = blockid((gix,giy,giz), A.blockSize)
         # get hdf5 file name
         fname = joinpath(A.dir, "chunk_$(bidx)_$(bidy)_$(bidz).h5")
         # compute index in hdf5
-        blkix, blkiy, blkiz = gidx2blkidx((gix,giy,giz), A.blockSize)
+        blkix, blkiy, blkiz = globalIndexes2blockIndexes((gix,giy,giz), A.blockSize)
         # compute index in buffer
-        bufix, bufiy, bufiz = gidx2bufidx((gix,giy,giz), idx)
+        bufix, bufiy, bufiz = globalIndexes2bufferIndexes((gix,giy,giz), idxes)
         # put buffer subarray to hdf5, reserve existing values
         while true
           try
               if isfile(fname) && ishdf5(fname)
                   f = h5open(fname, "r+")
-                  @assert eltype(f["main"])==eltype(buf)
+                  dataSet = f[H5DatasetName]
+                  @assert eltype(f[H5DatasetName])==eltype(buf)
               else
                   f = h5open(fname, "w")
+                  # assign values
+                  if A.compression == :deflate
+                    if ndims(buf)==3
+                      dataSet = d_create(f, H5DatasetName, datatype(eltype(buf)),
+                            dataspace(A.blockSize[1], A.blockSize[2], A.blockSize[3]),
+                            "chunk", (A.chunkSize[1],A.chunkSize[2],A.chunkSize[3]),
+                            "shuffle", (), "deflate", 3)
+                    else
+                      dataSet = d_create(f, H5DatasetName, datatype(eltype(buf)),
+                            dataspace(A.blockSize[1], A.blockSize[2], A.blockSize[3], 3),
+                            "chunk", (A.chunkSize[1],A.chunkSize[2],A.chunkSize[3], 3),
+                            "shuffle", (), "deflate", 3)
+                    end
+                  elseif A.compression == :blosc
+                    if ndims(buf)==3
+                      dataSet = d_create(f, H5DatasetName, datatype(eltype(buf)),
+                            dataspace(A.blockSize[1], A.blockSize[2], A.blockSize[3]),
+                            "chunk", (A.chunkSize[1],A.chunkSize[2],A.chunkSize[3]),
+                            "blosc", 3)
+                    else
+                      dataSet = d_create(f, H5DatasetName, datatype(eltype(buf)),
+                            dataspace(A.blockSize[1], A.blockSize[2], A.blockSize[3], 3),
+                            "chunk", (A.chunkSize[1],A.chunkSize[2],A.chunkSize[3], 3),
+                            "blosc", 3)
+                    end
+                  end
               end
 
-              # assign values
-              if A.compression == :deflate
-                dset = d_create(f, "main", datatype(eltype(buf)),
-                      dataspace(A.blockSize[1], A.blockSize[2], A.blockSize[3]),
-                      "chunk", (A.chunkSize[1],A.chunkSize[2],A.chunkSize[3]),
-                      "shuffle", (), "deflate", 3)
-              elseif A.compression == :blosc
-                dset = d_create(f, "main", datatype(eltype(buf)),
-                      dataspace(A.blockSize[1], A.blockSize[2], A.blockSize[3]),
-                      "chunk", (A.chunkSize[1],A.chunkSize[2],A.chunkSize[3]),
-                      "blosc", 3)
-              end
+
               # @show idx
               info("save ($gix, $giy, $giz) from buffer ($bufix, $bufiy, $bufiz) to ($blkix, $blkiy, $blkiz) of $(fname)")
               # @show bufix, bufiy, bufiz
               # @show blkix, blkiy, blkiz
-              dset[blkix, blkiy, blkiz] = buf[bufix, bufiy, bufiz]
+              if ndims(buf)==3
+                dataSet[blkix, blkiy, blkiz] = buf[bufix, bufiy, bufiz]
+              else
+                dataSet[blkix, blkiy, blkiz, :] = buf[bufix, bufiy, bufiz, :]
+              end
               close(f)
               break
           catch
