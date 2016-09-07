@@ -1,92 +1,93 @@
+export blockid, GlobalIndex, globalRange2localRange, globalIndex2blockIndex, globalIndex2bufferIndex, globalIndexes2bufferIndexes, globalIndexes2blockIndexes
 
 """
 get blockid from a coordinate
 """
-function blockid(c::Int, bsz::Int)
-    div(c-1, bsz)+1
+function blockid(c::Int, blockSize::Integer)
+    div(c-1, blockSize)+1
 end
 
-function blockid(idx::UnitRange, bsz::Int)
-    bid1 = blockid(idx.start, bsz)
-    bid2 = blockid(idx.stop, bsz)
+function blockid(idx::UnitRange, blockSize::Integer)
+    bid1 = blockid(idx.start, blockSize)
+    bid2 = blockid(idx.stop, blockSize)
     @assert bid1 == bid2
     bid1
 end
 
-function blockid(idxs::Tuple, blocksz::Union{Vector, Tuple})
-    bidx = blockid(idxs[1], blocksz[1])
-    bidy = blockid(idxs[2], blocksz[2])
-    bidz = blockid(idxs[3], blocksz[3])
+function blockid(idxes::Tuple, blockSize::Union{Vector, Tuple})
+    bidx = blockid(idxes[1], blockSize[1])
+    bidy = blockid(idxes[2], blockSize[2])
+    bidz = blockid(idxes[3], blockSize[3])
     (bidx, bidy, bidz)
 end
 
 """
 transform one global UnitRange (inside a block) to local UnitRange in a block
 """
-function gr2lr(gr::UnitRange, bsz::Int)
+function globalRange2localRange(globalRange::UnitRange, blockSize::Int)
     # make sure that this range is within a block
-    @assert length(gr) <= bsz
+    @assert length(globalRange) <= blockSize
     # they belong to a same block
-    @assert blockid(gr.start, bsz) == blockid(gr.stop, bsz)
+    @assert blockid(globalRange.start, blockSize) == blockid(globalRange.stop, blockSize)
     # block id
-    ((gr.start-1)%bsz+1) : ((gr.stop-1)%bsz+1)
+    ((globalRange.start-1)%blockSize+1) : ((globalRange.stop-1)%blockSize+1)
 end
 
 """
 transform global UnitRange (inside a block) to local UnitRange
 """
-function gr2lr(gr::Int, bsz::Int)
-    (gr-1)%bsz+1
+function globalRange2localRange(globalRange::Int, blockSize::Int)
+    (globalRange-1)%blockSize+1
 end
 
 # iterater of global index
-type TGIdxs
+type GlobalIndex
     idx::Union{UnitRange, Int}
-    bsz::Int
+    blockSize::Int
 end
 
-function Base.start(gidxs::TGIdxs)
-    if isa(gidxs.idx, Int)
-        # @show gidxs
-        return gidxs.idx
+function Base.start(globalIndex::GlobalIndex)
+    if isa(globalIndex.idx, Int)
+        # @show globalIndex
+        return globalIndex.idx
     else
-        @assert isa(gidxs.idx, UnitRange)
-        start = gidxs.idx.start
+        @assert isa(globalIndex.idx, UnitRange)
+        start = globalIndex.idx.start
         # block id of the first
-        bid = blockid(gidxs.idx.start, gidxs.bsz)
-        stop = min(gidxs.idx.stop, bid*gidxs.bsz)
-        # @show gidxs, start, stop, bid
+        bid = blockid(globalIndex.idx.start, globalIndex.blockSize)
+        stop = min(globalIndex.idx.stop, bid*globalIndex.blockSize)
+        # @show globalIndex, start, stop, bid
         return start:stop
     end
 end
 
-function Base.done(gidxs::TGIdxs, idx::UnitRange)
-    idx.start > gidxs.idx.stop
+function Base.done(globalIndex::GlobalIndex, idx::UnitRange)
+    idx.start > globalIndex.idx.stop
 end
 
-function Base.done(gidxs::TGIdxs, idx::Int)
-    idx > gidxs.idx
+function Base.done(globalIndex::GlobalIndex, idx::Int)
+    idx > globalIndex.idx
 end
 
-function Base.done(gidxs::TGIdxs, state::Tuple)
+function Base.done(globalIndex::GlobalIndex, state::Tuple)
     idx, bid = state
-    done(gidxs, idx)
+    done(globalIndex, idx)
 end
 
-function Base.next(gidxs::TGIdxs, idx::UnitRange)
+function Base.next(globalIndex::GlobalIndex, idx::UnitRange)
     # next blockid
-    nbid = blockid(idx, gidxs.bsz) + 1
+    nbid = blockid(idx, globalIndex.blockSize) + 1
     # get new index state
-    nstart = (nbid-1) * gidxs.bsz + 1
-    nstop = min(gidxs.idx.stop, idx.stop+gidxs.bsz)
+    nstart = (nbid-1) * globalIndex.blockSize + 1
+    nstop = min(globalIndex.idx.stop, idx.stop+globalIndex.blockSize)
     # return current index and next index
     return idx, nstart:nstop
 end
 
-function Base.next(gidxs::TGIdxs, idx::Int)
+function Base.next(globalIndex::GlobalIndex, idx::Int)
     # next block id
-    nbid = blockid(idx, gidxs.bsz) + 1
-    nstart = (nbid-1) * gidxs.bsz + 1
+    nbid = blockid(idx, globalIndex.blockSize) + 1
+    nstart = (nbid-1) * globalIndex.blockSize + 1
     # return current index and next index
     return idx, nstart
  end
@@ -94,17 +95,22 @@ function Base.next(gidxs::TGIdxs, idx::Int)
 """
 compute the index inside a block based on global index, block size and block id
 """
-function gidx2blkidx(gidx::Union{UnitRange, Int}, bsz::Int)
-    bid = blockid(gidx, bsz)
-    gidx - (bid-1)*bsz
+function globalIndex2blockIndex(globalIndex::Union{UnitRange, Int}, blockSize::Integer)
+    bid = blockid(globalIndex, blockSize)
+    globalIndex - (bid-1)*blockSize
 end
 
-function gidx2blkidx(gidxs::Tuple, blocksz::Union{Vector, Tuple})
-    @assert length(gidxs) == length(blocksz)
-    blkix = gidx2blkidx(gidxs[1], blocksz[1])
-    blkiy = gidx2blkidx(gidxs[2], blocksz[2])
-    blkiz = gidx2blkidx(gidxs[3], blocksz[3])
+function globalIndexes2blockIndexes(globalIndexes::Tuple, blockSize::Union{Vector, Tuple})
+    # @assert length(globalIndexes) == length(blockSize)
+    blkix = globalIndex2blockIndex(globalIndexes[1], blockSize[1])
+    blkiy = globalIndex2blockIndex(globalIndexes[2], blockSize[2])
+    blkiz = globalIndex2blockIndex(globalIndexes[3], blockSize[3])
     (blkix, blkiy, blkiz)
+    # if length(globalIndexes)==3
+    #   return (blkix, blkiy, blkiz)
+    # else
+    #   return (blkix, blkiy, blkiz, :)
+    # end
 end
 
 function getstart(idx::UnitRange)
@@ -117,16 +123,23 @@ end
 """
 compute buffer index
 """
-function gidx2bufidx(gidx::Union{UnitRange, Int}, bufidx::Union{Int, UnitRange})
-    # @show gidx, bufidx
-    bufstart = getstart(bufidx)
-    gidx - bufstart + 1
+function globalIndex2bufferIndex(globalIndex::Union{UnitRange, Int, Colon}, bufferIndex::Union{Int, UnitRange, Colon})
+    # @show globalIndex, bufferIndex
+    bufstart = getstart(bufferIndex)
+    globalIndex - bufstart + 1
 end
 
-function gidx2bufidx(gidxs::Tuple, bufidxs::Tuple)
-    @assert length(gidxs) == length(bufidxs)
-    bufix = gidx2bufidx(gidxs[1], bufidxs[1])
-    bufiy = gidx2bufidx(gidxs[2], bufidxs[2])
-    bufiz = gidx2bufidx(gidxs[3], bufidxs[3])
+function globalIndexes2bufferIndexes(globalIndexes::Tuple, bufferIndexes::Tuple)
+  # @show globalIndexes
+  # @show bufferIndexes
+    # @assert length(globalIndexes) == length(bufferIndexes)
+    bufix = globalIndex2bufferIndex(globalIndexes[1], bufferIndexes[1])
+    bufiy = globalIndex2bufferIndex(globalIndexes[2], bufferIndexes[2])
+    bufiz = globalIndex2bufferIndex(globalIndexes[3], bufferIndexes[3])
     (bufix, bufiy, bufiz)
+    # if length(globalIndexes)==3
+    #   return (bufix, bufiy, bufiz)
+    # else
+    #   return (bufix, bufiy, bufiz, :)
+    # end
 end
