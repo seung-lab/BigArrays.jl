@@ -7,23 +7,36 @@ export Chunk, blendchunk, crop_border, physical_offset, save, savechunk, readchu
 
 type Chunk <: AbstractChunk
     data::Union{Array, SegMST} # could be 3 or 4 Dimensional array
-    origin::Vector{UInt32}     # measured by voxel number
-    voxelsize::Vector{UInt32}  # physical size of each voxel
+    origin::Vector{Int}     # measured by voxel number
+    voxelsize::Vector{Int}  # physical size of each voxel
 end
 
 """
 blend chunk to BigArray
 """
 function blendchunk(ba::AbstractBigArray, chunk::Chunk)
+  gr = global_range( chunk )
+  @show gr
+  if ndims(chunk) == 3 && isa(chunk.data, Array)
+    ba[gr[1], gr[2], gr[3]] = chunk.data
+  elseif ndims(chunk) == 3 && isa(chunk.data, SegMST)
+    ba[gr[1], gr[2], gr[3]] = chunk.data.segmentation
+  elseif ndims(chunk) == 4
+    ba[gr[1], gr[2], gr[3], gr[4]] = chunk.data
+  end
+end
+
+"""
+get global index range
+"""
+function global_range( chunk::Chunk )
   x1 = chunk.origin[1];   x2 = x1 + size(chunk)[1] - 1
   y1 = chunk.origin[2];   y2 = y1 + size(chunk)[2] - 1
   z1 = chunk.origin[3];   z2 = z1 + size(chunk)[3] - 1
-  if ndims(chunk) == 3 && isa(chunk.data, Array)
-    ba[x1:x2, y1:y2, z1:z2] = chunk.data
-  elseif ndims(chunk) == 3 && isa(chunk.data, SegMST)
-    ba[x1:x2, y1:y2, z1:z2] = chunk.data.segmentation
+  if ndims(chunk) == 3
+    return( x1:x2, y1:y2, z1:z2 )
   elseif ndims(chunk) == 4
-    ba[x1:x2, y1:y2, z1:z2, :] = chunk.data
+    return( x1:x2, y1:y2, z1:z2, :)
   end
 end
 

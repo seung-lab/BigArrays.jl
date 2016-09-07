@@ -3,21 +3,21 @@ export blockid, GlobalIndex, globalRange2localRange, globalIndex2blockIndex, glo
 """
 get blockid from a coordinate
 """
-function blockid(c::Int, blockSize::Int)
+function blockid(c::Int, blockSize::Integer)
     div(c-1, blockSize)+1
 end
 
-function blockid(idx::UnitRange, blockSize::Int)
+function blockid(idx::UnitRange, blockSize::Integer)
     bid1 = blockid(idx.start, blockSize)
     bid2 = blockid(idx.stop, blockSize)
     @assert bid1 == bid2
     bid1
 end
 
-function blockid(idxs::Tuple, blockSize::Union{Vector, Tuple})
-    bidx = blockid(idxs[1], blockSize[1])
-    bidy = blockid(idxs[2], blockSize[2])
-    bidz = blockid(idxs[3], blockSize[3])
+function blockid(idxes::Tuple, blockSize::Union{Vector, Tuple})
+    bidx = blockid(idxes[1], blockSize[1])
+    bidy = blockid(idxes[2], blockSize[2])
+    bidz = blockid(idxes[3], blockSize[3])
     (bidx, bidy, bidz)
 end
 
@@ -95,7 +95,7 @@ function Base.next(globalIndex::GlobalIndex, idx::Int)
 """
 compute the index inside a block based on global index, block size and block id
 """
-function globalIndex2blockIndex(globalIndex::Union{UnitRange, Int}, blockSize::Int)
+function globalIndex2blockIndex(globalIndex::Union{UnitRange, Int}, blockSize::Integer)
     bid = blockid(globalIndex, blockSize)
     globalIndex - (bid-1)*blockSize
 end
