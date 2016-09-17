@@ -30,7 +30,7 @@ function AlignedBigArray(fregister::AbstractString)
         # initialize the registration of a section image
         d = Tsecreg()
         fname, xoff, yoff, xdim, ydim, tf = split(line)
-        z = parse(split(split(fname,'_')[1], ',')[2])+1
+        z = parse(split(split(fname,'_')[1], ',')[2]) + 1
         waiverID = parse(split(split(fname,'_')[1], ',')[1])
         d[:fname] = joinpath(dirname(fregister), fname * ".h5")
         d[:xoff] = parse(xoff)
@@ -82,10 +82,10 @@ function Tbbox(A::AlignedBigArray)
     x1 = Inf;   x2 = -Inf;
     y1 = Inf;   y2 = -Inf;
     z1 = Inf;   z2 = -Inf;
-    for d in A.register
-        x1 = min(x1, d[:xoff] +1)
-        y1 = min(y1, d[:yoff] +1)
-        z1 = min(z1, d[:zoff] +1)
+    for d in values( A.register )
+        x1 = min(x1, d[:xoff] + 1)
+        y1 = min(y1, d[:yoff] + 1)
+        z1 = min(z1, d[:zoff] + 1)
         x2 = max(x2, d[:xoff] + d[:xdim])
         y2 = max(y2, d[:xoff] + d[:ydim])
         z2 = max(z2, d[:zoff] + d[:zdim])
