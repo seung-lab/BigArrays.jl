@@ -278,6 +278,7 @@ function Base.setindex!(ba::H5sBigArray, buf::Array, idxes::Union{UnitRange, Int
                         info("save ($gix, $giy, $giz) from buffer ($bufix, $bufiy, $bufiz) to ($blkix, $blkiy, $blkiz) of $(h5FileName)")
                         break
                     catch
+                        rethrow()
                         warn("open and write $h5FileName failed, will try 5 seconds later...")
                         sleep(5)
                     end
