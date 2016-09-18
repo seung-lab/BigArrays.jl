@@ -29,7 +29,13 @@ function AlignedBigArray(fregister::AbstractString)
     for line in lines
         # initialize the registration of a section image
         d = Tsecreg()
-        fname, xoff, yoff, xdim, ydim, tf = split(line)
+        if length(split(line)) == 7
+            fname, tmpZero, xoff, yoff, xdim, ydim, tf = split(line)
+        elseif length(split(line))==6
+            fname, xoff, yoff, xdim, ydim, tf = split(line)
+        else
+            error("unsupported format of register file: $(line)")
+        end
         z = parse(split(split(fname,'_')[1], ',')[2]) + 1
         waiverID = parse(split(split(fname,'_')[1], ',')[1])
         d[:fname] = joinpath(dirname(fregister), fname * ".h5")
@@ -108,7 +114,6 @@ end
 
 function Base.show(A::AlignedBigArray)
     println("type: $(typeof(A))")
-    println("size: $(size(A))")
     println("bounding box: $(bbox(A))")
     println("the data is in disk, can not ")
 end
@@ -129,18 +134,32 @@ function Base.getindex(A::AlignedBigArray, idxes::Union{UnitRange, Int, Colon}..
     @show idxes
     for globalZ in idxes[3]
         key = (WAIVER_ID,globalZ)
-        fname = A.register[key][:fname]
-        xidx = idxes[1] - A.register[key][:xoff]
-        yidx = idxes[2] - A.register[key][:yoff]
-        zidx = globalZ  - A.register[key][:zoff]
-        info("fname: $(basename(fname)), xidx: $(xidx), yidx: $(yidx), zidx: $(zidx)")
-        @assert xidx.start > 0
-        @assert yidx.start > 0
-        @assert zidx > 0
-        if ishdf5(fname)
-            buf[:,:,zidx] = h5read(fname, "img", (xidx, yidx))
+        if haskey(A.register, key)
+            fname = A.register[key][:fname]
+            xidx = idxes[1] - A.register[key][:xoff]
+            yidx = idxes[2] - A.register[key][:yoff]
+            zidx = globalZ  - first(idxes[3]) + 1
+            # println("fname: $(basename(fname)), xidx: $(xidx), yidx: $(yidx), zidx: $(zidx)")
+            @assert xidx.start > 0
+            @assert yidx.start > 0
+            @assert zidx > 0
+            if ishdf5(fname)
+                while true
+                    try
+                        buf[:,:,zidx] = h5read(fname, "img", (xidx, yidx))
+                        break
+                    catch
+                        rethrow()
+                        sleep(2)
+                        warn("file was opened, wait for 2 seconds and try again.")
+                        warn("file name: $fname")
+                    end
+                end
+            else
+                warn("no hdf5 file: $(fname) for section $(zidx), filled with zero")
+            end
         else
-            warn("no hdf5 file: $(fname) for section $(zidx), filled with zero")
+            warn("section file not exist: $(key)")
         end
     end
     buf
