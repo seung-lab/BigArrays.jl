@@ -5,6 +5,9 @@ using HDF5
 include("../types.jl")
 
 const WAIVER_ID = 1
+const H5_DATASET_NAME = "img"
+const H5_DATASET_ELEMENT_TYPE = UInt8
+const DATASET_NDIMS = 3
 
 export AlignedBigArray
 
@@ -30,15 +33,15 @@ function AlignedBigArray(fregister::AbstractString)
         # initialize the registration of a section image
         d = Tsecreg()
         if length(split(line)) == 7
-            fname, tmpZero, xoff, yoff, xdim, ydim, tf = split(line)
+            registerFile, tmpZero, xoff, yoff, xdim, ydim, tf = split(line)
         elseif length(split(line))==6
-            fname, xoff, yoff, xdim, ydim, tf = split(line)
+            registerFile, xoff, yoff, xdim, ydim, tf = split(line)
         else
             error("unsupported format of register file: $(line)")
         end
-        z = parse(split(split(fname,'_')[1], ',')[2]) + 1
-        waiverID = parse(split(split(fname,'_')[1], ',')[1])
-        d[:fname] = joinpath(dirname(fregister), fname * ".h5")
+        z = parse(split(split(registerFile,'_')[1], ',')[2]) + 1
+        waiverID = parse(split(split(registerFile,'_')[1], ',')[1])
+        d[:registerFile] = joinpath(dirname(fregister), registerFile * ".h5")
         d[:xoff] = parse(xoff)
         d[:yoff] = parse(yoff)
         d[:zoff] = z-1
@@ -54,31 +57,33 @@ end
 specialized for UInt8 raw image data type
 """
 function Base.eltype(A::AlignedBigArray)
-    for key in keys(A.register)
-        fname = A.register[key][:fname]
-        if isfile(fname) && ishdf5(fname)
-            f = h5open(fname)
-            ret = eltype(f["img"])
-            close(f)
-            return ret
-        end
-    end
+    return H5_DATASET_ELEMENT_TYPE
+    # for key in keys(A.register)
+    #     registerFile = A.register[key][:registerFile]
+    #     if isfile(registerFile) && ishdf5(registerFile)
+    #         f = h5open(registerFile)
+    #         ret = eltype(f[])
+    #         close(f)
+    #         return ret
+    #     end
+    # end
 end
 
 """
 number of dimension
 """
 function Base.ndims(A::AlignedBigArray)
-    for key in keys(A.register)
-        fname = A.register[key][:fname]
-        if isfile(fname) && ishdf5(fname)
-            f = h5open(fname)
-            ret = ndims(f["img"])
-            close(f)
-            # don't forget the z dimension!
-            return ret+1
-        end
-    end
+    return DATASET_NDIMS
+    # for key in keys(A.register)
+    #     registerFile = A.register[key][:registerFile]
+    #     if isfile(registerFile) && ishdf5(registerFile)
+    #         f = h5open(registerFile)
+    #         ret = ndims(f[H5_DATASET_NAME])
+    #         close(f)
+    #         # don't forget the z dimension!
+    #         return ret+1
+    #     end
+    # end
 end
 
 """
@@ -119,10 +124,46 @@ function Base.show(A::AlignedBigArray)
 end
 
 """
+read out part of the image from HDF5 file
+"""
+function read_subimage(  registerFile::AbstractString,
+                    sizeX::Integer,
+                    sizeY::Integer,
+                    xidx::Union{Int, UnitRange},
+                    yidx::Union{Int, UnitRange})
+    @assert ishdf5(registerFile)
+    buf = zeros(H5_DATASET_ELEMENT_TYPE, (length(xidx), length(yidx)))
+
+    while true
+        try
+            # the explicit coordinate range
+            x1 = max(1, first(xidx));   x2 = min(sx, last(xidx));
+            y1 = max(1, first(yidx));   y2 = min(sy, last(yidx));
+            if x1>x2 || y1>y2
+                warn("no overlaping region in this section: $(registerFile)")
+            else
+                # index in buffer
+                bufx1 = x1 - first(xidx) + 1;
+                bufx2 = x2 - first(xidx) + 1;
+                bufy1 = y1 - first(yidx) + 1;
+                bufy2 = y2 - first(yidx) + 1;
+                buf[bufx1:bufx2, bufy1:bufy2] = h5read(registerFile, H5_DATASET_NAME, (x1:x2, y1:y2))
+            end
+            return buf
+        catch
+            rethrow()
+            sleep(2)
+            warn("file was opened, wait for 2 seconds and try again.")
+            warn("file name: $registerFile")
+        end
+    end
+end
+
+"""
 extract chunk from a bigarray
 only works for 3D now.
 """
-function Base.getindex(A::AlignedBigArray, idxes::Union{UnitRange, Int, Colon}...)
+function Base.getindex(A::AlignedBigArray, idxes::Union{UnitRange, Int}...)
     # only support 3D image now, could support arbitrary dimensions in the future
     @assert length(idxes) == 3
     # allocate memory
@@ -130,34 +171,23 @@ function Base.getindex(A::AlignedBigArray, idxes::Union{UnitRange, Int, Colon}..
     sy = length(idxes[2])
     sz = length(idxes[3])
     # create buffer
-    buf = zeros(UInt8, (sx,sy,sz))
+    buf = zeros(H5_DATASET_ELEMENT_TYPE, (sx,sy,sz))
     @show idxes
     for globalZ in idxes[3]
         key = (WAIVER_ID,globalZ)
         if haskey(A.register, key)
-            fname = A.register[key][:fname]
+            registerFile = A.register[key][:registerFile]
             xidx = idxes[1] - A.register[key][:xoff]
             yidx = idxes[2] - A.register[key][:yoff]
             zidx = globalZ  - first(idxes[3]) + 1
-            # println("fname: $(basename(fname)), xidx: $(xidx), yidx: $(yidx), zidx: $(zidx)")
+            # println("registerFile: $(basename(registerFile)), xidx: $(xidx), yidx: $(yidx), zidx: $(zidx)")
             @assert xidx.start > 0
             @assert yidx.start > 0
             @assert zidx > 0
-            if ishdf5(fname)
-                while true
-                    try
-                        buf[:,:,zidx] = h5read(fname, "img", (xidx, yidx))
-                        break
-                    catch
-                        rethrow()
-                        sleep(2)
-                        warn("file was opened, wait for 2 seconds and try again.")
-                        warn("file name: $fname")
-                    end
-                end
-            else
-                warn("no hdf5 file: $(fname) for section $(zidx), filled with zero")
-            end
+            buf[:,:,zidx] = read_subimage(registerFile,
+                                A.register[key][:xdim],
+                                A.register[key][:ydim],
+                                xidx, yidx)
         else
             warn("section file not exist: $(key)")
         end
