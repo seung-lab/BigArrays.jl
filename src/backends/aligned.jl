@@ -137,8 +137,8 @@ function read_subimage(  registerFile::AbstractString,
     while true
         try
             # the explicit coordinate range
-            x1 = max(1, first(xidx));   x2 = min(sx, last(xidx));
-            y1 = max(1, first(yidx));   y2 = min(sy, last(yidx));
+            x1 = max(1, first(xidx));   x2 = min(sizeX, last(xidx));
+            y1 = max(1, first(yidx));   y2 = min(sizeY, last(yidx));
             if x1>x2 || y1>y2
                 warn("no overlaping region in this section: $(registerFile)")
             else
