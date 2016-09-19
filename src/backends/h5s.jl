@@ -7,6 +7,8 @@ using JSON
 # include("../index.jl")
 const CONFIG_FILE = "config.json"
 const H5_DATASET_NAME = "main"
+const DEFAULT_BLOCK_SIZE = (2048, 2048, 256)
+const DEFAULT_CHUNK_SIZE = (256, 256, 32)
 
 export H5sBigArray, boundingbox
 
@@ -53,8 +55,8 @@ end
 construct from a register file, which defines file architecture
 """
 function H5sBigArray(   dir::AbstractString;
-                        blockSize::NTuple{3, Int}   = (4096, 4096, 512),
-                        chunkSize::NTuple{3, Int}   = (128,128,16),
+                        blockSize::NTuple{3, Int}   = DEFAULT_BLOCK_SIZE,
+                        chunkSize::NTuple{3, Int}   = DEFAULT_CHUNK_SIZE,
                         compression::Symbol         = :deflate)
     configFile = joinpath(dir, CONFIG_FILE)
     if isfile(dir)
