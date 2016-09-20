@@ -302,6 +302,10 @@ function Base.setindex!(ba::H5sBigArray, buf::Array, idxes::Union{UnitRange, Int
             for gix in GlobalIndex(idxes[1], ba.blockSize[1])
                 # get block id
                 bidx, bidy, bidz = blockid((gix,giy,giz), ba.blockSize)
+                # global coordinate
+                globalOriginX = globalOffset[1] + (bidx-1) * ba.blockSize[1] + 1
+                globalOriginY = globalOffset[2] + (bidy-1) * ba.blockSize[2] + 1
+                globalOriginZ = globalOffset[3] + (bidz-1) * ba.blockSize[3] + 1
                 # get hdf5 file name
                 h5FileName = "$(ba.h5FilePrefix)$(globalOriginX)-$(globalOriginX+ba.blockSize[1]-1)_$(globalOriginY)-$(globalOriginY+ba.blockSize[2]-1)_$(globalOriginZ)-$(globalOriginZ+ba.blockSize[3]-1).h5"
                 h5FileName = joinpath(ba.dir, h5FileName)
