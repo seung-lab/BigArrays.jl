@@ -7,6 +7,8 @@ using JSON
 # include("../index.jl")
 const CONFIG_FILE = "config.json"
 const H5_DATASET_NAME = "main"
+const DEFAULT_BLOCK_SIZE = (2048, 2048, 256)
+const DEFAULT_CHUNK_SIZE = (256, 256, 32)
 
 export H5sBigArray, boundingbox
 
@@ -28,51 +30,85 @@ function H5sBigArray()
 end
 
 """
+handle vector type
+"""
+function H5sBigArray(   dir::AbstractString,
+                        blockSize::Vector,
+                        chunkSize::Vector,
+                        compression::AbstractString)
+    H5sBigArray(dir,    NTuple{3, Int}((blockSize ...)),
+                        NTuple{3, Int}((chunkSize ...)),
+                        Symbol(compression))
+end
+
+"""
+construct a H5sBigArray from a dict
+"""
+function H5sBigArray( configDict::Dict{Symbol, Any} )
+    H5sBigArray(configDict[:dir],
+                configDict[:blockSize],
+                configDict[:chunkSize],
+                configDict[:compression] )
+
+end
+"""
 construct from a register file, which defines file architecture
 """
-function H5sBigArray(dir::AbstractString; blockSize=(4096, 4096, 512), chunkSize=(128,128,16), compression=:deflate)
-  configFile = joinpath(dir, CONFIG_FILE)
-  if isfile(configFile)
-    # string format of config
-    strreg = readall(configFile)
-    config = JSON.parse(strreg, dicttype=Dict{Symbol, Any})
-    ba = H5sBigArray(dir, config[:blockSize], config[:chunkSize])
-  else
-    if !isdir(dir)
-      mkdir(dir)
+function H5sBigArray(   dir::AbstractString;
+                        blockSize::NTuple{3, Int}   = DEFAULT_BLOCK_SIZE,
+                        chunkSize::NTuple{3, Int}   = DEFAULT_CHUNK_SIZE,
+                        compression::Symbol         = :deflate)
+    configFile = joinpath(dir, CONFIG_FILE)
+    if isfile(dir)
+        warn("take this file as bigarray config file: $(dir)")
+        # string format of config
+        configDict = JSON.parsefile(dir, dicttype=Dict{Symbol, Any})
+        @show configDict
+        ba = H5sBigArray( configDict )
+    elseif isdir(dir) && isfile(configFile)
+        # string format of config
+        configDict = JSON.parsefile(configFile, dicttype=Dict{Symbol, Any})
+        @show configDict
+        ba = H5sBigArray( configDict )
+    else
+        if !isdir(dir)
+          mkdir(dir)
+        end
+        ba = H5sBigArray(dir, blockSize, chunkSize, compression)
+        updateconfigfile(ba)
     end
-    ba = H5sBigArray(dir, blockSize, chunkSize, compression)
-    updateconfigfile(ba)
-  end
-  ba
+    ba
 end
 
 
 """
 transform bigarray to string
 """
-function ba2dict(ba::H5sBigArray)
-  d = Dict{Symbol, Any}()
-  d[:fname] = ba.dir
-  d[:blockSize] = ba.blockSize
-  d[:chunkSize] = ba.chunkSize
-  d[:compression] = ba.compression
+function bigArray2dict(ba::H5sBigArray)
+    d = Dict{Symbol, Any}()
+    d[:dir] = ba.dir
+    d[:blockSize] = ba.blockSize
+    d[:chunkSize] = ba.chunkSize
+    d[:compression] = ba.compression
+    return d
 end
 
-function ba2str(ba::H5sBigArray)
-  d = ba2dict(ba)
-  JSON.json(d)
+function bigArray2string(ba::H5sBigArray)
+    d = bigArray2dict(ba)
+    @show d
+    JSON.json(d)
 end
 
 """
 update the config.json file
 """
 function updateconfigfile(ba::H5sBigArray)
-  configFile = joinpath(dirname(ba.dir), CONFIG_FILE)
+  configFile = joinpath(ba.dir, CONFIG_FILE)
   if !isdir(ba.dir)
     mkdir(ba.dir)
   end
-  str = ba2str(ba)
+  str = bigArray2string(ba)
+  @show str
 
   # write to text file
   f = open(configFile, "w")
@@ -86,9 +122,9 @@ element type of big array
 function Base.eltype(ba::H5sBigArray)
   files = readdir(ba.dir)
   for file in files
-    fname = joinpath(ba.dir, file)
-    if ishdf5(fname)
-      f = h5open(fname)
+    h5FileName = joinpath(ba.dir, file)
+    if ishdf5(h5FileName)
+      f = h5open(h5FileName)
       ret = eltype(f[H5_DATASET_NAME])
       close(f)
       return ret
@@ -101,8 +137,9 @@ number of dimension
 """
 function Base.ndims(ba::H5sBigArray)
   for file in readdir(ba.dir)
-    if ishdf5(file)
-      f = h5open(file)
+    fileName = joinpath(ba.dir, file)
+    if ishdf5(fileName)
+      f = h5open(fileName)
       ret = ndims(f[H5_DATASET_NAME])
       close(f)
       return ret
@@ -160,41 +197,56 @@ extract chunk from a bigarray
 only works for 3D now.
 """
 function Base.getindex(ba::H5sBigArray, idxes::Union{UnitRange, Int, Colon}...)
-  # only support 3D image now, could support arbitrary dimensions in the future
-  # allocate memory
-  sx = length(idxes[1])
-  sy = length(idxes[2])
-  sz = length(idxes[3])
-  # create buffer
-  buf = zeros(eltype(ba), (sx,sy,sz))
-  for giz in GlobalIndex(idxes[3], ba.blockSize[3])
-    for giy in GlobalIndex(idxes[2], ba.blockSize[2])
-      for gix in GlobalIndex(idxes[1], ba.blockSize[1])
-        # get block id
-        bidx, bidy, bidz = blockid((gix,giy,giz), ba.blockSize)
-        # get hdf5 file name
-        fname = joinpath(ba.dir, "chunk_$(bidx)_$(bidy)_$(bidz).h5")
-        # if have data fill with data,
-        # if not, no need to change, keep as zero
-        if isfile(fname) && ishdf5(fname)
-          # compute index in hdf5
-          blkix, blkiy, blkiz = globalIndexes2blockIndexes((gix,giy,giz), ba.blockSize)
-          # compute index in buffer
-          bufix, bufiy, bufiz = globalIndexes2bufferIndexes((gix,giy,giz), idx)
-          # assign data value, preserve existing value
-          info("read ($(gix), $giy, $giz) from ($(blkix), $(blkiy), $(blkiz)) of $(fname) to buffer ($bufix, $bufiy, $bufiz)")
-          if length(idxes)==3
-            buf[bufix, bufiy, bufiz] = h5read(fname, H5_DATASET_NAME, (blkix,blkiy,blkiz))
-          else
-            @assert length(idxes)==4
-            @assert ndims(ba)==4
-            buf[bufix, bufiy, bufiz,:] = h5read(fname, H5_DATASET_NAME, (blkix, blkiy, blkiz, :))
-          end
-        end
-      end
+    # only support 3D image now, could support arbitrary dimensions in the future
+    # allocate memory
+    sx = length(idxes[1])
+    sy = length(idxes[2])
+    sz = length(idxes[3])
+    # create buffer
+    if ndims(ba) == 3
+        buf = zeros(eltype(ba), (sx,sy,sz))
+    else
+        @assert ndims(ba)==4
+        buf = zeros(eltype(ba), (sx,sy,sz,3))
     end
-  end
-  buf
+    for giz in GlobalIndex(idxes[3], ba.blockSize[3])
+        for giy in GlobalIndex(idxes[2], ba.blockSize[2])
+            for gix in GlobalIndex(idxes[1], ba.blockSize[1])
+                # get block id
+                bidx, bidy, bidz = blockid((gix,giy,giz), ba.blockSize)
+                # get hdf5 file name
+                h5FileName = joinpath(ba.dir, "chunk_$(bidx)_$(bidy)_$(bidz).h5")
+                # if have data fill with data,
+                # if not, no need to change, keep as zero
+                if isfile(h5FileName) && ishdf5(h5FileName)
+                    # compute index in hdf5
+                    blkix, blkiy, blkiz = globalIndexes2blockIndexes((gix,giy,giz), ba.blockSize)
+                    # compute index in buffer
+                    bufix, bufiy, bufiz = globalIndexes2bufferIndexes((gix,giy,giz), idxes)
+                    # assign data value, preserve existing value
+                    info("read ($(gix), $giy, $giz) from ($(blkix), $(blkiy), $(blkiz)) of $(h5FileName) to buffer ($bufix, $bufiy, $bufiz)")
+                    while true
+                        try
+                            if length(idxes)==3
+                                buf[bufix, bufiy, bufiz] = h5read(h5FileName, H5_DATASET_NAME, (blkix,blkiy,blkiz))
+                            else
+                                @assert length(idxes)==4
+                                @assert ndims(ba)==4
+                                @show (blkix, blkiy, blkiz, :)
+                                buf[bufix, bufiy, bufiz,:] = h5read(h5FileName, H5_DATASET_NAME, (blkix, blkiy, blkiz, :))
+                            end
+                            break
+                        catch
+                            rethrow()
+                            warn("open and read $h5FileName failed, will try 5 seconds later...")
+                            sleep(5)
+                        end
+                    end
+                end
+            end
+        end
+    end
+    buf
 end
 
 
@@ -202,86 +254,110 @@ end
 put small array to big array
 """
 function Base.setindex!(ba::H5sBigArray, buf::Array, idxes::Union{UnitRange, Int, Colon}...)
-  # only support 3D now
-  @assert length(idxes[1]) == size(buf, 1)
-  @assert length(idxes[2]) == size(buf, 2)
-  @assert length(idxes[3]) == size(buf, 3)
+    # only support 3D now
+    @assert length(idxes[1]) == size(buf, 1)
+    @assert length(idxes[2]) == size(buf, 2)
+    @assert length(idxes[3]) == size(buf, 3)
 
-  for giz in GlobalIndex(idxes[3], ba.blockSize[3])
-    for giy in GlobalIndex(idxes[2], ba.blockSize[2])
-      for gix in GlobalIndex(idxes[1], ba.blockSize[1])
-        # get block id
-        bidx, bidy, bidz = blockid((gix,giy,giz), ba.blockSize)
-        # get hdf5 file name
-        fname = joinpath(ba.dir, "chunk_$(bidx)_$(bidy)_$(bidz).h5")
-        # compute index in hdf5
-        blkix, blkiy, blkiz = globalIndexes2blockIndexes((gix,giy,giz), ba.blockSize)
-        # compute index in buffer
-        bufix, bufiy, bufiz = globalIndexes2bufferIndexes((gix,giy,giz), idxes)
-        # put buffer subarray to hdf5, reserve existing values
-        while true
-          try
-              if isfile(fname) && ishdf5(fname) && has(h5open(fname), H5_DATASET_NAME)
-                  f = h5open(fname, "r+")
-                  dataSet = f[H5_DATASET_NAME]
-                  @assert eltype(f[H5_DATASET_NAME])==eltype(buf)
-              else
-                  f = h5open(fname, "w")
-                  # assign values
-                  if ba.compression == :deflate
-                    if ndims(buf)==3
-                      dataSet = d_create(f, H5_DATASET_NAME, datatype(eltype(buf)),
-                            dataspace(ba.blockSize[1], ba.blockSize[2], ba.blockSize[3]),
-                            "chunk", (ba.chunkSize[1], ba.chunkSize[2], ba.chunkSize[3]),
-                            "shuffle", (), "deflate", 3)
-                    else
-                      @assert ndims(buf)==4 && size(buf,4)==3
-                      @show f
-                      @show ba.blockSize
-                      @show ba.chunkSize
-                      dataSet = d_create(f, H5_DATASET_NAME, datatype(eltype(buf)),
-                            dataspace(ba.blockSize[1], ba.blockSize[2], ba.blockSize[3], 3),
-                            "chunk", (ba.chunkSize[1], ba.chunkSize[2], ba.chunkSize[3], 3),
-                            "shuffle", (), "deflate", 3)
-                      @show dataSet
+    for giz in GlobalIndex(idxes[3], ba.blockSize[3])
+        for giy in GlobalIndex(idxes[2], ba.blockSize[2])
+            for gix in GlobalIndex(idxes[1], ba.blockSize[1])
+                # get block id
+                bidx, bidy, bidz = blockid((gix,giy,giz), ba.blockSize)
+                # get hdf5 file name
+                h5FileName = joinpath(ba.dir, "chunk_$(bidx)_$(bidy)_$(bidz).h5")
+                @show h5FileName
+                # compute index in hdf5
+                blkix, blkiy, blkiz = globalIndexes2blockIndexes((gix,giy,giz), ba.blockSize)
+                # compute index in buffer
+                bufix, bufiy, bufiz = globalIndexes2bufferIndexes((gix,giy,giz), idxes)
+                # put buffer subarray to hdf5, reserve existing values
+                while true
+                    try
+                        save_buffer(buf, h5FileName, ba,
+                                    blkix, blkiy, blkiz,
+                                    bufix, bufiy, bufiz)
+                        info("save ($gix, $giy, $giz) from buffer ($bufix, $bufiy, $bufiz) to ($blkix, $blkiy, $blkiz) of $(h5FileName)")
+                        break
+                    catch
+                        rethrow()
+                        warn("open and write $h5FileName failed, will try 5 seconds later...")
+                        sleep(5)
                     end
-                  elseif ba.compression == :blosc
-                    if ndims(buf)==3
-                      dataSet = d_create(f, H5_DATASET_NAME, datatype(eltype(buf)),
-                            dataspace(ba.blockSize[1], ba.blockSize[2], ba.blockSize[3]),
-                            "chunk", (ba.chunkSize[1], ba.chunkSize[2], ba.chunkSize[3]),
-                            "blosc", 3)
-                    else
-                      @assert ndims(buf)==4 && size(buf,4)==3
-                      dataSet = d_create(f, H5_DATASET_NAME, datatype(eltype(buf)),
-                            dataspace(ba.blockSize[1], ba.blockSize[2], ba.blockSize[3], 3),
-                            "chunk", (ba.chunkSize[1], ba.chunkSize[2], ba.chunkSize[3], 3),
-                            "blosc", 3)
-                    end
-                  end
-              end
-
-              # @show idx
-              info("save ($gix, $giy, $giz) from buffer ($bufix, $bufiy, $bufiz) to ($blkix, $blkiy, $blkiz) of $(fname)")
-              # @show bufix, bufiy, bufiz
-              # @show blkix, blkiy, blkiz
-              @show dataSet
-              if ndims(buf)==3
-                dataSet[blkix, blkiy, blkiz] = buf[bufix, bufiy, bufiz]
-              else
-                # this is an affinity map
-                @assert ndims(buf)==4 && size(buf, 4)==3
-                dataSet[blkix, blkiy, blkiz, :] = buf[bufix, bufiy, bufiz, :]
-              end
-              close(f)
-              break
-          catch
-              warn("open and write $fname failed, will try 5 seconds later...")
-              sleep(5)
-          end
+                end
+            end
         end
-      end
     end
-  end
 end
+
+"""
+save part of or whole buffer to one hdf5 file
+"""
+function save_buffer{T}(    buf::Array{T, 3}, h5FileName, ba,
+                            blkix, blkiy, blkiz,
+                            bufix, bufiy, bufiz)
+    if isfile(h5FileName) && ishdf5(h5FileName)
+        f = h5open(h5FileName, "r+")
+        dataSet = f[H5_DATASET_NAME]
+        @assert eltype(f[H5_DATASET_NAME])==T
+    else
+        f = h5open(h5FileName, "w")
+        # assign values
+        if ba.compression == :deflate
+            dataSet = d_create(f, H5_DATASET_NAME, datatype(eltype(buf)),
+                dataspace(ba.blockSize[1], ba.blockSize[2], ba.blockSize[3]),
+                "chunk", (ba.chunkSize[1], ba.chunkSize[2], ba.chunkSize[3]),
+                "shuffle", (), "deflate", 3)
+
+        elseif ba.compression == :blosc
+            dataSet = d_create(f, H5_DATASET_NAME, datatype(eltype(buf)),
+                dataspace(ba.blockSize[1], ba.blockSize[2], ba.blockSize[3]),
+                "chunk", (ba.chunkSize[1], ba.chunkSize[2], ba.chunkSize[3]),
+                "blosc", 3)
+        end
+    end
+    # @show bufix, bufiy, bufiz
+    # @show blkix, blkiy, blkiz
+    @show dataSet
+    dataSet[blkix, blkiy, blkiz] = buf[bufix, bufiy, bufiz]
+    close(f)
 end
+
+function save_buffer{T}(    buf::Array{T, 4}, h5FileName, ba,
+                            blkix, blkiy, blkiz,
+                            bufix, bufiy, bufiz)
+    @assert ndims(buf)==4 && size(buf,4)==3
+    # @show blkix, blkiy, blkiz
+    # @show bufix, bufiy, bufiz
+    if isfile(h5FileName) && ishdf5(h5FileName)
+        println("find an existing file: $(h5FileName)")
+        f = h5open(h5FileName, "r+")
+        @show f
+        dataSet = f[H5_DATASET_NAME]
+        @show dataSet
+        @assert eltype(f[H5_DATASET_NAME])==T
+        dataSet[blkix, blkiy, blkiz, :] = buf[bufix, bufiy, bufiz, :]
+        close(f)
+    else
+        println("no such file, create one: $(h5FileName)")
+        f = h5open(h5FileName, "w")
+        @show f
+        # assign values
+        if ba.compression == :deflate
+            dataSet = d_create(f, H5_DATASET_NAME, datatype(eltype(buf)),
+                dataspace(ba.blockSize[1], ba.blockSize[2], ba.blockSize[3], 3),
+                "chunk", (ba.chunkSize[1], ba.chunkSize[2], ba.chunkSize[3], 3),
+                "shuffle", (), "deflate", 3)
+        elseif ba.compression == :blosc
+            dataSet = d_create(f, H5_DATASET_NAME, datatype(eltype(buf)),
+                dataspace(ba.blockSize[1], ba.blockSize[2], ba.blockSize[3], 3),
+                "chunk", (ba.chunkSize[1], ba.chunkSize[2], ba.chunkSize[3], 3),
+                "blosc", 3)
+        end
+        dataSet[blkix, blkiy, blkiz, :] = buf[bufix, bufiy, bufiz, :]
+        close(f)
+    end
+
+end
+
+end # end of module: H5sBigArrays

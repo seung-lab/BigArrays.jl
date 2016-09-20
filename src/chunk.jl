@@ -8,7 +8,7 @@ export Chunk, blendchunk, crop_border, physical_offset, save, savechunk, readchu
 type Chunk <: AbstractChunk
     data::Union{Array, SegMST} # could be 3 or 4 Dimensional array
     origin::Vector{Int}     # measured by voxel number
-    voxelsize::Vector{Int}  # physical size of each voxel
+    voxelSize::Vector{Int}  # physical size of each voxel
 end
 
 """
@@ -71,30 +71,30 @@ function crop_border{T}(chk::Chunk, cropMarginSize::Union{Vector{T},Tuple{T}})
   @assert sz[1]>cropMarginSize[1]*2 &&
           sz[2]>cropMarginSize[2]*2 &&
           sz[3]>cropMarginSize[3]*2
-  if nd == 3
-      data = chk.data[cropMarginSize[1]+1:sz[1]-cropMarginSize[1],
-                      cropMarginSize[2]+1:sz[2]-cropMarginSize[2],
-                      cropMarginSize[3]+1:sz[3]-cropMarginSize[3]]
-  elseif nd==4
-      data = chk.data[cropMarginSize[1]+1:sz[1]-cropMarginSize[1],
-                      cropMarginSize[2]+1:sz[2]-cropMarginSize[2],
-                      cropMarginSize[3]+1:sz[3]-cropMarginSize[3], :]
-  elseif nd==5
-      data = chk.data[cropMarginSize[1]+1:sz[1]-cropMarginSize[1],
-                      cropMarginSize[2]+1:sz[2]-cropMarginSize[2],
-                      cropMarginSize[3]+1:sz[3]-cropMarginSize[3], :, :]
-  else
-      error("only support 3-5 D, current dataay dimention is $(nd)")
-  end
-  origin = chk.origin .+ cropMarginSize
-  Chunk(data, origin, chk.voxelsize)
+    if nd == 3
+        data = chk.data[cropMarginSize[1]+1:sz[1]-cropMarginSize[1],
+                        cropMarginSize[2]+1:sz[2]-cropMarginSize[2],
+                        cropMarginSize[3]+1:sz[3]-cropMarginSize[3]]
+    elseif nd==4
+        data = chk.data[cropMarginSize[1]+1:sz[1]-cropMarginSize[1],
+                        cropMarginSize[2]+1:sz[2]-cropMarginSize[2],
+                        cropMarginSize[3]+1:sz[3]-cropMarginSize[3], :]
+    elseif nd==5
+        data = chk.data[cropMarginSize[1]+1:sz[1]-cropMarginSize[1],
+                        cropMarginSize[2]+1:sz[2]-cropMarginSize[2],
+                        cropMarginSize[3]+1:sz[3]-cropMarginSize[3], :, :]
+    else
+        error("only support 3-5 D, current dataay dimention is $(nd)")
+    end
+    origin = chk.origin .+ cropMarginSize
+    Chunk(data, origin, chk.voxelSize)
 end
 
 """
 compute the physical offset
 """
 function physical_offset( chk::Chunk )
-    Vector{UInt32}((chk.origin.-UInt32(1)) .* chk.voxelsize)
+    Vector{UInt32}((chk.origin.-UInt32(1)) .* chk.voxelSize)
 end
 
 """
@@ -107,12 +107,12 @@ function save(fname::AbstractString, chk::Chunk)
     f = h5open(fname, "w")
     f["type"] = "chunk"
     if isa(chk.data, AffinityMap)
-      # save with compression
-      f["affinityMap", "chunk", (64,64,8,3), "shuffle", (), "deflate", 3] = chk.data
+        # save with compression
+        f["affinityMap", "chunk", (64,64,8,3), "shuffle", (), "deflate", 3] = chk.data
     elseif isa(chk.data, EMImage)
-      f["image", "chunk", (64,64,8), "shuffle", (), "deflate", 3] = chk.data
+        f["image", "chunk", (64,64,8), "shuffle", (), "deflate", 3] = chk.data
     elseif isa(chk.data, Segmentation)
-      f["segmentation", "chunk", (64,64,8), "shuffle", (), "deflate", 3] = chk.data
+        f["segmentation", "chunk", (64,64,8), "shuffle", (), "deflate", 3] = chk.data
     elseif isa(chk.data, SegMST)
         f["segmentation", "chunk", (64,64,8), "shuffle", (), "deflate", 3] = chk.data.segmentation
         f["segmentPairs"] = chk.data.segmentPairs
@@ -121,7 +121,7 @@ function save(fname::AbstractString, chk::Chunk)
         error("This is an unsupported type: $(typeof(chk.data))")
     end
     f["origin"] = Vector{UInt32}(chk.origin)
-    f["voxelsize"] = Vector{UInt32}(chk.voxelsize)
+    f["voxelSize"] = Vector{UInt32}(chk.voxelSize)
     close(f)
 end
 savechunk = save
@@ -142,7 +142,14 @@ function readchunk(fname::AbstractString)
         error("not a standard chunk file")
     end
     origin = read(f["origin"])
-    voxelsize = read(f["voxelsize"])
+    voxelSize = read(f["voxelSize"])
     close(f)
-    return Chunk(data, origin, voxelsize)
+    return Chunk(data, origin, voxelSize)
+end
+
+"""
+cutout a chunk from BigArray
+"""
+function cutout(ba::AbstractBigArray, indexes::Union{UnitRange, Int, Colon} ...)
+    error("unimplemented")
 end

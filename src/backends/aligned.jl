@@ -4,12 +4,17 @@ using HDF5
 
 include("../types.jl")
 
+const WAIVER_ID = 1
+const H5_DATASET_NAME = "img"
+const H5_DATASET_ELEMENT_TYPE = UInt8
+const DATASET_NDIMS = 3
+
 export AlignedBigArray
 
 # register item of one section / hdf5 file
 typealias Tsecreg Dict{Symbol, Union{AbstractString, Int}}
 # the whole register records filename, xstart, ystart, xdim, ydim
-typealias Tregister Vector{Tsecreg}
+typealias Tregister Dict{Tuple{Int, Int}, Tsecreg}
 
 type AlignedBigArray <: AbstractBigArray
     register::Tregister
@@ -27,13 +32,23 @@ function AlignedBigArray(fregister::AbstractString)
     for line in lines
         # initialize the registration of a section image
         d = Tsecreg()
-        fname, xoff, yoff, xdim, ydim, tf = split(line)
-        d[:fname] = joinpath(dirname(fregister), fname * ".h5")
+        if length(split(line)) == 7
+            registerFile, tmpZero, xoff, yoff, xdim, ydim, tf = split(line)
+        elseif length(split(line))==6
+            registerFile, xoff, yoff, xdim, ydim, tf = split(line)
+        else
+            error("unsupported format of register file: $(line)")
+        end
+        z = parse(split(split(registerFile,'_')[1], ',')[2]) + 1
+        waiverID = parse(split(split(registerFile,'_')[1], ',')[1])
+        d[:registerFile] = joinpath(dirname(fregister), registerFile * ".h5")
         d[:xoff] = parse(xoff)
         d[:yoff] = parse(yoff)
+        d[:zoff] = z-1
         d[:xdim] = parse(xdim)
         d[:ydim] = parse(ydim)
-        push!(register, d)
+        d[:zdim] = 1
+        register[(waiverID, z)] = d
     end
     AlignedBigArray(register)
 end
@@ -42,47 +57,51 @@ end
 specialized for UInt8 raw image data type
 """
 function Base.eltype(A::AlignedBigArray)
-    for z in 1:length(A.register)
-        fname = A.register[z][:fname]
-        if isfile(fname) && ishdf5(fname)
-            f = h5open(fname)
-            ret = eltype(f["img"])
-            close(f)
-            return ret
-        end
-    end
+    return H5_DATASET_ELEMENT_TYPE
+    # for key in keys(A.register)
+    #     registerFile = A.register[key][:registerFile]
+    #     if isfile(registerFile) && ishdf5(registerFile)
+    #         f = h5open(registerFile)
+    #         ret = eltype(f[])
+    #         close(f)
+    #         return ret
+    #     end
+    # end
 end
 
 """
 number of dimension
 """
 function Base.ndims(A::AlignedBigArray)
-    for z in 1:length(A.register)
-        fname = A.register[z][:fname]
-        if isfile(fname) && ishdf5(fname)
-            f = h5open(fname)
-            ret = ndims(f["img"])
-            close(f)
-            # don't forget the z dimension!
-            return ret+1
-        end
-    end
+    return DATASET_NDIMS
+    # for key in keys(A.register)
+    #     registerFile = A.register[key][:registerFile]
+    #     if isfile(registerFile) && ishdf5(registerFile)
+    #         f = h5open(registerFile)
+    #         ret = ndims(f[H5_DATASET_NAME])
+    #         close(f)
+    #         # don't forget the z dimension!
+    #         return ret+1
+    #     end
+    # end
 end
 
 """
 bounding box of the whole volume
 """
 function Tbbox(A::AlignedBigArray)
-    zidx = 1:length(A.register)
     x1 = Inf;   x2 = -Inf;
     y1 = Inf;   y2 = -Inf;
-    for d in A.register
-        x1 = min(x1, d[:xoff] +1)
-        y1 = min(y1, d[:yoff] +1)
+    z1 = Inf;   z2 = -Inf;
+    for d in values( A.register )
+        x1 = min(x1, d[:xoff] + 1)
+        y1 = min(y1, d[:yoff] + 1)
+        z1 = min(z1, d[:zoff] + 1)
         x2 = max(x2, d[:xoff] + d[:xdim])
         y2 = max(y2, d[:xoff] + d[:ydim])
+        z2 = max(z2, d[:zoff] + d[:zdim])
     end
-    (Int64(x1):Int64(x2), Int64(y1):Int64(y2), zidx)
+    (Int64(x1):Int64(x2), Int64(y1):Int64(y2), Int64(z1):Int64(z2))
 end
 bbox(A::AlignedBigArray) = Tbbox(A)
 
@@ -100,37 +119,77 @@ end
 
 function Base.show(A::AlignedBigArray)
     println("type: $(typeof(A))")
-    println("size: $(size(A))")
     println("bounding box: $(bbox(A))")
     println("the data is in disk, can not ")
+end
+
+"""
+read out part of the image from HDF5 file
+"""
+function read_subimage(  registerFile::AbstractString,
+                    sizeX::Integer,
+                    sizeY::Integer,
+                    xidx::Union{Int, UnitRange},
+                    yidx::Union{Int, UnitRange})
+    @assert ishdf5(registerFile)
+    buf = zeros(H5_DATASET_ELEMENT_TYPE, (length(xidx), length(yidx)))
+
+    while true
+        try
+            # the explicit coordinate range
+            x1 = max(1, first(xidx));   x2 = min(sizeX, last(xidx));
+            y1 = max(1, first(yidx));   y2 = min(sizeY, last(yidx));
+            if x1>x2 || y1>y2
+                warn("no overlaping region in this section: $(registerFile)")
+            else
+                # index in buffer
+                bufx1 = x1 - first(xidx) + 1;
+                bufx2 = x2 - first(xidx) + 1;
+                bufy1 = y1 - first(yidx) + 1;
+                bufy2 = y2 - first(yidx) + 1;
+                buf[bufx1:bufx2, bufy1:bufy2] = h5read(registerFile, H5_DATASET_NAME, (x1:x2, y1:y2))
+            end
+            return buf
+        catch
+            rethrow()
+            sleep(2)
+            warn("file was opened, wait for 2 seconds and try again.")
+            warn("file name: $registerFile")
+        end
+    end
 end
 
 """
 extract chunk from a bigarray
 only works for 3D now.
 """
-function Base.getindex(A::AlignedBigArray, idx::Union{UnitRange, Int, Colon}...)
+function Base.getindex(A::AlignedBigArray, idxes::Union{UnitRange, Int}...)
     # only support 3D image now, could support arbitrary dimensions in the future
-    @assert length(idx) == 3
+    @assert length(idxes) == 3
     # allocate memory
-    sx = length(idx[1])
-    sy = length(idx[2])
-    sz = length(idx[3])
+    sx = length(idxes[1])
+    sy = length(idxes[2])
+    sz = length(idxes[3])
     # create buffer
-    buf = zeros(UInt8, (sx,sy,sz))
-    for z in idx[3]
-        fname = A.register[z][:fname]
-        xidx = idx[1] - A.register[z][:xoff]
-        yidx = idx[2] - A.register[z][:yoff]
-        zidx = z - first(idx[3]) + 1
-        info("fname: $(basename(fname)), xidx: $(xidx), yidx: $(yidx), zidx: $(zidx)")
-        @assert xidx.start>0
-        @assert yidx.start>0
-        @assert zidx>0
-        if ishdf5(fname)
-            buf[:,:,zidx] = h5read(fname, "img", (xidx, yidx))
+    buf = zeros(H5_DATASET_ELEMENT_TYPE, (sx,sy,sz))
+    @show idxes
+    for globalZ in idxes[3]
+        key = (WAIVER_ID,globalZ)
+        if haskey(A.register, key)
+            registerFile = A.register[key][:registerFile]
+            xidx = idxes[1] - A.register[key][:xoff]
+            yidx = idxes[2] - A.register[key][:yoff]
+            zidx = globalZ  - first(idxes[3]) + 1
+            # println("registerFile: $(basename(registerFile)), xidx: $(xidx), yidx: $(yidx), zidx: $(zidx)")
+            @assert xidx.start > 0
+            @assert yidx.start > 0
+            @assert zidx > 0
+            buf[:,:,zidx] = read_subimage(registerFile,
+                                A.register[key][:xdim],
+                                A.register[key][:ydim],
+                                xidx, yidx)
         else
-            warn("no hdf5 file: $(fname) for section $(z), filled with zero")
+            warn("section file not exist: $(key)")
         end
     end
     buf
