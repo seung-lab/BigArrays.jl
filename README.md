@@ -13,6 +13,7 @@ this package design was inspired by [GPUArray](https://github.com/JuliaGPU/GPUAr
 - [x] hdf5 files. 
 
 - [x] seunglab aligned 2D image hdf5 files.
+- [ ] [Janelia DVID](https://github.com/janelia-flyem/dvid)
 
 - [ ] [google subvolume](https://developers.google.com/brainmaps/v1beta2/rest/v1beta2/volumes/subvolume)
 
