@@ -217,7 +217,13 @@ function Base.getindex(ba::H5sBigArray, idxes::Union{UnitRange, Int, Colon}...)
     xRange = idxes[1] - globalOffset[1]
     yRange = idxes[2] - globalOffset[2]
     zRange = idxes[3] - globalOffset[3]
-    idxes = (xRange, yRange, zRange)
+    if length(idxes)==3
+        idxes = (xRange, yRange, zRange)
+    elseif length(idxes)==4
+        idxes = (xRange, yRange, zRange, idxes[4])
+    else
+        error("only support 3D and 4D now, get $(length(idxes))")
+    end
 
     @show globalOffset
     @show idxes
@@ -290,7 +296,13 @@ function Base.setindex!(ba::H5sBigArray, buf::Array, idxes::Union{UnitRange, Int
     xRange = idxes[1] - globalOffset[1]
     yRange = idxes[2] - globalOffset[2]
     zRange = idxes[3] - globalOffset[3]
-    idxes = (xRange, yRange, zRange)
+    if length(idxes)==3
+        idxes = (xRange, yRange, zRange)
+    elseif length(idxes)==4
+        idxes = (xRange, yRange, zRange, idxes[4])
+    else
+        error("only support 3D and 4D now, get $(length(idxes))")
+    end
 
     # only support 3D now
     @assert length(idxes[1]) == size(buf, 1)
