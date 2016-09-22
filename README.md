@@ -7,7 +7,15 @@ this package design was inspired by [GPUArray](https://github.com/JuliaGPU/GPUAr
     Pkg.clone(https://github.com/seung-lab/BigArray.jl.git)
     
 ## usage
-    using H5sBigArray
+
+```julia
+using BigArrays.H5sBigArrays
+ba = H5sBigArray("/directory/of/hdf5/files/");
+# use it as normal array
+
+ba[101:200, 201:300, 1:3] = rand(UInt8, 100,100,3)
+@show ba[101:200, 201:300, 1:3]
+```
    
 ## supported backends
 - [x] hdf5 files. 
