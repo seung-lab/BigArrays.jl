@@ -172,7 +172,7 @@ function boundingbox(ba::H5sBigArray)
     if ishdf5(file)
       f = h5open(file)
       origin = f["origin"]
-      sz = ndims(f[H5_DATASET_NAME])
+      sz = size(f[H5_DATASET_NAME])
 
       x1 = min(x1, origin[1])
       y1 = min(y1, origin[2])
@@ -180,6 +180,7 @@ function boundingbox(ba::H5sBigArray)
       x2 = max(x2, origin[1]+sz[1]-1)
       y2 = max(y2, origin[2]+sz[2]-1)
       z2 = max(z2, origin[3]+sz[3]-1)
+      close(f)
     end
   end
   (Int64(x1):Int64(x2), Int64(y1):Int64(y2), Int64(z1):Int64(z2))
@@ -237,7 +238,17 @@ function Base.getindex(ba::H5sBigArray, idxes::Union{UnitRange, Int, Colon}...)
         buf = zeros(eltype(ba), (sx,sy,sz))
     else
         @assert ndims(ba)==4
-        buf = zeros(eltype(ba), (sx,sy,sz,3))
+        channelNum = 0
+        for file in readdir(ba.dir)
+            h5FileName = joinpath(ba.dir, file)
+            if ishdf5(h5FileName)
+                f = h5open(h5FileName)
+                channelNum = size(f[H5_DATASET_NAME])[4]
+                close(f)
+                break
+            end
+        end
+        buf = zeros(eltype(ba), (sx,sy,sz, channelNum))
     end
     for giz in GlobalIndex(idxes[3], ba.blockSize[3])
         for giy in GlobalIndex(idxes[2], ba.blockSize[2])
@@ -332,6 +343,7 @@ function Base.setindex!(ba::H5sBigArray, buf::Array, idxes::Union{UnitRange, Int
                         save_buffer(buf, h5FileName, ba,
                                     blkix, blkiy, blkiz,
                                     bufix, bufiy, bufiz)
+                        h5write(h5FileName, "origin", [globalOriginX, globalOriginY, globalOriginZ])
                         info("save ($gix, $giy, $giz) from buffer ($bufix, $bufiy, $bufiz) to ($blkix, $blkiy, $blkiz) of $(h5FileName)")
                         break
                     catch
@@ -380,7 +392,10 @@ end
 function save_buffer{T}(    buf::Array{T, 4}, h5FileName, ba,
                             blkix, blkiy, blkiz,
                             bufix, bufiy, bufiz)
-    @assert ndims(buf)==4 && size(buf,4)==3
+    @assert ndims(buf)==4
+    # the number of channels, it is 3 for affinity map, 5 or more for semantic segmentation
+    channelNum = size(buf, 4)
+
     # @show blkix, blkiy, blkiz
     # @show bufix, bufiy, bufiz
     if isfile(h5FileName) && ishdf5(h5FileName)
@@ -399,13 +414,13 @@ function save_buffer{T}(    buf::Array{T, 4}, h5FileName, ba,
         # assign values
         if ba.compression == :deflate
             dataSet = d_create(f, H5_DATASET_NAME, datatype(eltype(buf)),
-                dataspace(ba.blockSize[1], ba.blockSize[2], ba.blockSize[3], 3),
-                "chunk", (ba.chunkSize[1], ba.chunkSize[2], ba.chunkSize[3], 3),
+                dataspace(ba.blockSize[1], ba.blockSize[2], ba.blockSize[3], channelNum),
+                "chunk", (ba.chunkSize[1], ba.chunkSize[2], ba.chunkSize[3], channelNum),
                 "shuffle", (), "deflate", 3)
         elseif ba.compression == :blosc
             dataSet = d_create(f, H5_DATASET_NAME, datatype(eltype(buf)),
-                dataspace(ba.blockSize[1], ba.blockSize[2], ba.blockSize[3], 3),
-                "chunk", (ba.chunkSize[1], ba.chunkSize[2], ba.chunkSize[3], 3),
+                dataspace(ba.blockSize[1], ba.blockSize[2], ba.blockSize[3], channelNum),
+                "chunk", (ba.chunkSize[1], ba.chunkSize[2], ba.chunkSize[3], channelNum),
                 "blosc", 3)
         end
         dataSet[blkix, blkiy, blkiz, :] = buf[bufix, bufiy, bufiz, :]
