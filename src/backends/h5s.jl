@@ -6,9 +6,11 @@ using JSON
 # include("../types.jl")
 # include("../index.jl")
 const CONFIG_FILE = "config.json"
-const H5_DATASET_NAME = "main"
+const DEFAULT_H5FILE_PREFIX = "chunk_"
+const H5_DATASET_NAME = "img"
 const DEFAULT_BLOCK_SIZE = (2048, 2048, 256)
 const DEFAULT_CHUNK_SIZE = (256, 256, 32)
+const DEFAULT_GLOBAL_OFFSET = (0,0,0)
 
 export H5sBigArray, boundingbox
 
@@ -16,10 +18,12 @@ export H5sBigArray, boundingbox
 definition of h5s big array
 """
 type H5sBigArray <: AbstractBigArray
-  dir             ::AbstractString
-  blockSize       ::NTuple{3, Int}
-  chunkSize       ::NTuple{3, Int}
-  compression     ::Symbol              # deflate || blosc
+  dir           ::AbstractString
+  h5FilePrefix  ::AbstractString
+  globalOffset  ::NTuple{3, Int}
+  blockSize     ::NTuple{3, Int}
+  chunkSize     ::NTuple{3, Int}
+  compression   ::Symbol              # deflate || blosc
 end
 
 """
@@ -33,12 +37,16 @@ end
 handle vector type
 """
 function H5sBigArray(   dir::AbstractString,
+                        h5FilePrefix::AbstractString,
+                        globalOffset::Vector,
                         blockSize::Vector,
                         chunkSize::Vector,
                         compression::AbstractString)
-    H5sBigArray(dir,    NTuple{3, Int}((blockSize ...)),
-                        NTuple{3, Int}((chunkSize ...)),
-                        Symbol(compression))
+    H5sBigArray(    dir, h5FilePrefix,
+                    NTuple{3, Int}((globalOffset ...)),
+                    NTuple{3, Int}((blockSize ...)),
+                    NTuple{3, Int}((chunkSize ...)),
+                    Symbol(compression))
 end
 
 """
@@ -46,6 +54,8 @@ construct a H5sBigArray from a dict
 """
 function H5sBigArray( configDict::Dict{Symbol, Any} )
     H5sBigArray(configDict[:dir],
+                configDict[:h5FilePrefix],
+                configDict[:globalOffset],
                 configDict[:blockSize],
                 configDict[:chunkSize],
                 configDict[:compression] )
@@ -55,9 +65,11 @@ end
 construct from a register file, which defines file architecture
 """
 function H5sBigArray(   dir::AbstractString;
-                        blockSize::NTuple{3, Int}   = DEFAULT_BLOCK_SIZE,
-                        chunkSize::NTuple{3, Int}   = DEFAULT_CHUNK_SIZE,
-                        compression::Symbol         = :deflate)
+                        h5FilePrefix::AbstractString    = DEFAULT_H5FILE_PREFIX,
+                        globalOffset::NTuple{3, Int}    = DEFAULT_GLOBAL_OFFSET,
+                        blockSize::NTuple{3, Int}       = DEFAULT_BLOCK_SIZE,
+                        chunkSize::NTuple{3, Int}       = DEFAULT_CHUNK_SIZE,
+                        compression::Symbol             = :deflate)
     configFile = joinpath(dir, CONFIG_FILE)
     if isfile(dir)
         warn("take this file as bigarray config file: $(dir)")
@@ -74,7 +86,7 @@ function H5sBigArray(   dir::AbstractString;
         if !isdir(dir)
           mkdir(dir)
         end
-        ba = H5sBigArray(dir, blockSize, chunkSize, compression)
+        ba = H5sBigArray(dir, h5FilePrefix, globalOffset, blockSize, chunkSize, compression)
         updateconfigfile(ba)
     end
     ba
@@ -87,6 +99,8 @@ transform bigarray to string
 function bigArray2dict(ba::H5sBigArray)
     d = Dict{Symbol, Any}()
     d[:dir] = ba.dir
+    d[:h5FilePrefix] = ba.h5FilePrefix
+    d[:globalOffset] = ba.globalOffset
     d[:blockSize] = ba.blockSize
     d[:chunkSize] = ba.chunkSize
     d[:compression] = ba.compression
@@ -197,6 +211,22 @@ extract chunk from a bigarray
 only works for 3D now.
 """
 function Base.getindex(ba::H5sBigArray, idxes::Union{UnitRange, Int, Colon}...)
+    @show idxes
+    # transform to originate from (0,0,0)
+    globalOffset = ba.globalOffset
+    xRange = idxes[1] - globalOffset[1]
+    yRange = idxes[2] - globalOffset[2]
+    zRange = idxes[3] - globalOffset[3]
+    if length(idxes)==3
+        idxes = (xRange, yRange, zRange)
+    elseif length(idxes)==4
+        idxes = (xRange, yRange, zRange, idxes[4])
+    else
+        error("only support 3D and 4D now, get $(length(idxes))")
+    end
+
+    @show globalOffset
+    @show idxes
     # only support 3D image now, could support arbitrary dimensions in the future
     # allocate memory
     sx = length(idxes[1])
@@ -214,8 +244,13 @@ function Base.getindex(ba::H5sBigArray, idxes::Union{UnitRange, Int, Colon}...)
             for gix in GlobalIndex(idxes[1], ba.blockSize[1])
                 # get block id
                 bidx, bidy, bidz = blockid((gix,giy,giz), ba.blockSize)
+                # global coordinate
+                globalOriginX = globalOffset[1] + (bidx-1) * ba.blockSize[1] + 1
+                globalOriginY = globalOffset[2] + (bidy-1) * ba.blockSize[2] + 1
+                globalOriginZ = globalOffset[3] + (bidz-1) * ba.blockSize[3] + 1
                 # get hdf5 file name
-                h5FileName = joinpath(ba.dir, "chunk_$(bidx)_$(bidy)_$(bidz).h5")
+                h5FileName = "$(ba.h5FilePrefix)$(globalOriginX)-$(globalOriginX+ba.blockSize[1]-1)_$(globalOriginY)-$(globalOriginY+ba.blockSize[2]-1)_$(globalOriginZ)-$(globalOriginZ+ba.blockSize[3]-1).h5"
+                h5FileName = joinpath(ba.dir, h5FileName)
                 # if have data fill with data,
                 # if not, no need to change, keep as zero
                 if isfile(h5FileName) && ishdf5(h5FileName)
@@ -242,6 +277,8 @@ function Base.getindex(ba::H5sBigArray, idxes::Union{UnitRange, Int, Colon}...)
                             sleep(5)
                         end
                     end
+                else
+                    warn("filled with zeros because file do not exist: $(h5FileName)")
                 end
             end
         end
@@ -254,6 +291,19 @@ end
 put small array to big array
 """
 function Base.setindex!(ba::H5sBigArray, buf::Array, idxes::Union{UnitRange, Int, Colon}...)
+    # transform to originate from (0,0,0)
+    globalOffset = ba.globalOffset
+    xRange = idxes[1] - globalOffset[1]
+    yRange = idxes[2] - globalOffset[2]
+    zRange = idxes[3] - globalOffset[3]
+    if length(idxes)==3
+        idxes = (xRange, yRange, zRange)
+    elseif length(idxes)==4
+        idxes = (xRange, yRange, zRange, idxes[4])
+    else
+        error("only support 3D and 4D now, get $(length(idxes))")
+    end
+
     # only support 3D now
     @assert length(idxes[1]) == size(buf, 1)
     @assert length(idxes[2]) == size(buf, 2)
@@ -264,8 +314,13 @@ function Base.setindex!(ba::H5sBigArray, buf::Array, idxes::Union{UnitRange, Int
             for gix in GlobalIndex(idxes[1], ba.blockSize[1])
                 # get block id
                 bidx, bidy, bidz = blockid((gix,giy,giz), ba.blockSize)
+                # global coordinate
+                globalOriginX = globalOffset[1] + (bidx-1) * ba.blockSize[1] + 1
+                globalOriginY = globalOffset[2] + (bidy-1) * ba.blockSize[2] + 1
+                globalOriginZ = globalOffset[3] + (bidz-1) * ba.blockSize[3] + 1
                 # get hdf5 file name
-                h5FileName = joinpath(ba.dir, "chunk_$(bidx)_$(bidy)_$(bidz).h5")
+                h5FileName = "$(ba.h5FilePrefix)$(globalOriginX)-$(globalOriginX+ba.blockSize[1]-1)_$(globalOriginY)-$(globalOriginY+ba.blockSize[2]-1)_$(globalOriginZ)-$(globalOriginZ+ba.blockSize[3]-1).h5"
+                h5FileName = joinpath(ba.dir, h5FileName)
                 @show h5FileName
                 # compute index in hdf5
                 blkix, blkiy, blkiz = globalIndexes2blockIndexes((gix,giy,giz), ba.blockSize)
@@ -316,7 +371,6 @@ function save_buffer{T}(    buf::Array{T, 3}, h5FileName, ba,
                 "blosc", 3)
         end
     end
-    # @show bufix, bufiy, bufiz
     # @show blkix, blkiy, blkiz
     @show dataSet
     dataSet[blkix, blkiy, blkiz] = buf[bufix, bufiy, bufiz]
