@@ -16,10 +16,11 @@ ba = H5sBigArray("/directory/of/hdf5/files/");
 ba[101:200, 201:300, 1:3] = rand(UInt8, 100,100,3)
 @show ba[101:200, 201:300, 1:3]
 ```
+
+`BigArrays` do not have limit of dataset size, if your reading index is outside of existing file range, will return an array filled with zeros.
    
 ## supported backends
 - [x] hdf5 files. 
-
 - [x] seunglab aligned 2D image hdf5 files.
 - [ ] [Janelia DVID](https://github.com/janelia-flyem/dvid)
 
