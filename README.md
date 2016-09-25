@@ -1,10 +1,10 @@
-# BigArray.jl
+# BigArrays.jl
 storing and accessing large julia array using different backends.
 
-this package design was inspired by [GPUArray](https://github.com/JuliaGPU/GPUArrays.jl)
+this package design was inspired by [GPUArrays](https://github.com/JuliaGPU/GPUArrays.jl)
 
 ## Installation
-    Pkg.clone(https://github.com/seung-lab/BigArray.jl.git)
+    Pkg.clone(https://github.com/seung-lab/BigArrays.jl.git)
     
 ## usage
 
