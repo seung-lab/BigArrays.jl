@@ -2,7 +2,7 @@
 storing and accessing large julia array using different backends.
 
 ## Installation
-    Pkg.clone(https://github.com/seung-lab/BigArrays.jl.git)
+    Pkg.clone("https://github.com/seung-lab/BigArrays.jl.git")
     
 ## usage
 
