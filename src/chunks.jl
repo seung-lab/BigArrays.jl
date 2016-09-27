@@ -17,9 +17,9 @@ immutable Chunks
     voxelSize::Size
 end
 
-function Chunks(ba::AbstractBigArray, origin::Coordinate=[0,0,0],
-                chunkSize::Size=[1024,1024,10], overlap::Size=[0,0,0],
-                gridsz::Size=[1,1,1], voxelSize::Size=[1,1,1])
+function Chunks(ba::AbstractBigArray; origin::Coordinate=[0,0,0],
+                chunkSize::Size=[1024,1024,128], overlap::Size=[0,0,0],
+                gridsz::Size=[1,1,1], voxelSize::Size=[4,4,40])
     Chunks(ba, origin, chunkSize, overlap, gridsz, voxelSize)
 end
 # iteration functions
