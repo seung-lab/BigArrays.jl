@@ -18,32 +18,32 @@ export H5sBigArray, boundingbox
 definition of h5s big array
 """
 type H5sBigArray <: AbstractBigArray
-  h5FilePrefix  ::AbstractString
-  globalOffset  ::NTuple{3, Int}
-  blockSize     ::NTuple{3, Int}
-  chunkSize     ::NTuple{3, Int}
-  compression   ::Symbol              # deflate || blosc
+    h5FilePrefix  ::AbstractString
+    globalOffset  ::Tuple
+    blockSize     ::Tuple
+    chunkSize     ::Tuple
+    compression   ::Symbol              # deflate || blosc
 end
 
 """
 default constructor
 """
 function H5sBigArray()
-  H5sBigArray(string(tempname(), ".h5sbigarray"))
+    H5sBigArray(string(tempname(), ".h5sbigarray"))
 end
 
 """
 handle vector type
 """
-function H5sBigArray(   h5FilePrefix::AbstractString,
-                        globalOffset::Vector,
-                        blockSize::Vector,
-                        chunkSize::Vector,
-                        compression::AbstractString)
+function H5sBigArray(   h5FilePrefix    ::AbstractString,
+                        globalOffset    ::Vector,
+                        blockSize       ::Vector,
+                        chunkSize       ::Vector,
+                        compression     ::AbstractString)
     H5sBigArray(    h5FilePrefix,
-                    NTuple{3, Int}((globalOffset ...)),
-                    NTuple{3, Int}((blockSize ...)),
-                    NTuple{3, Int}((chunkSize ...)),
+                    (globalOffset ...),
+                    (blockSize ...),
+                    (chunkSize ...),
                     Symbol(compression))
 end
 
@@ -63,9 +63,9 @@ construct from a register file, which defines file architecture
 """
 function H5sBigArray(   dir::AbstractString;
                         h5FilePrefix::AbstractString    = DEFAULT_H5FILE_PREFIX,
-                        globalOffset::NTuple{3, Int}    = DEFAULT_GLOBAL_OFFSET,
-                        blockSize::NTuple{3, Int}       = DEFAULT_BLOCK_SIZE,
-                        chunkSize::NTuple{3, Int}       = DEFAULT_CHUNK_SIZE,
+                        globalOffset::Tuple             = DEFAULT_GLOBAL_OFFSET,
+                        blockSize::Tuple                = DEFAULT_BLOCK_SIZE,
+                        chunkSize::Tuple                = DEFAULT_CHUNK_SIZE,
                         compression::Symbol             = :deflate)
     configFile = joinpath(dir, CONFIG_FILE)
     if isfile(dir)
@@ -164,26 +164,27 @@ end
 bounding box of the whole volume
 """
 function boundingbox(ba::H5sBigArray)
-  x1 = Inf;   x2 = -Inf;
-  y1 = Inf;   y2 = -Inf;
-  z1 = Inf;   z2 = -Inf;
-  for file in readdir(H5SBIGARRAY_DIRECTORY)
-    if ishdf5(file)
-        f = h5open(file)
-        origin = f["origin"]
-        sz = size(f[H5_DATASET_NAME])
-        close(f)
-        # origin = fileName2origin(  )
-        x1 = min(x1, origin[1])
-        y1 = min(y1, origin[2])
-        z1 = min(z1, origin[3])
-        x2 = max(x2, origin[1]+sz[1]-1)
-        y2 = max(y2, origin[2]+sz[2]-1)
-        z2 = max(z2, origin[3]+sz[3]-1)
-
+    d = ndims(ba)
+    start =
+    x1 = Inf;   x2 = -Inf;
+    y1 = Inf;   y2 = -Inf;
+    z1 = Inf;   z2 = -Inf;
+    for file in readdir(H5SBIGARRAY_DIRECTORY)
+        if ishdf5(file)
+            f = h5open(file)
+            origin = f["origin"]
+            sz = size(f[H5_DATASET_NAME])
+            close(f)
+            # origin = fileName2origin(  )
+            x1 = min(x1, origin[1])
+            y1 = min(y1, origin[2])
+            z1 = min(z1, origin[3])
+            x2 = max(x2, origin[1]+sz[1]-1)
+            y2 = max(y2, origin[2]+sz[2]-1)
+            z2 = max(z2, origin[3]+sz[3]-1)
+        end
     end
-  end
-  (Int64(x1):Int64(x2), Int64(y1):Int64(y2), Int64(z1):Int64(z2))
+    (Int64(x1):Int64(x2), Int64(y1):Int64(y2), Int64(z1):Int64(z2))
 end
 
 bbox(ba::H5sBigArray) = boundingbox(ba::H5sBigArray)
@@ -192,19 +193,30 @@ bbox(ba::H5sBigArray) = boundingbox(ba::H5sBigArray)
 compute size from bounding box
 """
 function Base.size(ba::H5sBigArray)
-  bb = BoundingBox(ba)
-  size(bb)
+    bb = boundingbox(ba)
+    size(bb)
 end
 
 function Base.size(ba::H5sBigArray, i::Int)
-  size(ba)[i]
+    size(ba)[i]
 end
 
 function Base.show(ba::H5sBigArray)
-  println("element type: $(eltype(ba))")
-  println("size: $(size(ba))")
-  println("bounding box: $(bbox(ba))")
-  println("the data is in disk, not shown here.")
+    # println("element type: $(eltype(ba))")
+    # println("size: $(size(ba))")
+    # println("bounding box: $(bbox(ba))")
+    println("the data is in disk, not shown here.")
+end
+
+"""
+get h5 file name
+"""
+function get_filename(ba::H5sBigArray, globalOrigin::Union{Tuple, Vector})
+    h5FileName = ba.h5FilePrefix
+    for i in 1:length(globalOrigin)
+        h5FileName *= "$(globalOrigin[i])-$(globalOrigin[i]+ba.blockSize[i]-1)_"
+    end
+    return joinpath(H5SBIGARRAY_DIRECTORY, "$(h5FileName[1:end-1]).h5")
 end
 
 """
@@ -213,85 +225,45 @@ only works for 3D now.
 """
 function Base.getindex(ba::H5sBigArray, idxes::Union{UnitRange, Int, Colon}...)
     @show idxes
+    # clarify the Colon
+    idxes = colon2unitRange(buf, idxes)
     # transform to originate from (0,0,0)
-    globalOffset = ba.globalOffset
-    xRange = idxes[1] - globalOffset[1]
-    yRange = idxes[2] - globalOffset[2]
-    zRange = idxes[3] - globalOffset[3]
-    if length(idxes)==3
-        idxes = (xRange, yRange, zRange)
-    elseif length(idxes)==4
-        idxes = (xRange, yRange, zRange, idxes[4])
-    else
-        error("only support 3D and 4D now, get $(length(idxes))")
-    end
+    idxes = [idxes...] .- [ba.globalOffset...]
 
-    @show globalOffset
+    @show ba.globalOffset
     @show idxes
     # only support 3D image now, could support arbitrary dimensions in the future
     # allocate memory
-    sx = length(idxes[1])
-    sy = length(idxes[2])
-    sz = length(idxes[3])
-    # create buffer
-    if ndims(ba) == 3
-        buf = zeros(eltype(ba), (sx,sy,sz))
-    else
-        @assert ndims(ba)==4
-        channelNum = 0
-        for file in readdir(H5SBIGARRAY_DIRECTORY)
-            h5FileName = joinpath(H5SBIGARRAY_DIRECTORY, file)
-            if ishdf5(h5FileName)
-                f = h5open(h5FileName)
-                channelNum = size(f[H5_DATASET_NAME])[4]
-                close(f)
-                break
-            end
-        end
-        buf = zeros(eltype(ba), (sx,sy,sz, channelNum))
-    end
-    for giz in GlobalIndex(idxes[3], ba.blockSize[3])
-        for giy in GlobalIndex(idxes[2], ba.blockSize[2])
-            for gix in GlobalIndex(idxes[1], ba.blockSize[1])
-                # get block id
-                bidx, bidy, bidz = blockid((gix,giy,giz), ba.blockSize)
-                # global coordinate
-                globalOriginX = globalOffset[1] + (bidx-1) * ba.blockSize[1] + 1
-                globalOriginY = globalOffset[2] + (bidy-1) * ba.blockSize[2] + 1
-                globalOriginZ = globalOffset[3] + (bidz-1) * ba.blockSize[3] + 1
-                # get hdf5 file name
-                h5FileName = "$(ba.h5FilePrefix)$(globalOriginX)-$(globalOriginX+ba.blockSize[1]-1)_$(globalOriginY)-$(globalOriginY+ba.blockSize[2]-1)_$(globalOriginZ)-$(globalOriginZ+ba.blockSize[3]-1).h5"
-                h5FileName = joinpath(H5SBIGARRAY_DIRECTORY, h5FileName)
-                # if have data fill with data,
-                # if not, no need to change, keep as zero
-                if isfile(h5FileName) && ishdf5(h5FileName)
-                    # compute index in hdf5
-                    blkix, blkiy, blkiz = globalIndexes2blockIndexes((gix,giy,giz), ba.blockSize)
-                    # compute index in buffer
-                    bufix, bufiy, bufiz = globalIndexes2bufferIndexes((gix,giy,giz), idxes)
-                    # assign data value, preserve existing value
-                    info("read ($(gix), $giy, $giz) from ($(blkix), $(blkiy), $(blkiz)) of $(h5FileName) to buffer ($bufix, $bufiy, $bufiz)")
-                    while true
-                        try
-                            if length(idxes)==3
-                                buf[bufix, bufiy, bufiz] = h5read(h5FileName, H5_DATASET_NAME, (blkix,blkiy,blkiz))
-                            else
-                                @assert length(idxes)==4
-                                @assert ndims(ba)==4
-                                @show (blkix, blkiy, blkiz, :)
-                                buf[bufix, bufiy, bufiz,:] = h5read(h5FileName, H5_DATASET_NAME, (blkix, blkiy, blkiz, :))
-                            end
-                            break
-                        catch
-                            rethrow()
-                            warn("open and read $h5FileName failed, will try 5 seconds later...")
-                            sleep(5)
-                        end
-                    end
-                else
-                    warn("filled with zeros because file do not exist: $(h5FileName)")
+    sz = map(length, idxes)
+    buf = zeros(eltype(ba), sz)
+
+    for gidxes in map(GlobalIndex, zip(idxes, ba.blockSize))
+        # get block id
+        bids = map(blockid, zip(gidxes, ba.blockSize))
+        # global coordinate
+        globalOrigin = [ba.globalOffset...] .+ ([bids...]-1).* ba.blockSize .+ 1
+        # get hdf5 file name
+        h5FileName = get_filename(ba, globalOrigin)
+        # if have data fill with data,
+        # if not, no need to change, keep as zero
+        if isfile(h5FileName) && ishdf5(h5FileName)
+            # compute index in hdf5
+            blkidxes = globalIndexes2blockIndexes(gidxes, ba.blockSize)
+            # compute index in buffer
+            bufidxes = globalIndexes2bufferIndexes(gidxes, idxes)
+            # assign data value, preserve existing value
+            while true
+                try
+                    buf[bufidxes] = h5read(h5FileName, H5_DATASET_NAME, blkidxes)
+                    break
+                catch
+                    rethrow()
+                    warn("open and read $h5FileName failed, will try 5 seconds later...")
+                    sleep(5)
                 end
             end
+        else
+            warn("filled with zeros because file do not exist: $(h5FileName)")
         end
     end
     buf
@@ -302,55 +274,36 @@ end
 put small array to big array
 """
 function Base.setindex!(ba::H5sBigArray, buf::Array, idxes::Union{UnitRange, Int, Colon}...)
+    @assert ndims(buf) == length(idxes)
+    # clarify the Colon
+    idxes = colon2unitRange(buf, idxes)
+    # set bounding box
+    # blendchunk!(ba.boundingBox, buf, idxes)
     # transform to originate from (0,0,0)
-    globalOffset = ba.globalOffset
-    xRange = idxes[1] - globalOffset[1]
-    yRange = idxes[2] - globalOffset[2]
-    zRange = idxes[3] - globalOffset[3]
-    if length(idxes)==3
-        idxes = (xRange, yRange, zRange)
-    elseif length(idxes)==4
-        idxes = (xRange, yRange, zRange, idxes[4])
-    else
-        error("only support 3D and 4D now, get $(length(idxes))")
-    end
+    idxes = [idxes...] .- [ba.globalOffset...]
 
-    # only support 3D now
-    @assert length(idxes[1]) == size(buf, 1)
-    @assert length(idxes[2]) == size(buf, 2)
-    @assert length(idxes[3]) == size(buf, 3)
-
-    for giz in GlobalIndex(idxes[3], ba.blockSize[3])
-        for giy in GlobalIndex(idxes[2], ba.blockSize[2])
-            for gix in GlobalIndex(idxes[1], ba.blockSize[1])
-                # get block id
-                bidx, bidy, bidz = blockid((gix,giy,giz), ba.blockSize)
-                # global coordinate
-                globalOriginX = globalOffset[1] + (bidx-1) * ba.blockSize[1] + 1
-                globalOriginY = globalOffset[2] + (bidy-1) * ba.blockSize[2] + 1
-                globalOriginZ = globalOffset[3] + (bidz-1) * ba.blockSize[3] + 1
-                # get hdf5 file name
-                h5FileName = "$(ba.h5FilePrefix)$(globalOriginX)-$(globalOriginX+ba.blockSize[1]-1)_$(globalOriginY)-$(globalOriginY+ba.blockSize[2]-1)_$(globalOriginZ)-$(globalOriginZ+ba.blockSize[3]-1).h5"
-                h5FileName = joinpath(H5SBIGARRAY_DIRECTORY, h5FileName)
-                @show h5FileName
-                # compute index in hdf5
-                blkix, blkiy, blkiz = globalIndexes2blockIndexes((gix,giy,giz), ba.blockSize)
-                # compute index in buffer
-                bufix, bufiy, bufiz = globalIndexes2bufferIndexes((gix,giy,giz), idxes)
-                # put buffer subarray to hdf5, reserve existing values
-                while true
-                    try
-                        save_buffer(buf, h5FileName, ba,
-                                    blkix, blkiy, blkiz,
-                                    bufix, bufiy, bufiz)
-                        info("save ($gix, $giy, $giz) from buffer ($bufix, $bufiy, $bufiz) to ($blkix, $blkiy, $blkiz) of $(h5FileName)")
-                        break
-                    catch
-                        rethrow()
-                        warn("open and write $h5FileName failed, will try 5 seconds later...")
-                        sleep(5)
-                    end
-                end
+    for gidxes in map(x->GlobalIndex(x), zip(idxes, ba.blockSize))
+        # get block id
+        bids = map(blockid, zip(gidxes, ba.blockSize))
+        # global coordinate
+        globalOrigin = [ba.globalOffset...] .+ ([bids...].-1) .* [ba.blockSize...] .+ 1
+        # get hdf5 file name
+        h5FileName = get_filename(ba, globalOrigin)
+        @show h5FileName
+        # compute index in hdf5
+        blkidxes = globalIndexes2blockIndexes(gidxes, ba.blockSize)
+        # compute index in buffer
+        bufidxes = globalIndexes2bufferIndexes(gidxes, idxes)
+        # put buffer subarray to hdf5, reserve existing values
+        while true
+            try
+                save_buffer(buf, h5FileName, ba, blkidxes, bufidxes)
+                info("save $(gidxes) from buffer $(bufidxes) to $(blkidxes) of $(h5FileName)")
+                break
+            catch
+                rethrow()
+                warn("open and write $h5FileName failed, will try 5 seconds later...")
+                sleep(5)
             end
         end
     end
@@ -360,20 +313,23 @@ end
 decode file name to origin coordinate
 """
 function fileName2origin( fileName::AbstractString )
-    origin = zeros(Int, 3)
     secs = split(fileName, "_")
-    origin[1] = parse( split(secs[2],"-")[1] )
-    origin[2] = parse( split(secs[3],"-")[1] )
-    origin[3] = parse( split(secs[4],"-")[1] )
+    origin = zeros(Int, length(secs)-2)
+    for i in 1:length(origin)
+        origin[i] = parse( split(secs[i+1],"-")[1] )
+    end
     return origin
 end
 
 """
 save part of or whole buffer to one hdf5 file
 """
-function save_buffer{T}(    buf::Array{T, 3}, h5FileName, ba,
-                            blkix, blkiy, blkiz,
-                            bufix, bufiy, bufiz)
+function save_buffer{T,D}(  buf::Array{T, D}, h5FileName::AbstractString,
+                            ba::AbstractBigArray,
+                            blkidxes::Union{Tuple, Vector},
+                            bufidxes::Union{Tuple, Vector})
+    @assert D==length(blkidxes)
+    @assert D==length(bufidxes)
     if isfile(h5FileName) && ishdf5(h5FileName)
         f = h5open(h5FileName, "r+")
         dataSet = f[H5_DATASET_NAME]
@@ -385,69 +341,25 @@ function save_buffer{T}(    buf::Array{T, 3}, h5FileName, ba,
         # assign values
         if ba.compression == :deflate
             dataSet = d_create(f, H5_DATASET_NAME, datatype(eltype(buf)),
-                dataspace(ba.blockSize[1], ba.blockSize[2], ba.blockSize[3]),
-                "chunk", (ba.chunkSize[1], ba.chunkSize[2], ba.chunkSize[3]),
+                dataspace(ba.blockSize...),
+                "chunk", (ba.chunkSize...),
                 "shuffle", (), "deflate", 3)
 
         elseif ba.compression == :blosc
             dataSet = d_create(f, H5_DATASET_NAME, datatype(eltype(buf)),
-                dataspace(ba.blockSize[1], ba.blockSize[2], ba.blockSize[3]),
-                "chunk", (ba.chunkSize[1], ba.chunkSize[2], ba.chunkSize[3]),
+                dataspace(ba.blockSize...),
+                "chunk", (ba.chunkSize...),
                 "blosc", 3)
         else
             dataSet = d_create(f, H5_DATASET_NAME, datatype(eltype(buf)),
-                dataspace(ba.blockSize[1], ba.blockSize[2], ba.blockSize[3]),
-                "chunk", (ba.chunkSize[1], ba.chunkSize[2], ba.chunkSize[3]))
+                dataspace(ba.blockSize...),
+                "chunk", (ba.chunkSize...))
         end
     end
     # @show blkix, blkiy, blkiz
     @show dataSet
-    dataSet[blkix, blkiy, blkiz] = buf[bufix, bufiy, bufiz]
+    dataSet[blkidxes...] = buf[bufidxes...]
     close(f)
-end
-
-function save_buffer{T}(    buf::Array{T, 4}, h5FileName, ba,
-                            blkix, blkiy, blkiz,
-                            bufix, bufiy, bufiz)
-    @assert ndims(buf)==4
-    # the number of channels, it is 3 for affinity map, 5 or more for semantic segmentation
-    channelNum = size(buf, 4)
-
-    # @show blkix, blkiy, blkiz
-    # @show bufix, bufiy, bufiz
-    if isfile(h5FileName) && ishdf5(h5FileName)
-        println("find an existing file: $(h5FileName)")
-        f = h5open(h5FileName, "r+")
-        @show f
-        dataSet = f[H5_DATASET_NAME]
-        @show dataSet
-        @assert eltype(f[H5_DATASET_NAME])==T
-        dataSet[blkix, blkiy, blkiz, :] = buf[bufix, bufiy, bufiz, :]
-        close(f)
-    else
-        println("no such file, create one: $(h5FileName)")
-        f = h5open(h5FileName, "w")
-        @show f
-        # assign values
-        if ba.compression == :deflate
-            dataSet = d_create(f, H5_DATASET_NAME, datatype(eltype(buf)),
-                dataspace(ba.blockSize[1], ba.blockSize[2], ba.blockSize[3], channelNum),
-                "chunk", (ba.chunkSize[1], ba.chunkSize[2], ba.chunkSize[3], channelNum),
-                "shuffle", (), "deflate", 3)
-        elseif ba.compression == :blosc
-            dataSet = d_create(f, H5_DATASET_NAME, datatype(eltype(buf)),
-                dataspace(ba.blockSize[1], ba.blockSize[2], ba.blockSize[3], channelNum),
-                "chunk", (ba.chunkSize[1], ba.chunkSize[2], ba.chunkSize[3], channelNum),
-                "blosc", 3)
-        else
-            dataSet = d_create(f, H5_DATASET_NAME, datatype(eltype(buf)),
-                dataspace(ba.blockSize[1], ba.blockSize[2], ba.blockSize[3], channelNum),
-                "chunk", (ba.chunkSize[1], ba.chunkSize[2], ba.chunkSize[3], channelNum))
-        end
-        dataSet[blkix, blkiy, blkiz, :] = buf[bufix, bufiy, bufiz, :]
-        close(f)
-    end
-
 end
 
 end # end of module: H5sBigArrays

@@ -1,4 +1,5 @@
 export blockid, GlobalIndex, globalRange2localRange, globalIndex2blockIndex, globalIndex2bufferIndex, globalIndexes2bufferIndexes, globalIndexes2blockIndexes
+export colon2unitRange
 
 """
 get blockid from a coordinate
@@ -14,17 +15,18 @@ function blockid(idx::UnitRange, blockSize::Integer)
     bid1
 end
 
+function blockid(t::Tuple{UnitRange, Int})
+    blockid(t[1], t[2])
+end
+
 function blockid(idxes::Tuple, blockSize::Union{Vector, Tuple})
-    bidx = blockid(idxes[1], blockSize[1])
-    bidy = blockid(idxes[2], blockSize[2])
-    bidz = blockid(idxes[3], blockSize[3])
-    (bidx, bidy, bidz)
+    map(x->blockid(x[1], x[2]), zip(idxes, blockSize))
 end
 
 """
 transform one global UnitRange (inside a block) to local UnitRange in a block
 """
-function globalRange2localRange(globalRange::UnitRange, blockSize::Int)
+function globalRange2localRange(globalRange::UnitRange, blockSize::Integer)
     # make sure that this range is within a block
     @assert length(globalRange) <= blockSize
     # they belong to a same block
@@ -43,7 +45,15 @@ end
 # iterater of global index
 type GlobalIndex
     idx::Union{UnitRange, Int}
-    blockSize::Int
+    blockSize::Integer
+end
+
+function GlobalIndex( t::Tuple{UnitRange, Int})
+    GlobalIndex(t[1], t[2])
+end
+
+function Base.length( gidx::GlobalIndex )
+    length(gidx.idx)
 end
 
 function Base.start(globalIndex::GlobalIndex)
@@ -101,16 +111,13 @@ function globalIndex2blockIndex(globalIndex::Union{UnitRange, Int}, blockSize::I
 end
 
 function globalIndexes2blockIndexes(globalIndexes::Tuple, blockSize::Union{Vector, Tuple})
-    # @assert length(globalIndexes) == length(blockSize)
-    blkix = globalIndex2blockIndex(globalIndexes[1], blockSize[1])
-    blkiy = globalIndex2blockIndex(globalIndexes[2], blockSize[2])
-    blkiz = globalIndex2blockIndex(globalIndexes[3], blockSize[3])
-    (blkix, blkiy, blkiz)
-    # if length(globalIndexes)==3
-    #   return (blkix, blkiy, blkiz)
-    # else
-    #   return (blkix, blkiy, blkiz, :)
-    # end
+    @assert length(globalIndexes) == length(blockSize)
+    ret = []
+    for i = 1:length(blockSize)
+        push!(ret, globalIndex2blockIndex(globalIndexes[i], blockSize[i]))
+    end
+    return (ret...)
+    # map(globalIndex2blockIndex, zip(globalIndexes, blockSize))
 end
 
 function getstart(idx::UnitRange)
@@ -124,22 +131,27 @@ end
 compute buffer index
 """
 function globalIndex2bufferIndex(globalIndex::Union{UnitRange, Int, Colon}, bufferIndex::Union{Int, UnitRange, Colon})
-    # @show globalIndex, bufferIndex
     bufstart = getstart(bufferIndex)
     globalIndex - bufstart + 1
 end
 
 function globalIndexes2bufferIndexes(globalIndexes::Tuple, bufferIndexes::Tuple)
-  # @show globalIndexes
-  # @show bufferIndexes
-    # @assert length(globalIndexes) == length(bufferIndexes)
-    bufix = globalIndex2bufferIndex(globalIndexes[1], bufferIndexes[1])
-    bufiy = globalIndex2bufferIndex(globalIndexes[2], bufferIndexes[2])
-    bufiz = globalIndex2bufferIndex(globalIndexes[3], bufferIndexes[3])
-    (bufix, bufiy, bufiz)
-    # if length(globalIndexes)==3
-    #   return (bufix, bufiy, bufiz)
-    # else
-    #   return (bufix, bufiy, bufiz, :)
-    # end
+    map(globalIndex2bufferIndex, zip(globalIndexes, bufferIndexes))
+end
+
+"""
+replace Colon of indexes by UnitRange
+"""
+function colon2unitRange(buf::Array, indexes::Tuple)
+    colon2unitRange(size(buf), indexes)
+end
+
+function colon2unitRange(sz::Tuple, indexes::Tuple)
+    ret = [indexes...]
+    for i in 1:length(indexes)
+        if indexes[i] == Colon()
+            ret[i] = UnitRange(1:sz[i])
+        end
+    end
+    return (ret...)
 end

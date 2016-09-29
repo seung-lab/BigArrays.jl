@@ -7,8 +7,8 @@ export Chunk, blendchunk, crop_border, physical_offset, save, savechunk, readchu
 
 type Chunk <: AbstractChunk
     data::Union{Array, SegMST} # could be 3 or 4 Dimensional array
-    origin::Vector{Int}     # measured by voxel number
-    voxelSize::Vector{Int}  # physical size of each voxel
+    origin::Vector{UInt32}     # measured by voxel number
+    voxelSize::Vector{UInt32}  # physical size of each voxel
 end
 
 """
@@ -150,6 +150,6 @@ end
 """
 cutout a chunk from BigArray
 """
-function cutout(ba::AbstractBigArray, indexes::Union{UnitRange, Int, Colon} ...)
+function cutout(ba::AbstractBigArray, indexes::Union{UnitRange, Integer, Colon} ...)
     error("unimplemented")
 end
