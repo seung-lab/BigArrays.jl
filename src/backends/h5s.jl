@@ -358,6 +358,7 @@ end
 
 """
 decode file name to origin coordinate
+to-do: support negative coordinate.
 """
 function fileName2origin( fileName::AbstractString )
     origin = zeros(Int, 3)
@@ -381,7 +382,7 @@ function save_buffer{T}(    buf::Array{T, 3}, h5FileName, ba,
     else
         f = h5open(h5FileName, "w")
         # assign origin
-        f["origin"] = fileName2origin( h5FileName )
+        # f["origin"] = #fileName2origin( h5FileName )
         # assign values
         if ba.compression == :deflate
             dataSet = d_create(f, H5_DATASET_NAME, datatype(eltype(buf)),

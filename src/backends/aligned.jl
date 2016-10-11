@@ -9,7 +9,7 @@ const H5_DATASET_NAME = "img"
 const H5_DATASET_ELEMENT_TYPE = UInt8
 const DATASET_NDIMS = 3
 
-export AlignedBigArray
+export AlignedBigArray, boundingbox
 
 # register item of one section / hdf5 file
 typealias Tsecreg Dict{Symbol, Union{AbstractString, Int}}
@@ -29,12 +29,13 @@ function AlignedBigArray(fregister::AbstractString)
     lines = readlines(f)
     close(f)
     register = Tregister()
-    sizehint!(Tregister, length(lines))
+    # sizehint!(Tregister, length(lines))
     z = 0
     for i in eachindex(lines)
         z += 1
         # initialize the registration of a section image
         d = Tsecreg()
+        line = lines[i]
         if length(split(line)) == 7
             registerFile, tmpZero, xoff, yoff, xdim, ydim, tf = split(line)
         elseif length(split(line))==6
@@ -92,7 +93,7 @@ end
 """
 bounding box of the whole volume
 """
-function Tbbox(A::AlignedBigArray)
+function boundingbox(A::AlignedBigArray)
     x1 = Inf;   x2 = -Inf;
     y1 = Inf;   y2 = -Inf;
     z1 = Inf;   z2 = -Inf;
@@ -106,7 +107,6 @@ function Tbbox(A::AlignedBigArray)
     end
     (Int64(x1):Int64(x2), Int64(y1):Int64(y2), Int64(z1):Int64(z2))
 end
-bbox(A::AlignedBigArray) = Tbbox(A)
 
 """
 compute size from bounding box
@@ -183,16 +183,13 @@ function Base.getindex(A::AlignedBigArray, idxes::Union{UnitRange, Int}...)
             yidx = idxes[2] - A.register[z][:yoff]
             zidx = z  - first(idxes[3]) + 1
             # println("registerFile: $(basename(registerFile)), xidx: $(xidx), yidx: $(yidx), zidx: $(zidx)")
-            @assert xidx.start > 0
-            @assert yidx.start > 0
-            @assert zidx > 0
             read_subimage!( buf[:,:,zidx],
                             registerFile,
                             A.register[z][:xdim],
                             A.register[z][:ydim],
                             xidx, yidx)
         else
-            warn("section file not exist: $(key)")
+            warn("section file not exist: $(z)")
         end
     end
     buf
