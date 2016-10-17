@@ -1,82 +1,92 @@
+# store small cuboids in AWS S3, download all the cuboids and cutout locally.
+# The larger the cuboids size, the more redundency the download will be.
+# The smaller the cuboids, the more impact on speed from the network latency.
+
+"""
+BigArray with backend of Google Cloud Storage
+"""
+module GCSBigArray
+
+using ..BigArrays
+using GoogleCloud
+using GoogleCloud.Utils.Storage
 using JSON
 
 # include("../types.jl")
 # include("../index.jl")
 const DEFAULT_CONFIG_FILE = "config.json"
 const DEFAULT_PREFIX = "cuboid_"
-const DEFAULT_CUBOID_SIZE = (2048, 2048, 256)
+const DEFAULT_CUBOID_SIZE = (516, 516, 64)
 const DEFAULT_GLOBAL_OFFSET = (0,0,0)
 
 """
 definition of big array
 """
-type BigArray <: AbstractBigArray
+type GCSBigArray <: AbstractBigArray
     prefix          ::AbstractString
     globalOffset    ::NTuple{3, Int}
     cuboidSize      ::NTuple{3, Int}
+    eltype          ::Type
+    cartesianRange  ::CartesianRange
     compression     ::Symbol              # deflate || blosc
-end
-
-"""
-default constructor
-"""
-function BigArray()
-  H5sBigArray(string(tempname(), ".bigarray"))
 end
 
 """
 handle vector type
 """
-function BigArray(  prefix::AbstractString,
-                    globalOffset::Vector,
-                    blockSize::Vector,
-                    chunkSize::Vector,
-                    compression::AbstractString)
+function GCSBigArray(   prefix      ::AbstractString,
+                        globalOffset::Vector,
+                        blockSize   ::Vector,
+                        chunkSize   ::Vector,
+                        eltype      ::Type,
+                        cartesianRange  ::CartesianRange
+                        compression     ::AbstractString)
     BigArray(   prefix,
                 NTuple{3, Int}((globalOffset ...)),
                 NTuple{3, Int}((cuboidSize ...)),
+                eltype,
+                cartesianRange,
                 Symbol(compression))
 end
 
 """
 construct a BigArray from a dict
 """
-function BigArray( configDict::Dict{Symbol, Any} )
+function GCSBigArray( configDict::Dict{Symbol, Any} )
+    if isa(configDict[:eltype], AbstractString)
+        configDict[:eltype] = eval(parse( configDict[:eltype] ))
+    end
+    if isa(configDict[:cartesianRange], AbstractString)
+        configDict[:cartesianRange] = eval(parse(configDict[:cartesianRange]))
+    end
     BigArray(   configDict[:prefix],
                 configDict[:globalOffset],
                 configDict[:cuboidSize],
+                configDict[:eltype],
+                configDict[:cartesianRange],
                 configDict[:compression] )
-
 end
+
 """
 construct from a register file, which defines file architecture
 """
-function BigArray(  dir::AbstractString;
+function GCSBigArray(  dir::AbstractString;
                     prefix::AbstractString          = DEFAULT_PREFIX,
                     globalOffset::NTuple{3, Int}    = DEFAULT_GLOBAL_OFFSET,
-                    cuboidSize::NTuple{3, Int}       = DEFAULT_CUBOID_SIZE,
+                    cuboidSize::NTuple{3, Int}      = DEFAULT_CUBOID_SIZE,
+                    eltype::Type                    = UInt8,
                     compression::Symbol             = :deflate)
+    @assert ismatch(r"^gs://*", dir)
     configFile = joinpath(dir, DEFAULT_CONFIG_FILE)
-    if isfile(dir)
-        warn("take this file as bigarray config file: $(dir)")
-        global BIGARRAY_DIRECTORY = dirname(dir)
-        # string format of config
-        configDict = JSON.parsefile(dir, dicttype=Dict{Symbol, Any})
-        @show configDict
-        ba = BigArray( configDict )
-    elseif isdir(dir) && isfile(configFile)
-        global BIGARRAY_DIRECTORY = dir
-        # string format of config
-        configDict = JSON.parsefile(configFile, dicttype=Dict{Symbol, Any})
-        @show configDict
-        ba = BigArray( configDict )
-    else
-        if !isdir(dir)
-          mkdir(dir)
-        end
-        global H5SBIGARRAY_DIRECTORY = dir
-        ba = BigArray(h5FilePrefix, globalOffset, blockSize, chunkSize, compression)
+    bkt, key = gspath2bkt_key(configFile)
+    configString = storage(:Object, :get, bkt, key)
+    if isa(configString, Dict) && haskey(config, :error)
+        # the file is not exist, create one
+        ba = BigArray(prefix, globalOffset, cuboidSize, eltype, compression)
         updateconfigfile(ba)
+    else
+        configDict = JSON.parse(configString, dicttype=Dict{Symbol, Any})
+        ba = GCSBigArray( configDict )
     end
     ba
 end
@@ -85,16 +95,18 @@ end
 """
 transform bigarray to string
 """
-function bigArray2dict(ba::H5sBigArray)
+function bigArray2dict(ba::GCSBigArray)
     d = Dict{Symbol, Any}()
-    d[:prefix] = ba.prefix
-    d[:globalOffset] = ba.globalOffset
-    d[:cuboidSize] = ba.cuboidSize
-    d[:compression] = ba.compression
+    d[:prefix]          = ba.prefix
+    d[:globalOffset]    = ba.globalOffset
+    d[:cuboidSize]      = ba.cuboidSize
+    d[:eltype]          = ba.eltype
+    d[:cartesianRange]  = ba.cartesianRange
+    d[:compression]     = ba.compression
     return d
 end
 
-function bigArray2string(ba::H5sBigArray)
+function bigArray2string(ba::GCSBigArray)
     d = bigArray2dict(ba)
     @show d
     JSON.json(d)
@@ -103,82 +115,67 @@ end
 """
 update the config.json file
 """
-function updateconfigfile(ba::H5sBigArray)
-    configFile = joinpath(BIGARRAY_DIRECTORY, CONFIG_FILE)
-    if !isdir(BIGARRAY_DIRECTORY)
-        mkdir(BIGARRAY_DIRECTORY)
-    end
+function updateconfigfile(ba::GCSBigArray)
     str = bigArray2string(ba)
     @show str
-
-    # write to text file
-    f = open(configFile, "w")
-    write(f, str)
-    close(f)
+    configFile = joinpath(ba.dir, CONFIG_FILE)
+    gsupload(configFile, str; content_type="text/html")
 end
 
 """
 element type of big array
 """
 function Base.eltype(ba::BigArray)
-    files = readdir(BIGARRAY_DIRECTORY)
-    for file in files
-        fileName = joinpath(BIGARRAY_DIRECTORY, file)
-    return eltype(fileName)
-    end
+    ba.eltype
 end
 
 """
 number of dimension
 """
 function Base.ndims(ba::BigArray)
-    for file in readdir(BIGARRAY_DIRECTORY)
-        fileName = joinpath(BIGARRAY_DIRECTORY, file)
-        return ndims(fileName)
-    end
+    length(ba.cuboidSize)
 end
 
 """
 bounding box of the whole volume
 """
-function boundingbox(ba::H5sBigArray)
+function boundingbox(ba::GCSBigArray)
   x1 = Inf;   x2 = -Inf;
   y1 = Inf;   y2 = -Inf;
   z1 = Inf;   z2 = -Inf;
-  for file in readdir(H5SBIGARRAY_DIRECTORY)
-    if ishdf5(file)
-        f = h5open(file)
-        origin = f["origin"]
-        sz = size(f[H5_DATASET_NAME])
-        close(f)
-        # origin = fileName2origin(  )
-        x1 = min(x1, origin[1])
-        y1 = min(y1, origin[2])
-        z1 = min(z1, origin[3])
-        x2 = max(x2, origin[1]+sz[1]-1)
-        y2 = max(y2, origin[2]+sz[2]-1)
-        z2 = max(z2, origin[3]+sz[3]-1)
+  # use bucket list to get file names and then analyse the file names
 
-    end
-  end
-  (Int64(x1):Int64(x2), Int64(y1):Int64(y2), Int64(z1):Int64(z2))
+  # for file in readdir(GCSBigArray_DIRECTORY)
+  #   if ishdf5(file)
+  #       f = h5open(file)
+  #       origin = f["origin"]
+  #       sz = size(f[H5_DATASET_NAME])
+  #       close(f)
+  #       origin = fileName2origin(  )
+  #       x1 = min(x1, origin[1])
+  #       y1 = min(y1, origin[2])
+  #       z1 = min(z1, origin[3])
+  #       x2 = max(x2, origin[1]+sz[1]-1)
+  #       y2 = max(y2, origin[2]+sz[2]-1)
+  #       z2 = max(z2, origin[3]+sz[3]-1)
+  #   end
+  # end
+  # (Int64(x1):Int64(x2), Int64(y1):Int64(y2), Int64(z1):Int64(z2))
 end
-
-bbox(ba::H5sBigArray) = boundingbox(ba::H5sBigArray)
 
 """
 compute size from bounding box
 """
-function Base.size(ba::H5sBigArray)
+function Base.size(ba::GCSBigArray)
   bb = BoundingBox(ba)
   size(bb)
 end
 
-function Base.size(ba::H5sBigArray, i::Int)
+function Base.size(ba::GCSBigArray, i::Int)
   size(ba)[i]
 end
 
-function Base.show(ba::H5sBigArray)
+function Base.show(ba::GCSBigArray)
   println("element type: $(eltype(ba))")
   println("size: $(size(ba))")
   println("bounding box: $(bbox(ba))")
@@ -189,7 +186,7 @@ end
 extract chunk from a bigarray
 only works for 3D now.
 """
-function Base.getindex(ba::H5sBigArray, idxes::Union{UnitRange, Int, Colon}...)
+function Base.getindex(ba::GCSBigArray, idxes::Union{UnitRange, Int, Colon}...)
     @show idxes
     # transform to originate from (0,0,0)
     globalOffset = ba.globalOffset
@@ -217,8 +214,8 @@ function Base.getindex(ba::H5sBigArray, idxes::Union{UnitRange, Int, Colon}...)
     else
         @assert ndims(ba)==4
         channelNum = 0
-        for file in readdir(H5SBIGARRAY_DIRECTORY)
-            h5FileName = joinpath(H5SBIGARRAY_DIRECTORY, file)
+        for file in readdir(GCSBigArray_DIRECTORY)
+            h5FileName = joinpath(GCSBigArray_DIRECTORY, file)
             if ishdf5(h5FileName)
                 f = h5open(h5FileName)
                 channelNum = size(f[H5_DATASET_NAME])[4]
@@ -239,7 +236,7 @@ function Base.getindex(ba::H5sBigArray, idxes::Union{UnitRange, Int, Colon}...)
                 globalOriginZ = globalOffset[3] + (bidz-1) * ba.blockSize[3] + 1
                 # get hdf5 file name
                 h5FileName = "$(ba.h5FilePrefix)$(globalOriginX)-$(globalOriginX+ba.blockSize[1]-1)_$(globalOriginY)-$(globalOriginY+ba.blockSize[2]-1)_$(globalOriginZ)-$(globalOriginZ+ba.blockSize[3]-1).h5"
-                h5FileName = joinpath(H5SBIGARRAY_DIRECTORY, h5FileName)
+                h5FileName = joinpath(GCSBigArray_DIRECTORY, h5FileName)
                 # if have data fill with data,
                 # if not, no need to change, keep as zero
                 if isfile(h5FileName) && ishdf5(h5FileName)
@@ -279,7 +276,7 @@ end
 """
 put small array to big array
 """
-function Base.setindex!(ba::H5sBigArray, buf::Array, idxes::Union{UnitRange, Int, Colon}...)
+function Base.setindex!(ba::GCSBigArray, buf::Array, idxes::Union{UnitRange, Int, Colon}...)
     # transform to originate from (0,0,0)
     globalOffset = ba.globalOffset
     xRange = idxes[1] - globalOffset[1]
@@ -309,7 +306,7 @@ function Base.setindex!(ba::H5sBigArray, buf::Array, idxes::Union{UnitRange, Int
                 globalOriginZ = globalOffset[3] + (bidz-1) * ba.blockSize[3] + 1
                 # get hdf5 file name
                 h5FileName = "$(ba.h5FilePrefix)$(globalOriginX)-$(globalOriginX+ba.blockSize[1]-1)_$(globalOriginY)-$(globalOriginY+ba.blockSize[2]-1)_$(globalOriginZ)-$(globalOriginZ+ba.blockSize[3]-1).h5"
-                h5FileName = joinpath(H5SBIGARRAY_DIRECTORY, h5FileName)
+                h5FileName = joinpath(GCSBigArray_DIRECTORY, h5FileName)
                 @show h5FileName
                 # compute index in hdf5
                 blkix, blkiy, blkiz = globalIndexes2blockIndexes((gix,giy,giz), ba.blockSize)
@@ -429,4 +426,4 @@ function save_buffer{T}(    buf::Array{T, 4}, h5FileName, ba,
 
 end
 
-end # end of module: H5sBigArrays
+end # end of module: Cuboids
