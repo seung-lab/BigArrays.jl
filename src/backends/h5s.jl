@@ -226,7 +226,7 @@ only works for 3D now.
 function Base.getindex(ba::H5sBigArray, idxes::Union{UnitRange, Int, Colon}...)
     @show idxes
     # clarify the Colon
-    idxes = colon2unitRange(buf, idxes)
+    idxes = colon2unitRange(size(ba), idxes)
     # transform to originate from (0,0,0)
     idxes = [idxes...] .- [ba.globalOffset...]
 

@@ -1,12 +1,15 @@
+__precompile__()
+
 module BigArrays
 
-using TileIteration
-
+# basic functions
 include("types.jl")
 include("chunk.jl")
-include("BoundingBox.jl")
+include("boundingbox.jl")
 include("index.jl")
 include("base.jl")
+
+# applications
 include("backends.jl")
 include("chunks.jl")
 

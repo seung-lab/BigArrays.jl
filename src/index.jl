@@ -100,7 +100,9 @@ function Base.next(globalIndex::GlobalIndex, idx::Int)
     nstart = (nbid-1) * globalIndex.blockSize + 1
     # return current index and next index
     return idx, nstart
- end
+end
+
+
 
 """
 compute the index inside a block based on global index, block size and block id
@@ -142,16 +144,10 @@ end
 """
 replace Colon of indexes by UnitRange
 """
-function colon2unitRange(buf::Array, indexes::Tuple)
+function colon2unitRange(buf::Union{Array,AbstractBigArray}, indexes::Tuple)
     colon2unitRange(size(buf), indexes)
 end
 
 function colon2unitRange(sz::Tuple, indexes::Tuple)
-    ret = [indexes...]
-    for i in 1:length(indexes)
-        if indexes[i] == Colon()
-            ret[i] = UnitRange(1:sz[i])
-        end
-    end
-    return (ret...)
+    map((x,y)-> x==Colon() ? UnitRange(1:y):x, indexes, sz)
 end
