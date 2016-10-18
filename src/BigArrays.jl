@@ -1,5 +1,7 @@
 module BigArrays
 
+using TileIteration
+
 include("types.jl")
 include("chunk.jl")
 include("BoundingBox.jl")
