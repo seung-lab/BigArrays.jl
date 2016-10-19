@@ -1,10 +1,12 @@
-# store small cuboids in AWS S3, download all the cuboids and cutout locally.
-# The larger the cuboids size, the more redundency the download will be.
-# The smaller the cuboids, the more impact on speed from the network latency.
+# store small blocks in AWS S3, download all the blocks and cutout locally.
+# The larger the blocks size, the more redundency the download will be.
+# The smaller the blocks, the more impact on speed from the network latency.
 module GCSBigArrays
 
 using ..BigArrays
 # using ..BigArrays.BoundingBox
+using ..BigArrays.BigArrayIterators
+
 using GoogleCloud
 using GoogleCloud.Utils.Storage
 using JSON
@@ -12,7 +14,7 @@ using JSON
 # include("../types.jl")
 # include("../index.jl")
 const DEFAULT_CONFIG_FILE   = "config.json"
-const DEFAULT_PREFIX        = "cuboid_"
+const DEFAULT_PREFIX        = "block_"
 const DEFAULT_CUBOID_SIZE   = (516, 516, 64)
 const DEFAULT_GLOBAL_OFFSET = (0,0,0)
 const DEFAULT_ELTYPE        = UInt8
@@ -20,6 +22,7 @@ const DEFAULT_RANGE         = CartesianRange(
         CartesianIndex((typemax(Int), typemax(Int), typemax(Int))),
         CartesianIndex((0,0,0)))
 const DEFAULT_COMPRESSION   = :none
+const DEFAULT_EXT           = "blk"
 
 export GCSBigArray
 
@@ -30,9 +33,9 @@ type GCSBigArray <: AbstractBigArray
     dir             ::AbstractString
     prefix          ::AbstractString
     globalOffset    ::Tuple
-    cuboidSize      ::Tuple
+    blockSize       ::Tuple
     eltype          ::Type
-    cartesianRange  ::CartesianRange
+    globalRange     ::CartesianRange
     compression     ::Symbol              # deflate || blosc
 end
 
@@ -44,24 +47,24 @@ function GCSBigArray( configDict::Dict{Symbol, Any} )
         configDict[:eltype] = eval(parse( configDict[:eltype] ))
     end
     @show configDict[:eltype]
-    if isa(configDict[:cartesianRange], AbstractString)
-        configDict[:cartesianRange] = CartesianRange( eval(
-                                        parse(configDict[:cartesianRange])))
+    if isa(configDict[:globalRange], AbstractString)
+        configDict[:globalRange] = CartesianRange( eval(
+                                        parse(configDict[:globalRange])))
     end
     if isa(configDict[:globalOffset], Vector)
         configDict[:globalOffset] = (configDict[:globalOffset]...)
     end
-    if isa(configDict[:cuboidSize], Vector)
-        configDict[:cuboidSize] = (configDict[:cuboidSize]...)
+    if isa(configDict[:blockSize], Vector)
+        configDict[:blockSize] = (configDict[:blockSize]...)
     end
     configDict[:compression] = Symbol(configDict[:compression])
 
     GCSBigArray(configDict[:dir],
                 configDict[:prefix],
                 configDict[:globalOffset],
-                configDict[:cuboidSize],
+                configDict[:blockSize],
                 configDict[:eltype],
-                configDict[:cartesianRange],
+                configDict[:globalRange],
                 configDict[:compression] )
 end
 
@@ -71,9 +74,9 @@ construct from a register file, which defines file architecture
 function GCSBigArray(  dir::AbstractString;
                     prefix::AbstractString          = DEFAULT_PREFIX,
                     globalOffset::Tuple             = DEFAULT_GLOBAL_OFFSET,
-                    cuboidSize::Tuple               = DEFAULT_CUBOID_SIZE,
+                    blockSize::Tuple               = DEFAULT_CUBOID_SIZE,
                     eltype::Type                    = DEFAULT_ELTYPE,
-                    cartesianRange::CartesianRange  = DEFAULT_RANGE,
+                    globalRange::CartesianRange  = DEFAULT_RANGE,
                     compression::Symbol             = DEFAULT_COMPRESSION)
     @assert ismatch(r"^gs://*", dir)
     configFile = joinpath(dir, DEFAULT_CONFIG_FILE)
@@ -81,8 +84,8 @@ function GCSBigArray(  dir::AbstractString;
     configString = storage(:Object, :get, bkt, key)
     if isa(configString, Dict) && haskey(configString, :error)
         # the file is not exist, create one
-        ba = GCSBigArray(  dir, prefix, globalOffset, cuboidSize,
-                        eltype, cartesianRange, compression)
+        ba = GCSBigArray(  dir, prefix, globalOffset, blockSize,
+                        eltype, globalRange, compression)
         updateconfigfile(ba)
     else
         configDict = JSON.parse(configString, dicttype=Dict{Symbol, Any})
@@ -100,16 +103,16 @@ function bigArray2dict(ba::GCSBigArray)
     d[:dir]             = ba.dir
     d[:prefix]          = ba.prefix
     d[:globalOffset]    = ba.globalOffset
-    d[:cuboidSize]      = ba.cuboidSize
+    d[:blockSize]      = ba.blockSize
     d[:eltype]          = ba.eltype
-    d[:cartesianRange]  = ba.cartesianRange
+    d[:globalRange]  = ba.globalRange
     d[:compression]     = ba.compression
     return d
 end
 
 function bigArray2string(ba::GCSBigArray)
     d = bigArray2dict(ba)
-    d[:cartesianRange] = string(d[:cartesianRange])
+    d[:globalRange] = string(d[:globalRange])
     @show d
     JSON.json(d)
 end
@@ -135,21 +138,21 @@ end
 number of dimension
 """
 function Base.ndims(ba::GCSBigArray)
-    length(ba.cuboidSize)
+    length(ba.blockSize)
 end
 
 """
 bounding box of the whole volume
 """
 function boundingbox(ba::GCSBigArray)
-    ba.cartesianRange
+    ba.globalRange
 end
 
 """
 compute size from bounding box
 """
 function Base.size(ba::GCSBigArray)
-    size(ba.cartesianRange)
+    size(ba.globalRange)
 end
 
 function Base.size(ba::GCSBigArray, i::Int)
@@ -179,17 +182,17 @@ function Base.getindex(ba::GCSBigArray, idxes::Union{UnitRange, Int, Colon}...)
     sz = map(length, idxes)
     buf = zeros(ba.eltype, (sz...))
 
-    for gidxes in collect(GlobalIndex(zip(idxes, ba.cuboidSize)))
+    for gidxes in collect(GlobalIndex(zip(idxes, ba.blockSize)))
         # get block id
-        bids = map(blockid, zip(gidxes, ba.cuboidSize))
+        bids = map(blockid, zip(gidxes, ba.blockSize))
         # global coordinate
-        globalOrigin = [ba.globalOffset...] .+ ([bids...]-1).* ba.cuboidSize .+ 1
+        globalOrigin = [ba.globalOffset...] .+ ([bids...]-1).* ba.blockSize .+ 1
         # get file name
         fileName = get_filename(ba, globalOrigin)
         # if have data fill with data,
         # if not, no need to change, keep as zero
         # compute index in hdf5
-        blkidxes = globalIndexes2blockIndexes(gidxes, ba.cuboidSize)
+        blkidxes = globalIndexes2blockIndexes(gidxes, ba.blockSize)
         # compute index in buffer
         bufidxes = globalIndexes2bufferIndexes(gidxes, idxes)
         # assign data value, preserve existing value
@@ -201,7 +204,7 @@ function Base.getindex(ba::GCSBigArray, idxes::Union{UnitRange, Int, Colon}...)
         else
             block = reshape(    reinterprete(ba.eltype,
                                             Vector{UInt8}(block)),
-                                ba.cuboidSize)
+                                ba.blockSize)
             buf[(bufidxes...)] = block[(blkidxes...)]
         end
     end
@@ -209,66 +212,49 @@ function Base.getindex(ba::GCSBigArray, idxes::Union{UnitRange, Int, Colon}...)
 end
 
 """
-get h5 file name
+get block file name from a
 """
-function get_filename(ba::GCSBigArray, globalOrigin::Union{Tuple, Vector})
+function get_block_file_name{N}( ba::GCSBigArray, blockID::NTuple{N})
+    blockGlobalRange = blockid2global_range( blockID, ba.blockSize )
+
     fileName = ba.prefix
-    for i in 1:length(globalOrigin)
-        fileName *= "$(globalOrigin[i])-$(globalOrigin[i]+ba.cuboidSize[i]-1)_"
+    for i in 1:N
+        fileName *= "$(blockGlobalRange.start[i])-$(blockGlobalRange.stop[i])_"
     end
-    return joinpath(ba.dir, "$(fileName[1:end-1]).h5")
+    return joinpath(ba.dir, "$(fileName[1:end-1]).$(DEFAULT_EXT)")
+end
+function get_block_file_name(ba::GCSBigArray, idx::CartesianIndex)
+    blockID = index2blockid( idx, ba.blockSize )
+    get_block_file_name(ba, blockID)
 end
 
 """
 put small array to big array
 """
-function Base.setindex!(ba::GCSBigArray, buf::Array, idxes::Union{UnitRange, Int, Colon}...)
+function Base.setindex!{T,N}(ba::GCSBigArray, buf::Array{T,N}, idxes::Union{UnitRange, Int, Colon}...)
     @assert ndims(buf) == length(idxes)
     # clarify the Colon
     idxes = colon2unitRange(buf, idxes)
     # set bounding box
     adjust_range!(ba, idxes)
+    updateconfigfile(ba)
     # transform to originate from (0,0,0)
     idxes = map((x,y)-> x-y, idxes, ba.globalOffset)
+    bufferGlobalRange = CartesianRange(idxes)
 
     @show idxes
-    @show ba.cuboidSize
-    for gidxes in map((x,y) -> GlobalIndex(x,y), idxes, ba.cuboidSize)
-        @show gidxes
-        # get block id
-        bids = map(blockid, zip(gidxes, ba.cuboidSize))
-        # global coordinate
-        globalOrigin = [ba.globalOffset...] .+ ([bids...].-1) .* [ba.cuboidSize...] .+ 1
-        # get hdf5 file name
-        fileName = get_filename(ba, globalOrigin)
-        @show fileName
-        # compute index in hdf5
-        blkidxes = globalIndexes2blockIndexes(gidxes, ba.cuboidSize)
-        # compute index in buffer
-        bufidxes = globalIndexes2bufferIndexes(gidxes, idxes)
-        # put buffer subarray to hdf5, reserve existing values
-        save_buffer(buf, fileName, blkidxes, bufidxes; compression = ba.compression)
-        info("save $(gidxes) from buffer $(bufidxes) to $(blkidxes) of $(fileName)")
-    end
-end
+    @show bufferGlobalRange
+    baIter = BigArrayIterator(ba.globalRange, ba.blockSize)
 
-"""
-save part of or whole buffer to one hdf5 file
-only support **aligned** saving now!
-"""
-function save_buffer{T,D}(  buf::Array{T, D}, fileName::AbstractString,
-                            blkidxes::Union{Tuple, Vector},
-                            bufidxes::Union{Tuple, Vector};
-                            compression::Symbol = :none)
-    @assert D==length(blkidxes)
-    @assert D==length(bufidxes)
-
-    if ba.compression == :deflate
-        error("not support yet")
-    elseif ba.compression == :blosc
-        error("not support yet")
-    else
-        gssave(fileName, buf[(bufidxes...)])
+    # temporal block as a buffer to reduce memory allocation
+    tempBlock = Array(T, ba.blockSize)
+    for (blockID, globalRange, blockRange, bufferRange) in baIter
+        # refresh the temporal block
+        fill!(tempBlock, ba.eltype(0))
+        map((x,y)->tempBlock[x]=buf[y], blockRange, bufferRange)
+        blockFileName = get_block_file_name(ba, blockID)
+        info("save $(globalRange) from buffer $(bufferRange) to $(blockRange) of $(blockFileName) ...")
+        gssave(blockFileName, tempBlock)
     end
 end
 

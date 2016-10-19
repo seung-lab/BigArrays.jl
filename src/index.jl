@@ -1,153 +1,131 @@
-export blockid, GlobalIndex, globalRange2localRange, globalIndex2blockIndex, globalIndex2bufferIndex, globalIndexes2bufferIndexes, globalIndexes2blockIndexes
-export colon2unitRange
+module BigArrayIterators
+
+using ..BigArrays
+
+export BigArrayIterator, global_range2buffer_range, global_range2block_range
+export colon2unitRange, blockid2global_range, index2blockid
+
+# iteration for CartesianIndex
+function Base.start{N}( idx::CartesianIndex{N} )
+    1
+end
+
+function Base.next{N}( idx::CartesianIndex{N}, state::Integer )
+    return idx[state], state+1
+end
+
+function Base.done{N}( idx::CartesianIndex{N}, state::Integer )
+    state > N
+end
+
+immutable BigArrayIterator{N}
+    globalRange     ::CartesianRange{CartesianIndex{N}}
+    blockSize       ::NTuple{N}
+end
+
+function BigArrayIterator( ba::AbstractBigArray )
+    BigArrayIterator( ba.globalRange, ba.blockSize )
+end
+
+function Base.length( iter::BigArrayIterator )
+    length( iter.globalRange )
+end
+
+function Base.eltype( iter::BigArrayIterator )
+    eltype( iter.globalRange )
+end
+
+function Base.start( iter::BigArrayIterator )
+    blockID = index2blockid( iter.globalRange.start, iter.blockSize )
+    @show blockID
+    return blockID
+end
 
 """
-get blockid from a coordinate
+    Base.next( iter::BigArrayIterator, state::CartesianRange )
+
+increase start coordinate following the column-order.
 """
-function blockid(c::Int, blockSize::Integer)
-    div(c-1, blockSize)+1
-end
+function Base.next{N}( iter::BigArrayIterator{N}, blockID::NTuple{N} )
+    # get current global range in this block
+    start = CartesianIndex(( map((x,y,z)->max((x-1)*y+1, z), blockID,
+                            iter.blockSize, iter.globalRange.start )...))
+    stop  = CartesianIndex(( map((x,y,z)->min(x*y, z),       blockID,
+                            iter.blockSize, iter.globalRange.stop )...))
+    globalRange = CartesianRange(start, stop)
+    blockRange  = global_range2block_range( globalRange, iter.blockSize)
+    bufferRange = global_range2buffer_range(globalRange, iter.globalRange)
 
-function blockid(idx::UnitRange, blockSize::Integer)
-    bid1 = blockid(idx.start, blockSize)
-    bid2 = blockid(idx.stop, blockSize)
-    @assert bid1 == bid2
-    bid1
-end
-
-function blockid(t::Tuple{UnitRange, Int})
-    blockid(t[1], t[2])
-end
-
-function blockid(idxes::Tuple, blockSize::Union{Vector, Tuple})
-    map(x->blockid(x[1], x[2]), zip(idxes, blockSize))
-end
-
-"""
-transform one global UnitRange (inside a block) to local UnitRange in a block
-"""
-function globalRange2localRange(globalRange::UnitRange, blockSize::Integer)
-    # make sure that this range is within a block
-    @assert length(globalRange) <= blockSize
-    # they belong to a same block
-    @assert blockid(globalRange.start, blockSize) == blockid(globalRange.stop, blockSize)
-    # block id
-    ((globalRange.start-1)%blockSize+1) : ((globalRange.stop-1)%blockSize+1)
+    # find next blockID
+    for i in 1:N
+        if blockID[i]*iter.blockSize[i]+1 < iter.globalRange.stop[i]
+            newBlockID = (blockID[1:i-1]..., blockID[i]+1, blockID[i+1:end]...)
+            return globalRange, newBlockID
+        end
+    end
+    newBlockID = (blockID[1:N-1]..., blockID[N]+1)
+    return (blockID, globalRange, blockRange, bufferRange), newBlockID
 end
 
 """
-transform global UnitRange (inside a block) to local UnitRange
+    Base.done( iter::BigArrayIterator,  state::CartesianRange)
+
+if all the axeses were saturated, stop the iteration.
 """
-function globalRange2localRange(globalRange::Int, blockSize::Int)
-    (globalRange-1)%blockSize+1
-end
-
-# iterater of global index
-type GlobalIndex
-    idx::Union{UnitRange, Int}
-    blockSize::Integer
-end
-
-function GlobalIndex( t::Tuple{UnitRange, Int})
-    GlobalIndex(t[1], t[2])
-end
-
-function Base.length( gidx::GlobalIndex )
-    length(gidx.idx)
-end
-
-function Base.start(globalIndex::GlobalIndex)
-    if isa(globalIndex.idx, Int)
-        # @show globalIndex
-        return globalIndex.idx
+function Base.done{N}( iter::BigArrayIterator{N},  blockID::NTuple{N})
+    if (blockID[N]-1)*iter.blockSize[N]+1 > iter.globalRange.stop[N]
+        return true
     else
-        @assert isa(globalIndex.idx, UnitRange)
-        start = globalIndex.idx.start
-        # block id of the first
-        bid = blockid(globalIndex.idx.start, globalIndex.blockSize)
-        stop = min(globalIndex.idx.stop, bid*globalIndex.blockSize)
-        # @show globalIndex, start, stop, bid
-        return start:stop
+        return false
     end
 end
 
-function Base.done(globalIndex::GlobalIndex, idx::UnitRange)
-    idx.start > globalIndex.idx.stop
-end
-
-function Base.done(globalIndex::GlobalIndex, idx::Int)
-    idx > globalIndex.idx
-end
-
-function Base.done(globalIndex::GlobalIndex, state::Tuple)
-    idx, bid = state
-    done(globalIndex, idx)
-end
-
-function Base.next(globalIndex::GlobalIndex, idx::UnitRange)
-    # next blockid
-    nbid = blockid(idx, globalIndex.blockSize) + 1
-    # get new index state
-    nstart = (nbid-1) * globalIndex.blockSize + 1
-    nstop = min(globalIndex.idx.stop, idx.stop+globalIndex.blockSize)
-    # return current index and next index
-    return idx, nstart:nstop
-end
-
-function Base.next(globalIndex::GlobalIndex, idx::Int)
-    # next block id
-    nbid = blockid(idx, globalIndex.blockSize) + 1
-    nstart = (nbid-1) * globalIndex.blockSize + 1
-    # return current index and next index
-    return idx, nstart
-end
-
-
-
 """
-compute the index inside a block based on global index, block size and block id
+    global_range2buffer_range(globalRange::CartesianRange, bufferGlobalRange::CartesianRange)
+
+Transform a global range to a range inside buffer.
 """
-function globalIndex2blockIndex(globalIndex::Union{UnitRange, Int}, blockSize::Integer)
-    bid = blockid(globalIndex, blockSize)
-    globalIndex - (bid-1)*blockSize
-end
-
-function globalIndexes2blockIndexes(globalIndexes::Tuple, blockSize::Union{Vector, Tuple})
-    @assert length(globalIndexes) == length(blockSize)
-    ret = []
-    for i = 1:length(blockSize)
-        push!(ret, globalIndex2blockIndex(globalIndexes[i], blockSize[i]))
-    end
-    return (ret...)
-    # map(globalIndex2blockIndex, zip(globalIndexes, blockSize))
-end
-
-function getstart(idx::UnitRange)
-    idx.start
-end
-function getstart(idx::Int)
-    idx
+function global_range2buffer_range{N}(globalRange::CartesianRange{CartesianIndex{N}},
+                                    bufferGlobalRange::CartesianRange{CartesianIndex{N}})
+    start = globalRange.start - bufferGlobalRange.start + 1
+    stop  = globalRange.stop  - bufferGlobalRange.start + 1
+    return CartesianRange( start, stop )
 end
 
 """
-compute buffer index
+    global_range2buffer_range(globalRange::CartesianRange, bufferGlobalRange::CartesianRange)
+
+Transform a global range to a range inside block.
 """
-function globalIndex2bufferIndex(globalIndex::Union{UnitRange, Int, Colon}, bufferIndex::Union{Int, UnitRange, Colon})
-    bufstart = getstart(bufferIndex)
-    globalIndex - bufstart + 1
+function global_range2block_range{N}(globalRange::CartesianRange{CartesianIndex{N}},
+                                    blockSize::NTuple{N})
+    blockID = index2blockid(globalRange.start, blockSize)
+    start = CartesianIndex((map((x,y,z)->x-(y-1)*z, globalRange.start,
+                                blockID, blockSize)...))
+    stop  = CartesianIndex((map((x,y,z)->x-(y-1)*z, globalRange.stop,
+                                blockID, blockSize)...))
+    return CartesianRange(start, stop)
 end
 
-function globalIndexes2bufferIndexes(globalIndexes::Tuple, bufferIndexes::Tuple)
-    map(globalIndex2bufferIndex, zip(globalIndexes, bufferIndexes))
+function index2blockid{N}(idx::CartesianIndex{N}, blockSize::NTuple{N})
+    ( map((x,y)->div(x-1, y)+1, idx, blockSize) ... )
+end
+
+function blockid2global_range{N}(blockID::NTuple{N}, blockSize::NTuple{N})
+    start = CartesianIndex( map((x,y)->(x-1)*y+1, blockID, blockSize) )
+    stop  = CartesianIndex( map((x,y)->x*y,       blockID, blockSize) )
+    return CartesianRange(start, stop)
 end
 
 """
 replace Colon of indexes by UnitRange
 """
-function colon2unitRange(buf::Union{Array,AbstractBigArray}, indexes::Tuple)
+function colon2unitRange{N}(buf::Union{Array,AbstractBigArray}, indexes::NTuple{N})
     colon2unitRange(size(buf), indexes)
 end
 
-function colon2unitRange(sz::Tuple, indexes::Tuple)
+function colon2unitRange{N}(sz::NTuple{N}, indexes::NTuple{N})
     map((x,y)-> x==Colon() ? UnitRange(1:y):x, indexes, sz)
 end
+
+end # end of module
