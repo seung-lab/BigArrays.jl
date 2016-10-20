@@ -21,7 +21,7 @@ const DEFAULT_ELTYPE        = UInt8
 const DEFAULT_RANGE         = CartesianRange(
         CartesianIndex((typemax(Int), typemax(Int), typemax(Int))),
         CartesianIndex((0,0,0)))
-const DEFAULT_COMPRESSION   = :none
+const DEFAULT_COMPRESSION   = :blosc
 const DEFAULT_EXT           = "blk"
 
 export GCSBigArray
@@ -173,40 +173,29 @@ function Base.getindex(ba::GCSBigArray, idxes::Union{UnitRange, Int, Colon}...)
     # clarify the Colon
     idxes = colon2unitRange(ba, idxes)
     # transform to originate from (0,0,0)
-    idxes = [idxes...] .- [ba.globalOffset...]
+    idxes = map((x,y)->x-y, idxes, ba.globalOffset)
 
-    @show ba.globalOffset
-    @show idxes
     # only support 3D image now, could support arbitrary dimensions in the future
     # allocate memory
     sz = map(length, idxes)
     buf = zeros(ba.eltype, (sz...))
 
-    for gidxes in collect(GlobalIndex(zip(idxes, ba.blockSize)))
-        # get block id
-        bids = map(blockid, zip(gidxes, ba.blockSize))
-        # global coordinate
-        globalOrigin = [ba.globalOffset...] .+ ([bids...]-1).* ba.blockSize .+ 1
-        # get file name
-        fileName = get_filename(ba, globalOrigin)
-        # if have data fill with data,
-        # if not, no need to change, keep as zero
-        # compute index in hdf5
-        blkidxes = globalIndexes2blockIndexes(gidxes, ba.blockSize)
-        # compute index in buffer
-        bufidxes = globalIndexes2bufferIndexes(gidxes, idxes)
-        # assign data value, preserve existing value
-        block = gsread(fileName)
+    # transform to originate from (0,0,0)
+    idxes = map((x,y)-> x-y, idxes, ba.globalOffset)
+    bufferGlobalRange = CartesianRange(idxes)
 
-        if isa(block, Dict)
-            @assert haskey(block, :error)
-            warn("filled with zeros because file do not exist: $(fileName)")
-        else
-            block = reshape(    reinterprete(ba.eltype,
-                                            Vector{UInt8}(block)),
-                                ba.blockSize)
-            buf[(bufidxes...)] = block[(blkidxes...)]
-        end
+    baIter = BigArrayIterator(ba.globalRange, ba.blockSize)
+
+    # temporal block as a buffer to reduce memory allocation
+    tempBlock = Array(ba.eltype, ba.blockSize)
+    for (blockID, globalRange, blockRange, bufferRange) in baIter
+        blockFileName = get_block_file_name(ba, blockID)
+        info("read $(globalRange) from $(blockRange) of $(blockFileName) to buffer $(bufferRange) ...")
+        tempBlock = gsread(blockFileName; eltype=ba.eltype,
+                            shape = ba.blockSize,
+                            compression = ba.compression)
+        # map((x,y)->buf[x]=tempBlock[y], BufferRange, blockRange)
+        buf[bufferRange] = tempBlock[blockRange]
     end
     buf
 end
@@ -251,7 +240,9 @@ function Base.setindex!{T,N}(ba::GCSBigArray, buf::Array{T,N}, idxes::Union{Unit
     for (blockID, globalRange, blockRange, bufferRange) in baIter
         # refresh the temporal block
         fill!(tempBlock, ba.eltype(0))
-        map((x,y)->tempBlock[x]=buf[y], blockRange, bufferRange)
+        # map((x,y)->tempBlock[x]=buf[y], blockRange, bufferRange)
+        @show bufferRange
+        tempBlock[blockRange] = buf[bufferRange]
         blockFileName = get_block_file_name(ba, blockID)
         info("save $(globalRange) from buffer $(bufferRange) to $(blockRange) of $(blockFileName) ...")
         gssave(blockFileName, tempBlock)

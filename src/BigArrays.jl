@@ -10,6 +10,7 @@ include("index.jl")
 include("base.jl")
 
 # applications
+include("iterator.jl")
 include("backends.jl")
 include("chunks.jl")
 

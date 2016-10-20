@@ -1,9 +1,25 @@
-module BigArrayIterators
-
-using ..BigArrays
-
-export BigArrayIterator, global_range2buffer_range, global_range2block_range
 export colon2unitRange, blockid2global_range, index2blockid
+export global_range2buffer_range, global_range2block_range
+
+# make Array accept cartetian range as index
+function _cartesian_range2unitrange(r::CartesianRange)
+    ( map((x,y)->x:y, r.start, r.stop)...)
+end
+
+function Base.getindex{T,N}(A::Array{T,N},
+                            range::CartesianRange{CartesianIndex{N}})
+    ur = _cartesian_range2unitrange( range )
+    @show ur
+    A[ur...]
+end
+
+function Base.setindex!{T,N}(A::Array{T,N}, buf::Array{T,N},
+                                range::CartesianRange{CartesianIndex{N}})
+    @assert size(buf) == size(range)
+    ur = _cartesian_range2unitrange( range )
+    @show ur
+    A[ur...] = buf
+end
 
 # iteration for CartesianIndex
 function Base.start{N}( idx::CartesianIndex{N} )
@@ -16,68 +32,6 @@ end
 
 function Base.done{N}( idx::CartesianIndex{N}, state::Integer )
     state > N
-end
-
-immutable BigArrayIterator{N}
-    globalRange     ::CartesianRange{CartesianIndex{N}}
-    blockSize       ::NTuple{N}
-end
-
-function BigArrayIterator( ba::AbstractBigArray )
-    BigArrayIterator( ba.globalRange, ba.blockSize )
-end
-
-function Base.length( iter::BigArrayIterator )
-    length( iter.globalRange )
-end
-
-function Base.eltype( iter::BigArrayIterator )
-    eltype( iter.globalRange )
-end
-
-function Base.start( iter::BigArrayIterator )
-    blockID = index2blockid( iter.globalRange.start, iter.blockSize )
-    @show blockID
-    return blockID
-end
-
-"""
-    Base.next( iter::BigArrayIterator, state::CartesianRange )
-
-increase start coordinate following the column-order.
-"""
-function Base.next{N}( iter::BigArrayIterator{N}, blockID::NTuple{N} )
-    # get current global range in this block
-    start = CartesianIndex(( map((x,y,z)->max((x-1)*y+1, z), blockID,
-                            iter.blockSize, iter.globalRange.start )...))
-    stop  = CartesianIndex(( map((x,y,z)->min(x*y, z),       blockID,
-                            iter.blockSize, iter.globalRange.stop )...))
-    globalRange = CartesianRange(start, stop)
-    blockRange  = global_range2block_range( globalRange, iter.blockSize)
-    bufferRange = global_range2buffer_range(globalRange, iter.globalRange)
-
-    # find next blockID
-    for i in 1:N
-        if blockID[i]*iter.blockSize[i]+1 < iter.globalRange.stop[i]
-            newBlockID = (blockID[1:i-1]..., blockID[i]+1, blockID[i+1:end]...)
-            return globalRange, newBlockID
-        end
-    end
-    newBlockID = (blockID[1:N-1]..., blockID[N]+1)
-    return (blockID, globalRange, blockRange, bufferRange), newBlockID
-end
-
-"""
-    Base.done( iter::BigArrayIterator,  state::CartesianRange)
-
-if all the axeses were saturated, stop the iteration.
-"""
-function Base.done{N}( iter::BigArrayIterator{N},  blockID::NTuple{N})
-    if (blockID[N]-1)*iter.blockSize[N]+1 > iter.globalRange.stop[N]
-        return true
-    else
-        return false
-    end
 end
 
 """
@@ -127,5 +81,3 @@ end
 function colon2unitRange{N}(sz::NTuple{N}, indexes::NTuple{N})
     map((x,y)-> x==Colon() ? UnitRange(1:y):x, indexes, sz)
 end
-
-end # end of module
