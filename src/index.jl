@@ -1,14 +1,15 @@
 export colon2unitRange, blockid2global_range, index2blockid
 export global_range2buffer_range, global_range2block_range
+export cartesian_range2unitrange
 
 # make Array accept cartetian range as index
-function _cartesian_range2unitrange(r::CartesianRange)
+function cartesian_range2unitrange(r::CartesianRange)
     ( map((x,y)->x:y, r.start, r.stop)...)
 end
 
 function Base.getindex{T,N}(A::Array{T,N},
                             range::CartesianRange{CartesianIndex{N}})
-    ur = _cartesian_range2unitrange( range )
+    ur = cartesian_range2unitrange( range )
     @show ur
     A[ur...]
 end
@@ -16,7 +17,7 @@ end
 function Base.setindex!{T,N}(A::Array{T,N}, buf::Array{T,N},
                                 range::CartesianRange{CartesianIndex{N}})
     @assert size(buf) == size(range)
-    ur = _cartesian_range2unitrange( range )
+    ur = cartesian_range2unitrange( range )
     @show ur
     A[ur...] = buf
 end

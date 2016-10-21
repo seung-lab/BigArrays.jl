@@ -1,5 +1,6 @@
 module H5sBigArrays
 using ..BigArrays
+using ..BigArrays.Iterators
 using HDF5
 using JSON
 
@@ -11,6 +12,11 @@ const H5_DATASET_NAME = "img"
 const DEFAULT_BLOCK_SIZE = (2048, 2048, 256)
 const DEFAULT_CHUNK_SIZE = (256, 256, 32)
 const DEFAULT_GLOBAL_OFFSET = (0,0,0)
+const DEFAULT_RANGE         = CartesianRange(
+        CartesianIndex((typemax(Int), typemax(Int), typemax(Int))),
+        CartesianIndex((0,0,0)))
+
+const DEFAULT_COMPRESSION = :deflate
 
 export H5sBigArray, boundingbox
 
@@ -22,6 +28,7 @@ type H5sBigArray <: AbstractBigArray
     globalOffset  ::Tuple
     blockSize     ::Tuple
     chunkSize     ::Tuple
+    globalRange   ::CartesianRange
     compression   ::Symbol              # deflate || blosc
 end
 
@@ -33,39 +40,41 @@ function H5sBigArray()
 end
 
 """
-handle vector type
-"""
-function H5sBigArray(   h5FilePrefix    ::AbstractString,
-                        globalOffset    ::Vector,
-                        blockSize       ::Vector,
-                        chunkSize       ::Vector,
-                        compression     ::AbstractString)
-    H5sBigArray(    h5FilePrefix,
-                    (globalOffset ...),
-                    (blockSize ...),
-                    (chunkSize ...),
-                    Symbol(compression))
-end
-
-"""
 construct a H5sBigArray from a dict
 """
 function H5sBigArray( configDict::Dict{Symbol, Any} )
+    if isa(configDict[:globalRange], AbstractString)
+        configDict[:globalRange] = CartesianRange( eval(
+                                        parse(configDict[:globalRange])))
+    end
+    if isa(configDict[:globalOffset], Vector)
+        configDict[:globalOffset] = (configDict[:globalOffset]...)
+    end
+    if isa(configDict[:blockSize], Vector)
+        configDict[:blockSize] = (configDict[:blockSize]...)
+    end
+    if isa(configDict[:chunkSize], Vector)
+        configDict[:chunkSize] = (configDict[:chunkSize]...)
+    end
+    configDict[:compression] = Symbol(configDict[:compression])
     H5sBigArray(    configDict[:h5FilePrefix],
                     configDict[:globalOffset],
                     configDict[:blockSize],
                     configDict[:chunkSize],
+                    configDict[:globalRange],
                     configDict[:compression] )
 
 end
 """
 construct from a register file, which defines file architecture
 """
-function H5sBigArray(   dir::AbstractString;
+function H5sBigArray{N}(   dir::AbstractString;
                         h5FilePrefix::AbstractString    = DEFAULT_H5FILE_PREFIX,
-                        globalOffset::Tuple             = DEFAULT_GLOBAL_OFFSET,
-                        blockSize::Tuple                = DEFAULT_BLOCK_SIZE,
-                        chunkSize::Tuple                = DEFAULT_CHUNK_SIZE,
+                        globalOffset::NTuple{N}         = DEFAULT_GLOBAL_OFFSET,
+                        blockSize::NTuple{N}            = DEFAULT_BLOCK_SIZE,
+                        chunkSize::NTuple{N}            = DEFAULT_CHUNK_SIZE,
+                        globalRange::CartesianRange{CartesianIndex{N}}
+                                                        = DEFAULT_RANGE,
                         compression::Symbol             = :deflate)
     configFile = joinpath(dir, CONFIG_FILE)
     if isfile(dir)
@@ -86,7 +95,8 @@ function H5sBigArray(   dir::AbstractString;
           mkdir(dir)
         end
         global H5SBIGARRAY_DIRECTORY = dir
-        ba = H5sBigArray(h5FilePrefix, globalOffset, blockSize, chunkSize, compression)
+        ba = H5sBigArray(h5FilePrefix, globalOffset, blockSize, chunkSize,
+                            globalRange, compression)
         updateconfigfile(ba)
     end
     ba
@@ -102,13 +112,14 @@ function bigArray2dict(ba::H5sBigArray)
     d[:globalOffset] = ba.globalOffset
     d[:blockSize] = ba.blockSize
     d[:chunkSize] = ba.chunkSize
+    d[:globalRange] = ba.globalRange
     d[:compression] = ba.compression
     return d
 end
 
 function bigArray2string(ba::H5sBigArray)
     d = bigArray2dict(ba)
-    @show d
+    d[:globalRange] = string(d[:globalRange])
     JSON.json(d)
 end
 
@@ -121,8 +132,6 @@ function updateconfigfile(ba::H5sBigArray)
       mkdir(H5SBIGARRAY_DIRECTORY)
   end
   str = bigArray2string(ba)
-  @show str
-
   # write to text file
   f = open(configFile, "w")
   write(f, str)
@@ -164,37 +173,14 @@ end
 bounding box of the whole volume
 """
 function boundingbox(ba::H5sBigArray)
-    d = ndims(ba)
-    start =
-    x1 = Inf;   x2 = -Inf;
-    y1 = Inf;   y2 = -Inf;
-    z1 = Inf;   z2 = -Inf;
-    for file in readdir(H5SBIGARRAY_DIRECTORY)
-        if ishdf5(file)
-            f = h5open(file)
-            origin = f["origin"]
-            sz = size(f[H5_DATASET_NAME])
-            close(f)
-            # origin = fileName2origin(  )
-            x1 = min(x1, origin[1])
-            y1 = min(y1, origin[2])
-            z1 = min(z1, origin[3])
-            x2 = max(x2, origin[1]+sz[1]-1)
-            y2 = max(y2, origin[2]+sz[2]-1)
-            z2 = max(z2, origin[3]+sz[3]-1)
-        end
-    end
-    (Int64(x1):Int64(x2), Int64(y1):Int64(y2), Int64(z1):Int64(z2))
+    map((x,y)->x:y, ba.globalRange.start, ba.globalRange.stop)
 end
-
-bbox(ba::H5sBigArray) = boundingbox(ba::H5sBigArray)
 
 """
 compute size from bounding box
 """
 function Base.size(ba::H5sBigArray)
-    bb = boundingbox(ba)
-    size(bb)
+    size(ba.globalRange)
 end
 
 function Base.size(ba::H5sBigArray, i::Int)
@@ -220,41 +206,48 @@ function get_filename(ba::H5sBigArray, globalOrigin::Union{Tuple, Vector})
 end
 
 """
+    h5read{N}(blockFileName::AbstractString,
+                    H5_DATASET_NAME::AbstractString,
+                    blockRange::CartesianRange{CartesianIndex{N}})
+
+read h5 file using CartesianRange.
+"""
+function HDF5.h5read{N}(blockFileName::AbstractString,
+                    H5_DATASET_NAME::AbstractString,
+                    blockRange::CartesianRange{CartesianIndex{N}})
+    blockIndexes = cartesian_range2unitrange( blockRange )
+    h5read(blockFileName, H5_DATASET_NAME, blockIndexes)
+end
+
+"""
 extract chunk from a bigarray
 only works for 3D now.
 """
 function Base.getindex(ba::H5sBigArray, idxes::Union{UnitRange, Int, Colon}...)
-    @show idxes
     # clarify the Colon
     idxes = colon2unitRange(size(ba), idxes)
-    # transform to originate from (0,0,0)
-    idxes = [idxes...] .- [ba.globalOffset...]
-
-    @show ba.globalOffset
-    @show idxes
     # only support 3D image now, could support arbitrary dimensions in the future
     # allocate memory
     sz = map(length, idxes)
     buf = zeros(eltype(ba), sz)
 
-    for gidxes in map(GlobalIndex, zip(idxes, ba.blockSize))
-        # get block id
-        bids = map(blockid, zip(gidxes, ba.blockSize))
-        # global coordinate
-        globalOrigin = [ba.globalOffset...] .+ ([bids...]-1).* ba.blockSize .+ 1
-        # get hdf5 file name
-        h5FileName = get_filename(ba, globalOrigin)
+    # transform to originate from (0,0,0)
+    idxes = map((x,y)-> x-y, idxes, ba.globalOffset)
+    bufferGlobalRange = CartesianRange(idxes)
+
+    baIter = BigArrayIterator(bufferGlobalRange, ba.blockSize)
+    for (blockID, globalRange, blockRange, bufferRange) in baIter
+        blockFileName = get_block_file_name(ba, blockID)
+        info("read $(globalRange) from $(blockRange) of $(blockFileName) to buffer $(bufferRange) ...")
+
         # if have data fill with data,
         # if not, no need to change, keep as zero
-        if isfile(h5FileName) && ishdf5(h5FileName)
-            # compute index in hdf5
-            blkidxes = globalIndexes2blockIndexes(gidxes, ba.blockSize)
-            # compute index in buffer
-            bufidxes = globalIndexes2bufferIndexes(gidxes, idxes)
+        if isfile(blockFileName) && ishdf5(blockFileName)
             # assign data value, preserve existing value
             while true
                 try
-                    buf[bufidxes] = h5read(h5FileName, H5_DATASET_NAME, blkidxes)
+                    buf[bufferRange] = h5read(blockFileName, H5_DATASET_NAME,
+                                                blockRange)
                     break
                 catch
                     rethrow()
@@ -269,36 +262,49 @@ function Base.getindex(ba::H5sBigArray, idxes::Union{UnitRange, Int, Colon}...)
     buf
 end
 
+"""
+get block file name from a
+"""
+function get_block_file_name{N}( ba::H5sBigArray, blockID::NTuple{N})
+    blockGlobalRange = blockid2global_range( blockID, ba.blockSize )
+
+    fileName = ba.h5FilePrefix
+    for i in 1:N
+        fileName *= "$(blockGlobalRange.start[i])-$(blockGlobalRange.stop[i])_"
+    end
+    return joinpath(H5SBIGARRAY_DIRECTORY, "$(fileName[1:end-1]).h5")
+end
+function get_block_file_name(ba::H5sBigArray, idx::CartesianIndex)
+    blockID = index2blockid( idx, ba.blockSize )
+    get_block_file_name(ba, blockID)
+end
 
 """
 put small array to big array
 """
-function Base.setindex!(ba::H5sBigArray, buf::Array, idxes::Union{UnitRange, Int, Colon}...)
+function Base.setindex!{T,N}(ba::H5sBigArray, buf::Array{T,N}, idxes::Union{UnitRange, Int, Colon}...)
     @assert ndims(buf) == length(idxes)
     # clarify the Colon
     idxes = colon2unitRange(buf, idxes)
     # set bounding box
-    # blendchunk!(ba.boundingBox, buf, idxes)
+    adjust_range!(ba, idxes)
+    updateconfigfile(ba)
     # transform to originate from (0,0,0)
-    idxes = [idxes...] .- [ba.globalOffset...]
+    idxes = map((x,y)-> x-y, idxes, ba.globalOffset)
+    bufferGlobalRange = CartesianRange(idxes)
 
-    for gidxes in map(x->GlobalIndex(x), zip(idxes, ba.blockSize))
-        # get block id
-        bids = map(blockid, zip(gidxes, ba.blockSize))
-        # global coordinate
-        globalOrigin = [ba.globalOffset...] .+ ([bids...].-1) .* [ba.blockSize...] .+ 1
-        # get hdf5 file name
-        h5FileName = get_filename(ba, globalOrigin)
-        @show h5FileName
-        # compute index in hdf5
-        blkidxes = globalIndexes2blockIndexes(gidxes, ba.blockSize)
-        # compute index in buffer
-        bufidxes = globalIndexes2bufferIndexes(gidxes, idxes)
-        # put buffer subarray to hdf5, reserve existing values
+    baIter = BigArrayIterator(bufferGlobalRange, ba.blockSize)
+
+    # temporal block as a buffer to reduce memory allocation
+    for (blockID, globalRange, blockRange, bufferRange) in baIter
+        # refresh the temporal block
+        # map((x,y)->tempBlock[x]=buf[y], blockRange, bufferRange)
+        blockFileName = get_block_file_name(ba, blockID)
+        info("save $(globalRange) from buffer $(bufferRange) to $(blockRange) of $(blockFileName) ...")
         while true
             try
-                save_buffer(buf, h5FileName, ba, blkidxes, bufidxes)
-                info("save $(gidxes) from buffer $(bufidxes) to $(blkidxes) of $(h5FileName)")
+                save_buffer( buf, blockFileName, ba, blockRange, bufferRange)
+                info("save $(globalRange) from buffer $(bufferRange) to $(blockRange) of $(blockFileName) ...")
                 break
             catch
                 rethrow()
@@ -325,18 +331,16 @@ end
 """
 save part of or whole buffer to one hdf5 file
 """
-function save_buffer{T,D}(  buf::Array{T, D}, h5FileName::AbstractString,
+function save_buffer{T,N}(  buf::Array{T,N}, blockFileName::AbstractString,
                             ba::AbstractBigArray,
-                            blkidxes::Union{Tuple, Vector},
-                            bufidxes::Union{Tuple, Vector})
-    @assert D==length(blkidxes)
-    @assert D==length(bufidxes)
-    if isfile(h5FileName) && ishdf5(h5FileName)
-        f = h5open(h5FileName, "r+")
+                            blockRange ::CartesianRange{CartesianIndex{N}},
+                            bufferRange::CartesianRange{CartesianIndex{N}})
+    if isfile(blockFileName) && ishdf5(blockFileName)
+        f = h5open(blockFileName, "r+")
         dataSet = f[H5_DATASET_NAME]
         @assert eltype(f[H5_DATASET_NAME])==T
     else
-        f = h5open(h5FileName, "w")
+        f = h5open(blockFileName, "w")
         # assign origin
         # f["origin"] = #fileName2origin( h5FileName )
         # assign values
@@ -357,10 +361,15 @@ function save_buffer{T,D}(  buf::Array{T, D}, h5FileName::AbstractString,
                 "chunk", (ba.chunkSize...))
         end
     end
-    # @show blkix, blkiy, blkiz
-    @show dataSet
-    dataSet[blkidxes...] = buf[bufidxes...]
+    dataSet[blockRange] = buf[bufferRange]
     close(f)
+end
+
+
+function Base.setindex!{T,N}(dataSet::HDF5.HDF5Dataset, buf::Array{T,N},
+                                blockRange::CartesianRange{CartesianIndex{N}})
+    ur = cartesian_range2unitrange(blockRange)
+    dataSet[ur...] = buf
 end
 
 end # end of module: H5sBigArrays

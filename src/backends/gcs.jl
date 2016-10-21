@@ -5,7 +5,7 @@ module GCSBigArrays
 
 using ..BigArrays
 # using ..BigArrays.BoundingBox
-using ..BigArrays.BigArrayIterators
+using ..BigArrays.Iterators
 
 using GoogleCloud
 using GoogleCloud.Utils.Storage
@@ -46,7 +46,6 @@ function GCSBigArray( configDict::Dict{Symbol, Any} )
     if isa(configDict[:eltype], AbstractString)
         configDict[:eltype] = eval(parse( configDict[:eltype] ))
     end
-    @show configDict[:eltype]
     if isa(configDict[:globalRange], AbstractString)
         configDict[:globalRange] = CartesianRange( eval(
                                         parse(configDict[:globalRange])))
@@ -233,7 +232,7 @@ function Base.setindex!{T,N}(ba::GCSBigArray, buf::Array{T,N}, idxes::Union{Unit
 
     @show idxes
     @show bufferGlobalRange
-    baIter = BigArrayIterator(ba.globalRange, ba.blockSize)
+    baIter = BigArrayIterator(bufferGlobalRange, ba.blockSize)
 
     # temporal block as a buffer to reduce memory allocation
     tempBlock = Array(T, ba.blockSize)

@@ -1,4 +1,4 @@
-module BigArrayIterators
+module Iterators
 
 using ..BigArrays
 
@@ -39,6 +39,7 @@ function Base.next{N}( iter::BigArrayIterator{N}, blockID::NTuple{N} )
     stop  = CartesianIndex(( map((x,y,z)->min(x*y, z),       blockID,
                             iter.blockSize, iter.globalRange.stop )...))
     globalRange = CartesianRange(start, stop)
+    @show globalRange
     blockRange  = global_range2block_range( globalRange, iter.blockSize)
     bufferRange = global_range2buffer_range(globalRange, iter.globalRange)
 
@@ -46,7 +47,7 @@ function Base.next{N}( iter::BigArrayIterator{N}, blockID::NTuple{N} )
     for i in 1:N
         if blockID[i]*iter.blockSize[i]+1 < iter.globalRange.stop[i]
             newBlockID = (blockID[1:i-1]..., blockID[i]+1, blockID[i+1:end]...)
-            return globalRange, newBlockID
+            return (blockID, globalRange, blockRange, bufferRange), newBlockID
         end
     end
     newBlockID = (blockID[1:N-1]..., blockID[N]+1)
