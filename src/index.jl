@@ -3,7 +3,7 @@ export global_range2buffer_range, global_range2block_range
 export cartesian_range2unitrange
 
 # make Array accept cartetian range as index
-function cartesian_range2unitrange(r::CartesianRange)
+function cartesian_range2unitrange{N}(r::CartesianRange{CartesianIndex{N}})
     ( map((x,y)->x:y, r.start, r.stop)...)
 end
 

@@ -43,7 +43,7 @@ function AlignedBigArray(fregister::AbstractString)
         else
             error("unsupported format of register file: $(line)")
         end
-        d[:secIDinWaver] = parse(split(split(registerFile,'_')[1], ',')[2]) + 1
+        d[:secIDinWaver] = parse(split(split(registerFile,'_')[1], ',')[2])
         d[:waiverID] = parse(split(split(registerFile,'_')[1], ',')[1])
         d[:registerFile] = joinpath(dirname(fregister), registerFile * ".h5")
         d[:xoff] = parse(xoff)
@@ -134,7 +134,8 @@ function read_subimage!(buf,
                         sizeX::Integer,
                         sizeY::Integer,
                         xidx::Union{Int, UnitRange},
-                        yidx::Union{Int, UnitRange})
+                        yidx::Union{Int, UnitRange},
+                        zidx::Integer)
     @assert ishdf5(registerFile)
 
     while true
@@ -150,7 +151,7 @@ function read_subimage!(buf,
                 bufx2 = x2 - first(xidx) + 1;
                 bufy1 = y1 - first(yidx) + 1;
                 bufy2 = y2 - first(yidx) + 1;
-                buf[bufx1:bufx2, bufy1:bufy2] = h5read(registerFile, H5_DATASET_NAME, (x1:x2, y1:y2))
+                buf[bufx1:bufx2, bufy1:bufy2, zidx] = h5read(registerFile, H5_DATASET_NAME, (x1:x2, y1:y2))
             end
             return
         catch
@@ -183,13 +184,13 @@ function Base.getindex(A::AlignedBigArray, idxes::Union{UnitRange, Int}...)
             yidx = idxes[2] - A.register[z][:yoff]
             zidx = z  - first(idxes[3]) + 1
             # println("registerFile: $(basename(registerFile)), xidx: $(xidx), yidx: $(yidx), zidx: $(zidx)")
-            read_subimage!( buf[:,:,zidx],
+            read_subimage!( buf,
                             registerFile,
                             A.register[z][:xdim],
                             A.register[z][:ydim],
-                            xidx, yidx)
+                            xidx, yidx, zidx)
         else
-            warn("section file not exist: $(z)")
+            warn("section file not exist: $(z) with file path: $(registerFile)")
         end
     end
     buf
