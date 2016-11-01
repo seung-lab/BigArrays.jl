@@ -57,29 +57,11 @@ end
 """
 crop the 3D surrounding margin
 """
-function crop_border{T}(chk::Chunk, cropMarginSize::Union{Vector{T},Tuple{T}})
-  @assert typeof(chk.data) <: Array
-  nd = ndims(chk.data)
-  @assert nd >= 3
-  sz = size(chk.data)
-  @assert sz[1]>cropMarginSize[1]*2 &&
-          sz[2]>cropMarginSize[2]*2 &&
-          sz[3]>cropMarginSize[3]*2
-    if nd == 3
-        data = chk.data[cropMarginSize[1]+1:sz[1]-cropMarginSize[1],
-                        cropMarginSize[2]+1:sz[2]-cropMarginSize[2],
-                        cropMarginSize[3]+1:sz[3]-cropMarginSize[3]]
-    elseif nd==4
-        data = chk.data[cropMarginSize[1]+1:sz[1]-cropMarginSize[1],
-                        cropMarginSize[2]+1:sz[2]-cropMarginSize[2],
-                        cropMarginSize[3]+1:sz[3]-cropMarginSize[3], :]
-    elseif nd==5
-        data = chk.data[cropMarginSize[1]+1:sz[1]-cropMarginSize[1],
-                        cropMarginSize[2]+1:sz[2]-cropMarginSize[2],
-                        cropMarginSize[3]+1:sz[3]-cropMarginSize[3], :, :]
-    else
-        error("only support 3-5 D, current dataay dimention is $(nd)")
-    end
+function crop_border(chk::Chunk, cropMarginSize::Union{Vector,Tuple})
+    @assert typeof(chk.data) <: Array
+    @assert length(cropMarginSize) == ndims(chk.data)
+    idx = map((x,y)->x+1:y-x, cropMarginSize, size(chk.data))
+    data = chk.data[idx...]
     origin = chk.origin .+ cropMarginSize
     Chunk(data, origin, chk.voxelSize)
 end

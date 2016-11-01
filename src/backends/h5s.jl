@@ -252,12 +252,12 @@ function Base.getindex(ba::H5sBigArray, idxes::Union{UnitRange, Int, Colon}...)
                     break
                 catch
                     rethrow()
-                    warn("open and read $h5FileName failed, will try 5 seconds later...")
+                    warn("open and read $blockFileName failed, will try 5 seconds later...")
                     sleep(5)
                 end
             end
         else
-            warn("filled with zeros because file do not exist: $(h5FileName)")
+            warn("filled with zeros because file do not exist: $(blockFileName)")
         end
     end
     buf
