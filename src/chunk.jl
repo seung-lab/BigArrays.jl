@@ -15,29 +15,23 @@ end
 blend chunk to BigArray
 """
 function blendchunk(ba::AbstractBigArray, chunk::Chunk)
-  gr = global_range( chunk )
-  @show gr
-  if ndims(chunk) == 3 && isa(chunk.data, Array)
-    ba[gr[1], gr[2], gr[3]] = chunk.data
-  elseif ndims(chunk) == 3 && isa(chunk.data, SegMST)
-    ba[gr[1], gr[2], gr[3]] = chunk.data.segmentation
-  elseif ndims(chunk) == 4
-    ba[gr[1], gr[2], gr[3], gr[4]] = chunk.data
-  end
+    gr = global_range( chunk )
+    ba[gr...] = chunk.data
+    # @show gr
+    # if ndims(chunk) == 3 && isa(chunk.data, Array)
+    # ba[gr[1], gr[2], gr[3]] = chunk.data
+    # elseif ndims(chunk) == 3 && isa(chunk.data, SegMST)
+    # ba[gr[1], gr[2], gr[3]] = chunk.data.segmentation
+    # elseif ndims(chunk) == 4
+    # ba[gr[1], gr[2], gr[3], gr[4]] = chunk.data
+    # end
 end
 
 """
 get global index range
 """
 function global_range( chunk::Chunk )
-  x1 = chunk.origin[1];   x2 = x1 + size(chunk)[1] - 1
-  y1 = chunk.origin[2];   y2 = y1 + size(chunk)[2] - 1
-  z1 = chunk.origin[3];   z2 = z1 + size(chunk)[3] - 1
-  if ndims(chunk) == 3
-    return( x1:x2, y1:y2, z1:z2 )
-  elseif ndims(chunk) == 4
-    return( x1:x2, y1:y2, z1:z2, :)
-  end
+    map((x,y)->x:x+y-1, chunk.origin, size(chunk))
 end
 
 function Base.size( chunk::Chunk )

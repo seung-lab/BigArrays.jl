@@ -9,7 +9,7 @@ using JSON
 const CONFIG_FILE = "config.json"
 const DEFAULT_H5FILE_PREFIX = "block_"
 const H5_DATASET_NAME = "img"
-const DEFAULT_BLOCK_SIZE = (2048, 2048, 256)
+const DEFAULT_BLOCK_SIZE = (1024, 1024, 128)
 const DEFAULT_CHUNK_SIZE = (256, 256, 32)
 const DEFAULT_GLOBAL_OFFSET = (0,0,0)
 const DEFAULT_RANGE         = CartesianRange(
@@ -75,7 +75,8 @@ function H5sBigArray{N}(   dir::AbstractString;
                         chunkSize::NTuple{N}            = DEFAULT_CHUNK_SIZE,
                         globalRange::CartesianRange{CartesianIndex{N}}
                                                         = DEFAULT_RANGE,
-                        compression::Symbol             = :deflate)
+                        compression::Symbol             = DEFAULT_COMPRESSION)
+    dir = expanduser(dir)
     configFile = joinpath(dir, CONFIG_FILE)
     if isfile(dir)
         warn("take this file as bigarray config file: $(dir)")
@@ -283,7 +284,7 @@ end
 put small array to big array
 """
 function Base.setindex!{T,N}(ba::H5sBigArray, buf::Array{T,N}, idxes::Union{UnitRange, Int, Colon}...)
-    @assert ndims(buf) == length(idxes)
+    @assert N == length(idxes)
     # clarify the Colon
     idxes = colon2unitRange(buf, idxes)
     # set bounding box
