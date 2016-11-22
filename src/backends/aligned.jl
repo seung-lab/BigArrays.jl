@@ -122,7 +122,7 @@ end
 
 function Base.show(A::AlignedBigArray)
     println("type: $(typeof(A))")
-    println("bounding box: $(bbox(A))")
+    println("bounding box: $(boundingbox(A))")
     println("the data is in disk, can not ")
 end
 
@@ -133,25 +133,25 @@ function read_subimage!(buf,
                         registerFile::AbstractString,
                         sizeX::Integer,
                         sizeY::Integer,
-                        xidx::Union{Int, UnitRange},
-                        yidx::Union{Int, UnitRange},
-                        zidx::Integer)
+                        xidxSection::Union{Int, UnitRange},
+                        yidxSection::Union{Int, UnitRange},
+                        zidxSection::Integer)
     @assert ishdf5(registerFile)
 
     while true
         try
             # the explicit coordinate range
-            x1 = max(1, first(xidx));   x2 = min(sizeX, last(xidx));
-            y1 = max(1, first(yidx));   y2 = min(sizeY, last(yidx));
+            x1 = max(1, first(xidxSection));   x2 = min(sizeX, last(xidxSection));
+            y1 = max(1, first(yidxSection));   y2 = min(sizeY, last(yidxSection));
             if x1>x2 || y1>y2
                 warn("no overlaping region in this section: $(registerFile)")
             else
                 # index in buffer
-                bufx1 = x1 - first(xidx) + 1;
-                bufx2 = x2 - first(xidx) + 1;
-                bufy1 = y1 - first(yidx) + 1;
-                bufy2 = y2 - first(yidx) + 1;
-                buf[bufx1:bufx2, bufy1:bufy2, zidx] = h5read(registerFile, H5_DATASET_NAME, (x1:x2, y1:y2))
+                bufx1 = x1 - first(xidxSection) + 1;
+                bufx2 = x2 - first(xidxSection) + 1;
+                bufy1 = y1 - first(yidxSection) + 1;
+                bufy2 = y2 - first(yidxSection) + 1;
+                buf[bufx1:bufx2, bufy1:bufy2, zidxSection] = h5read(registerFile, H5_DATASET_NAME, (x1:x2, y1:y2))
             end
             return
         catch
@@ -180,15 +180,15 @@ function Base.getindex(A::AlignedBigArray, idxes::Union{UnitRange, Int}...)
     for z in idxes[3]
         if haskey(A.register, z)
             registerFile = A.register[z][:registerFile]
-            xidx = idxes[1] - A.register[z][:xoff]
-            yidx = idxes[2] - A.register[z][:yoff]
-            zidx = z  - first(idxes[3]) + 1
+            xidxSection = idxes[1] - A.register[z][:xoff]
+            yidxSection = idxes[2] - A.register[z][:yoff]
+            zidxSection = z  - first(idxes[3]) + 1
             # println("registerFile: $(basename(registerFile)), xidx: $(xidx), yidx: $(yidx), zidx: $(zidx)")
             read_subimage!( buf,
                             registerFile,
                             A.register[z][:xdim],
                             A.register[z][:ydim],
-                            xidx, yidx, zidx)
+                            xidxSection, yidxSection, zidxSection)
         else
             warn("section file not exist: $z")
         end

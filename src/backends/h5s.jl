@@ -222,7 +222,6 @@ end
 
 """
 extract chunk from a bigarray
-only works for 3D now.
 """
 function Base.getindex(ba::H5sBigArray, idxes::Union{UnitRange, Int, Colon}...)
     # clarify the Colon
