@@ -7,7 +7,7 @@ export Chunk, blendchunk, crop_border, physical_offset, save, savechunk, readchu
 
 type Chunk <: AbstractChunk
     data::Union{Array, SegMST} # could be 3 or 4 Dimensional array
-    origin::Vector{UInt32}     # measured by voxel number
+    origin::Vector{Int}     # measured by voxel number
     voxelSize::Vector{UInt32}  # physical size of each voxel
 end
 
@@ -70,7 +70,7 @@ end
 compute the physical offset
 """
 function physical_offset( chk::Chunk )
-    Vector{UInt32}((chk.origin.-UInt32(1)) .* chk.voxelSize)
+    Vector{Int}((chk.origin.-1) .* chk.voxelSize)
 end
 
 """
@@ -96,7 +96,7 @@ function save(fname::AbstractString, chk::Chunk)
     else
         error("This is an unsupported type: $(typeof(chk.data))")
     end
-    f["origin"] = Vector{UInt32}(chk.origin)
+    f["origin"] = Vector{Int}(chk.origin)
     f["voxelSize"] = Vector{UInt32}(chk.voxelSize)
     close(f)
 end

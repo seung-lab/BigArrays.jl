@@ -3,6 +3,9 @@ using ..BigArrays
 using ..BigArrays.Iterators
 using HDF5
 using JSON
+using Blosc
+
+# Blosc.set_num_threads(Threads.nthreads())
 
 # include("../types.jl")
 # include("../index.jl")
@@ -28,7 +31,6 @@ type H5sBigArray <: AbstractBigArray
     globalOffset  ::Tuple
     blockSize     ::Tuple
     chunkSize     ::Tuple
-    globalRange   ::CartesianRange
     compression   ::Symbol              # deflate || blosc
 end
 
@@ -43,10 +45,6 @@ end
 construct a H5sBigArray from a dict
 """
 function H5sBigArray( configDict::Dict{Symbol, Any} )
-    if isa(configDict[:globalRange], AbstractString)
-        configDict[:globalRange] = CartesianRange( eval(
-                                        parse(configDict[:globalRange])))
-    end
     if isa(configDict[:globalOffset], Vector)
         configDict[:globalOffset] = (configDict[:globalOffset]...)
     end
@@ -61,7 +59,6 @@ function H5sBigArray( configDict::Dict{Symbol, Any} )
                     configDict[:globalOffset],
                     configDict[:blockSize],
                     configDict[:chunkSize],
-                    configDict[:globalRange],
                     configDict[:compression] )
 
 end
@@ -73,8 +70,6 @@ function H5sBigArray{N}(   dir::AbstractString;
                         globalOffset::NTuple{N}         = DEFAULT_GLOBAL_OFFSET,
                         blockSize::NTuple{N}            = DEFAULT_BLOCK_SIZE,
                         chunkSize::NTuple{N}            = DEFAULT_CHUNK_SIZE,
-                        globalRange::CartesianRange{CartesianIndex{N}}
-                                                        = DEFAULT_RANGE,
                         compression::Symbol             = DEFAULT_COMPRESSION)
     dir = expanduser(dir)
     configFile = joinpath(dir, CONFIG_FILE)
@@ -97,7 +92,7 @@ function H5sBigArray{N}(   dir::AbstractString;
         end
         global H5SBIGARRAY_DIRECTORY = dir
         ba = H5sBigArray(h5FilePrefix, globalOffset, blockSize, chunkSize,
-                            globalRange, compression)
+                            compression)
         updateconfigfile(ba)
     end
     ba
@@ -113,14 +108,12 @@ function bigArray2dict(ba::H5sBigArray)
     d[:globalOffset] = ba.globalOffset
     d[:blockSize] = ba.blockSize
     d[:chunkSize] = ba.chunkSize
-    d[:globalRange] = ba.globalRange
     d[:compression] = ba.compression
     return d
 end
 
 function bigArray2string(ba::H5sBigArray)
     d = bigArray2dict(ba)
-    d[:globalRange] = string(d[:globalRange])
     JSON.json(d)
 end
 
@@ -174,14 +167,30 @@ end
 bounding box of the whole volume
 """
 function boundingbox(ba::H5sBigArray)
-    map((x,y)->x:y, ba.globalRange.start, ba.globalRange.stop)
+    D = ndims(ba)
+    range = CartesianRange(
+            CartesianIndex([typemax(Int) for i = 1:D]...),
+            CartesianIndex([typemin(Int) for i = 1:D]...))
+    @show H5SBIGARRAY_DIRECTORY
+    for file in readdir(H5SBIGARRAY_DIRECTORY)
+        if ishdf5(file)
+            start = fileName2origin(file)
+            f = h5open(file)
+            sz = size(f[H5_DATASET_NAME])
+            close(f)
+            stop = map((x,y)->x+y-1, start,sz)
+            range.start = CartesianIndex(map((x,y)->max(x,y), range.start, start))
+            range.stop  = CartesianIndex(map((x,y)->min(x,y), range.stop,  stop))
+        end
+    end
+    return range
 end
 
 """
 compute size from bounding box
 """
 function Base.size(ba::H5sBigArray)
-    size(ba.globalRange)
+    size(boundingbox(ba))
 end
 
 function Base.size(ba::H5sBigArray, i::Int)
@@ -288,8 +297,8 @@ function Base.setindex!{T,N}(ba::H5sBigArray, buf::Array{T,N}, idxes::Union{Unit
     # clarify the Colon
     idxes = colon2unitRange(buf, idxes)
     # set bounding box
-    adjust_range!(ba, idxes)
-    updateconfigfile(ba)
+    # adjust_range!(ba, idxes)
+    # updateconfigfile(ba)
     # transform to originate from (0,0,0)
     idxes = map((x,y)-> x-y, idxes, ba.globalOffset)
     bufferGlobalRange = CartesianRange(idxes)
@@ -321,10 +330,12 @@ decode file name to origin coordinate
 to-do: support negative coordinate.
 """
 function fileName2origin( fileName::AbstractString )
+    fileName = replace(fileName, "-",  ":")
+    fileName = replace(fileName, "_:", "_-")
     secs = split(fileName, "_")
     origin = zeros(Int, length(secs)-2)
     for i in 1:length(origin)
-        origin[i] = parse( split(secs[i+1],"-")[1] )
+        origin[i] = parse( split(secs[i+1],":")[1] )
     end
     return origin
 end
@@ -343,7 +354,8 @@ function save_buffer{T,N}(  buf::Array{T,N}, blockFileName::AbstractString,
     else
         f = h5open(blockFileName, "w")
         # assign origin
-        # f["origin"] = #fileName2origin( h5FileName )
+        @show blockFileName
+        # f["origin"] = fileName2origin( blockFileName )
         # assign values
         if ba.compression == :deflate
             dataSet = d_create(f, H5_DATASET_NAME, datatype(eltype(buf)),

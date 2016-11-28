@@ -37,11 +37,15 @@ end
 """
 adjust bigarray bounding box range when fitting in new subarray
 """
+function adjust_range!(globalRange::CartesianRange, idxes::CartesianRange)
+    start = min(globalRange.start, idxes.start)
+    stop  = max(globalRange.stop,  idxes.stop)
+    return CartesianRange(start, stop)
+end
 function adjust_range!(ba::AbstractBigArray, idxes::CartesianRange)
-    @assert length(ba.globalRange.start) == length(idxes.start)
-    start = min(ba.globalRange.start, idxes.start)
-    stop  = max(ba.globalRange.stop,  idxes.stop)
-    ba.globalRange = CartesianRange(start, stop)
+    # @assert length(ba.globalRange.start) == length(idxes.start)
+    globalRange = boundingbox(ba)
+    return adjust_range!(globalRange, idexes)
 end
 
 function adjust_range!(ba::AbstractBigArray, idxes::Tuple)

@@ -190,7 +190,7 @@ function Base.getindex(A::AlignedBigArray, idxes::Union{UnitRange, Int}...)
                             A.register[z][:ydim],
                             xidx, yidx, zidx)
         else
-            warn("section file not exist: $(z) with file path: $(registerFile)")
+            warn("section file not exist: $(z)")
         end
     end
     buf
