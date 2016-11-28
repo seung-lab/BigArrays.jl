@@ -13,7 +13,7 @@ const CONFIG_FILE = "config.json"
 const DEFAULT_H5FILE_PREFIX = "block_"
 const H5_DATASET_NAME = "img"
 const DEFAULT_BLOCK_SIZE = (1024, 1024, 128)
-const DEFAULT_CHUNK_SIZE = (256, 256, 32)
+const DEFAULT_CHUNK_SIZE = (128, 128, 16)
 const DEFAULT_GLOBAL_OFFSET = (0,0,0)
 const DEFAULT_RANGE         = CartesianRange(
         CartesianIndex((typemax(Int), typemax(Int), typemax(Int))),
@@ -381,6 +381,7 @@ end
 function Base.setindex!{T,N}(dataSet::HDF5.HDF5Dataset, buf::Array{T,N},
                                 blockRange::CartesianRange{CartesianIndex{N}})
     ur = cartesian_range2unitrange(blockRange)
+    @show ur
     dataSet[ur...] = buf
 end
 

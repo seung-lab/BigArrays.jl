@@ -63,7 +63,7 @@ function global_range2block_range{N}(globalRange::CartesianRange{CartesianIndex{
 end
 
 function index2blockid{N}(idx::CartesianIndex{N}, blockSize::NTuple{N})
-    ( map((x,y)->div(x-1, y)+1, idx, blockSize) ... )
+    ( map((x,y)->fld(x-1, y)+1, idx, blockSize) ... )
 end
 
 function blockid2global_range{N}(blockID::NTuple{N}, blockSize::NTuple{N})
