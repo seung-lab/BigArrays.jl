@@ -163,27 +163,32 @@ function Base.ndims(ba::H5sBigArray)
   end
 end
 
+function CartesianIndex(idx::Vector)
+    CartesianIndex((idx...))
+end
+
 """
 bounding box of the whole volume
 """
 function boundingbox(ba::H5sBigArray)
     D = ndims(ba)
-    range = CartesianRange(
-            CartesianIndex([typemax(Int) for i = 1:D]...),
-            CartesianIndex([typemin(Int) for i = 1:D]...))
+    ret_start = CartesianIndex([typemax(Int) for i = 1:D]...)
+    ret_stop  = CartesianIndex([typemin(Int) for i = 1:D]...)
+
     @show H5SBIGARRAY_DIRECTORY
     for file in readdir(H5SBIGARRAY_DIRECTORY)
-        if ishdf5(file)
+        fileName = joinpath(H5SBIGARRAY_DIRECTORY, file)
+        if fileName[end-3:end]==".h5"
             start = fileName2origin(file)
-            f = h5open(file)
-            sz = size(f[H5_DATASET_NAME])
-            close(f)
-            stop = map((x,y)->x+y-1, start,sz)
-            range.start = CartesianIndex(map((x,y)->max(x,y), range.start, start))
-            range.stop  = CartesianIndex(map((x,y)->min(x,y), range.stop,  stop))
+            # f = h5open(fileName)
+            # sz = size(f[H5_DATASET_NAME])
+            # close(f)
+            stop = map((x,y)->x+y-1, start,ba.blockSize)
+            ret_start = CartesianIndex(map((x,y)->max(x,y), ret_start, start))
+            ret_stop  = CartesianIndex(map((x,y)->min(x,y), ret_stop,  stop))
         end
     end
-    return range
+    return CartesianRange(ret_start, ret_stop)
 end
 
 """
@@ -329,10 +334,12 @@ decode file name to origin coordinate
 to-do: support negative coordinate.
 """
 function fileName2origin( fileName::AbstractString )
+    # fileName = replace(fileName, DEFAULT_H5FILE_PREFIX, "")
+    fileName = replace(fileName, ".h5", "")
     fileName = replace(fileName, "-",  ":")
     fileName = replace(fileName, "_:", "_-")
     secs = split(fileName, "_")
-    origin = zeros(Int, length(secs)-2)
+    origin = zeros(Int, length(secs)-1)
     for i in 1:length(origin)
         origin[i] = parse( split(secs[i+1],":")[1] )
     end
