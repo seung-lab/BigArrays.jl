@@ -178,14 +178,16 @@ function boundingbox(ba::H5sBigArray)
     @show H5SBIGARRAY_DIRECTORY
     for file in readdir(H5SBIGARRAY_DIRECTORY)
         fileName = joinpath(H5SBIGARRAY_DIRECTORY, file)
-        if fileName[end-3:end]==".h5"
+        # if fileName[end-2:end]==".h5"
+        if contains(fileName, ".h5")
             start = fileName2origin(file)
+            @show start
             # f = h5open(fileName)
             # sz = size(f[H5_DATASET_NAME])
             # close(f)
             stop = map((x,y)->x+y-1, start,ba.blockSize)
-            ret_start = CartesianIndex(map((x,y)->max(x,y), ret_start, start))
-            ret_stop  = CartesianIndex(map((x,y)->min(x,y), ret_stop,  stop))
+            ret_start = CartesianIndex(map((x,y)->min(x,y), ret_start, start))
+            ret_stop  = CartesianIndex(map((x,y)->max(x,y), ret_stop,  stop))
         end
     end
     return CartesianRange(ret_start, ret_stop)
