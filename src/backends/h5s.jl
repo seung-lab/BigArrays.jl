@@ -181,7 +181,7 @@ function boundingbox(ba::H5sBigArray)
         # if fileName[end-2:end]==".h5"
         if contains(fileName, ".h5")
             start = fileName2origin(file)
-            @show start
+            # @show start
             # f = h5open(fileName)
             # sz = size(f[H5_DATASET_NAME])
             # close(f)
