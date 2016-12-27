@@ -163,10 +163,6 @@ function Base.ndims(ba::H5sBigArray)
   end
 end
 
-function CartesianIndex(idx::Vector)
-    CartesianIndex((idx...))
-end
-
 """
 bounding box of the whole volume
 """
@@ -250,7 +246,7 @@ function Base.getindex(ba::H5sBigArray, idxes::Union{UnitRange, Int, Colon}...)
     bufferGlobalRange = CartesianRange(idxes)
 
     baIter = BigArrayIterator(bufferGlobalRange, ba.blockSize)
-    for (blockID, globalRange, blockRange, bufferRange) in baIter
+    for (blockID, blockGlobalRange, globalRange, blockRange, bufferRange) in baIter
         blockFileName = get_block_file_name(ba, blockID)
         info("read $(globalRange) from $(blockRange) of $(blockFileName) to buffer $(bufferRange) ...")
 
@@ -310,7 +306,7 @@ function Base.setindex!{T,N}(ba::H5sBigArray, buf::Array{T,N}, idxes::Union{Unit
     baIter = BigArrayIterator(bufferGlobalRange, ba.blockSize)
 
     # temporal block as a buffer to reduce memory allocation
-    for (blockID, globalRange, blockRange, bufferRange) in baIter
+    for (blockID, blockGlobalRange, globalRange, blockRange, bufferRange) in baIter
         # refresh the temporal block
         # map((x,y)->tempBlock[x]=buf[y], blockRange, bufferRange)
         blockFileName = get_block_file_name(ba, blockID)

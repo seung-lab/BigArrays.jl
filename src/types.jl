@@ -3,3 +3,5 @@
 export AbstractBigArray
 
 abstract AbstractBigArray <: AbstractArray
+
+abstract AbstractBigArrayBackend    <: Any

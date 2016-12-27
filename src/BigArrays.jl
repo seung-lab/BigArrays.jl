@@ -4,10 +4,12 @@ module BigArrays
 
 # basic functions
 include("types.jl")
-include("chunk.jl")
-include("boundingbox.jl")
 include("index.jl")
 include("base.jl")
+include("chunk.jl")
+include("boundingbox.jl")
+
+
 
 # chunkstore, use key-value store as backends
 include("context.jl")

@@ -82,3 +82,36 @@ end
 function colon2unitRange{N}(sz::NTuple{N}, indexes::NTuple{N})
     map((x,y)-> x==Colon() ? UnitRange(1:y):x, indexes, sz)
 end
+
+function Base.CartesianIndex(idx::Union{Tuple,Vector})
+    CartesianIndex((idx...))
+end
+
+
+function Base.string{N}(r::CartesianRange{CartesianIndex{N}})
+    ret = ""
+    for d in 1:N
+        s = r.start.I[d]
+        e = r.stop.I[d]
+        ret *= "$s:$e_"
+    end
+    return ret[1:end-1]
+end
+
+function Base.string( idxes::UnitRange...)
+    ret = ""
+    ret = map(x->"$(start(x)):$(x[end])_", idxes)
+    return ret[1:end-1]
+end
+
+function Base.CartesianRange( str::String )
+    secs = split(str, "_")
+    N = length(secs)
+    s = CartesianIndex{N}()
+    e = CartesianIndex{N}()
+    for i in 1:N
+        s[i] = parse( split(secs[i+1],":")[1] )
+        e[i] = parse( split(secs[i+1],":")[2] )
+    end
+    return CartesianRange(s,e)
+end

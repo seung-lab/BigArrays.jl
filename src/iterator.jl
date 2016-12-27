@@ -6,20 +6,26 @@ export BigArrayIterator
 
 immutable BigArrayIterator{N}
     globalRange     ::CartesianRange{CartesianIndex{N}}
-    blockSize       ::NTuple{N}
-    blockIDRange    ::CartesianRange{CartesianIndex{N}}
+    chunkSize       ::NTuple{N}
+    chunkIDRange    ::CartesianRange{CartesianIndex{N}}
 end
 
 function BigArrayIterator{N}( globalRange::CartesianRange{CartesianIndex{N}},
-                            blockSize::NTuple{N})
-    blockIDStart = CartesianIndex(index2blockid( globalRange.start, blockSize ))
-    blockIDStop  = CartesianIndex(index2blockid( globalRange.stop,  blockSize ))
-    blockIDRange = CartesianRange(blockIDStart, blockIDStop)
-    BigArrayIterator( globalRange, blockSize, blockIDRange )
+                            chunkSize::NTuple{N})
+    chunkIDStart = CartesianIndex(index2chunkid( globalRange.start, chunkSize ))
+    chunkIDStop  = CartesianIndex(index2chunkid( globalRange.stop,  chunkSize ))
+    chunkIDRange = CartesianRange(chunkIDStart, chunkIDStop)
+    BigArrayIterator( globalRange, chunkSize, chunkIDRange )
 end
 
+function BigArrayIterator{N}( idxes::Union{UnitRange, Int},
+                                chunkSize::NTuple{N})
+    globalRange = CartesianRange(idxes)
+    BigArrayIterator( globalRange, chunkSize )
+end 
+
 function BigArrayIterator( ba::AbstractBigArray )
-    BigArrayIterator( ba.globalRange, ba.blockSize )
+    BigArrayIterator( ba.globalRange, ba.chunkSize )
 end
 
 function Base.length( iter::BigArrayIterator )
@@ -31,10 +37,10 @@ function Base.eltype( iter::BigArrayIterator )
 end
 
 """
-the state is a tuple {blockID, and the dimension that is increasing}
+the state is a tuple {chunkID, and the dimension that is increasing}
 """
 function Base.start( iter::BigArrayIterator )
-    iter.blockIDRange.start
+    iter.chunkIDRange.start
 end
 
 """
@@ -44,20 +50,24 @@ increase start coordinate following the column-order.
 """
 function Base.next{N}(  iter    ::BigArrayIterator{N},
                         state   ::CartesianIndex{N} )
-    blockIDIndex, state = next(iter.blockIDRange, state)
-    blockID = tuple(blockIDIndex.I...)
+    chunkIDIndex, state = next(iter.chunkIDRange, state)
+    chunkID = tuple(chunkIDIndex.I...)
 
-    # get current global range in this block
-    start = CartesianIndex(( map((x,y,z)->max((x-1)*y+1, z), blockID,
-                            iter.blockSize, iter.globalRange.start )...))
-    stop  = CartesianIndex(( map((x,y,z)->min(x*y, z),       blockID,
-                            iter.blockSize, iter.globalRange.stop )...))
+    # get current global range in this chunk
+    start = CartesianIndex(( map((x,y,z)->max((x-1)*y+1, z), chunkID,
+                            iter.chunkSize, iter.globalRange.start )...))
+    stop  = CartesianIndex(( map((x,y,z)->min(x*y, z),       chunkID,
+                            iter.chunkSize, iter.globalRange.stop )...))
+    # the global range of the cutout in this chunk
     globalRange = CartesianRange(start, stop)
     @show globalRange
-    blockRange  = global_range2block_range( globalRange, iter.blockSize)
-    bufferRange = global_range2buffer_range(globalRange, iter.globalRange)
-
-    return (blockID, globalRange, blockRange, bufferRange), state
+    # the range inside this chunk
+    rangeInChunk  = global_range2chunk_range( globalRange, iter.chunkSize)
+    # the range inside the buffer
+    rangeInBuffer = global_range2buffer_range(globalRange, iter.globalRange)
+    # the global range of this chunk
+    chunkGlobalRange = blockid2global_range( blockID, ba.blockSize )
+    return (chunkID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer), state
 end
 
 """
@@ -67,7 +77,7 @@ if all the axeses were saturated, stop the iteration.
 """
 function Base.done{N}(  iter::BigArrayIterator{N},
                         state::CartesianIndex{N})
-    done(iter.blockIDRange, state)
+    done(iter.chunkIDRange, state)
 end
 
 end # end of module

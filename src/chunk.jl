@@ -1,6 +1,8 @@
 using EMIRT
 using HDF5
 
+module Chunk
+
 abstract AbstractChunk
 
 export Chunk, blendchunk, crop_border, physical_offset, save, savechunk, readchunk
@@ -129,3 +131,5 @@ cutout a chunk from BigArray
 function cutout(ba::AbstractBigArray, indexes::Union{UnitRange, Integer, Colon} ...)
     error("unimplemented")
 end
+
+end # end of module
