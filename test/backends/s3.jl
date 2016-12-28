@@ -1,10 +1,11 @@
+import BigArrays: get_config
 using S3Dicts
 
 using BigArrays
 
-
 d = S3Dict( "s3://seunglab/jpwu/tmp/img/" )
 ba = BigArray( d )
+@show size(ba)
 
 info("\n test 3D image reading and saving...")
 a = rand(UInt8, 200,200,10)

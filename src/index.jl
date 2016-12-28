@@ -115,3 +115,15 @@ function Base.CartesianRange( str::String )
     end
     return CartesianRange(s,e)
 end
+
+"""
+    adjust bounding box range when fitting in new subarray
+"""
+function Base.union(globalRange::CartesianRange, idxes::CartesianRange)
+    start = min(globalRange.start, idxes.start)
+    stop  = max(globalRange.stop,  idxes.stop)
+    return CartesianRange(start, stop)
+end
+function Base.union!(r1::CartesianRange, r2::CartesianRange)
+    r1 = union(r1, r2)
+end

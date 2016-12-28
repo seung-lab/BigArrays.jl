@@ -1,6 +1,6 @@
 {
-    "prefix": "block_",
-    "blocksz": [4096,4096,512],
-    "chunksz": [256,256,32],
+    "prefix": "chunk_",
+    "blockSize": [256,256,32],
+    "chunkSize": [256,256,32],
     "compression": "deflate"
 }

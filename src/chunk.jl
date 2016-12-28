@@ -1,13 +1,14 @@
+module Chunks
+
 using EMIRT
 using HDF5
-
-module Chunk
+using ..BigArrays
 
 abstract AbstractChunk
 
-export Chunk, blendchunk, crop_border, physical_offset, save, savechunk, readchunk
+export Chunk, blendchunk, global_range, crop_border, physical_offset, save, savechunk, readchunk
 
-type Chunk <: AbstractChunk
+immutable Chunk <: AbstractChunk
     data::Union{Array, SegMST} # could be 3 or 4 Dimensional array
     origin::Vector{Int}     # measured by voxel number
     voxelSize::Vector{UInt32}  # physical size of each voxel
@@ -84,14 +85,14 @@ function save(fname::AbstractString, chk::Chunk)
     end
     f = h5open(fname, "w")
     f["type"] = "chunk"
-    if isa(chk.data, AffinityMap)
+    if isa(chk.data, Array{Float32,4})
         # save with compression
         f["affinityMap", "chunk", (64,64,8,3), "shuffle", (), "deflate", 3] = chk.data
-    elseif isa(chk.data, EMImage)
+    elseif isa(chk.data, Array{UInt8,3})
         f["image", "chunk", (64,64,8), "shuffle", (), "deflate", 3] = chk.data
-    elseif isa(chk.data, Segmentation)
+    elseif isa(chk.data, Array{UInt32,3})
         f["segmentation", "chunk", (64,64,8), "shuffle", (), "deflate", 3] = chk.data
-    elseif isa(chk.data, SegMST)
+    elseif :segmentation in fieldnames(typeof(chk.data))
         f["segmentation", "chunk", (64,64,8), "shuffle", (), "deflate", 3] = chk.data.segmentation
         f["segmentPairs"] = chk.data.segmentPairs
         f["segmentPairAffinities"] = chk.data.segmentPairAffinities

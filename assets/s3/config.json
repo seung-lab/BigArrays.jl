@@ -1,0 +1,6 @@
+{
+    "prefix":       "chunk_",
+    "chunkSize":    [256,256,32],
+    "dataType":     "UInt8",
+    "compression":  "deflate"
+}
