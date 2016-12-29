@@ -6,13 +6,10 @@ module BigArrays
 include("types.jl")
 include("chunk.jl")
 include("index.jl")
-include("base.jl")
-# include("boundingbox.jl")
-
-# applications
 include("iterator.jl")
+include("base.jl")
+
 include("backends.jl")
-# include("chunks.jl")
 
 
 end

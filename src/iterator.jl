@@ -22,7 +22,7 @@ function BigArrayIterator{N}( idxes::Union{UnitRange, Int},
                                 chunkSize::NTuple{N})
     globalRange = CartesianRange(idxes)
     BigArrayIterator( globalRange, chunkSize )
-end 
+end
 
 function BigArrayIterator( ba::AbstractBigArray )
     BigArrayIterator( ba.globalRange, ba.chunkSize )
@@ -66,7 +66,7 @@ function Base.next{N}(  iter    ::BigArrayIterator{N},
     # the range inside the buffer
     rangeInBuffer = global_range2buffer_range(globalRange, iter.globalRange)
     # the global range of this chunk
-    chunkGlobalRange = blockid2global_range( blockID, ba.blockSize )
+    chunkGlobalRange = chunkid2global_range( chunkID, iter.chunkSize )
     return (chunkID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer), state
 end
 

@@ -1,6 +1,6 @@
 {
     "prefix": "chunk_",
-    "blockSize": [256,256,32],
+    "innerChunkSize": [256,256,32],
     "chunkSize": [256,256,32],
     "compression": "deflate"
 }

@@ -1,5 +1,5 @@
-export colon2unitRange, blockid2global_range, index2blockid
-export global_range2buffer_range, global_range2block_range
+export colon2unitRange, chunkid2global_range, index2chunkid
+export global_range2buffer_range, global_range2chunk_range
 export cartesian_range2unitrange
 
 # make Array accept cartetian range as index
@@ -50,25 +50,25 @@ end
 """
     global_range2buffer_range(globalRange::CartesianRange, bufferGlobalRange::CartesianRange)
 
-Transform a global range to a range inside block.
+Transform a global range to a range inside chunk.
 """
-function global_range2block_range{N}(globalRange::CartesianRange{CartesianIndex{N}},
-                                    blockSize::NTuple{N})
-    blockID = index2blockid(globalRange.start, blockSize)
+function global_range2chunk_range{N}(globalRange::CartesianRange{CartesianIndex{N}},
+                                    chunkSize::NTuple{N})
+    chunkID = index2chunkid(globalRange.start, chunkSize)
     start = CartesianIndex((map((x,y,z)->x-(y-1)*z, globalRange.start,
-                                blockID, blockSize)...))
+                                chunkID, chunkSize)...))
     stop  = CartesianIndex((map((x,y,z)->x-(y-1)*z, globalRange.stop,
-                                blockID, blockSize)...))
+                                chunkID, chunkSize)...))
     return CartesianRange(start, stop)
 end
 
-function index2blockid{N}(idx::CartesianIndex{N}, blockSize::NTuple{N})
-    ( map((x,y)->fld(x-1, y)+1, idx, blockSize) ... )
+function index2chunkid{N}(idx::CartesianIndex{N}, chunkSize::NTuple{N})
+    ( map((x,y)->fld(x-1, y)+1, idx, chunkSize) ... )
 end
 
-function blockid2global_range{N}(blockID::NTuple{N}, blockSize::NTuple{N})
-    start = CartesianIndex( map((x,y)->(x-1)*y+1, blockID, blockSize) )
-    stop  = CartesianIndex( map((x,y)->x*y,       blockID, blockSize) )
+function chunkid2global_range{N}(chunkID::NTuple{N}, chunkSize::NTuple{N})
+    start = CartesianIndex( map((x,y)->(x-1)*y+1, chunkID, chunkSize) )
+    stop  = CartesianIndex( map((x,y)->x*y,       chunkID, chunkSize) )
     return CartesianRange(start, stop)
 end
 

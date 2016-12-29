@@ -1,7 +1,8 @@
-import BigArrays: get_config
+# import BigArrays: get_config
+using BigArrays
 using S3Dicts
 
-using BigArrays
+
 
 d = S3Dict( "s3://seunglab/jpwu/tmp/img/" )
 ba = BigArray( d )
@@ -11,6 +12,7 @@ info("\n test 3D image reading and saving...")
 a = rand(UInt8, 200,200,10)
 ba = BigArray(d, UInt8, (8,8,2))
 ba[201:400, 201:400, 101:110] = a
+# BigArrays.mysetindex!(ba, a, (201:400, 201:400, 101:110))
 b = ba[201:400, 201:400, 101:110]
 @assert all(a.==b)
 
