@@ -4,9 +4,10 @@ module BigArrays
 
 # basic functions
 include("types.jl")
-include("chunk.jl")
+include("Chunks.jl")
 include("index.jl")
-include("iterator.jl")
+include("BigArrayIterators.jl")
+include("ChunkStores.jl")
 include("base.jl")
 
 include("backends.jl")

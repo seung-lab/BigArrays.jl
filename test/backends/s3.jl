@@ -7,6 +7,7 @@ using S3Dicts
 d = S3Dict( "s3://seunglab/jpwu/tmp/img/" )
 ba = BigArray( d )
 @show size(ba)
+@show eltype(ba)
 
 info("\n test 3D image reading and saving...")
 a = rand(UInt8, 200,200,10)
