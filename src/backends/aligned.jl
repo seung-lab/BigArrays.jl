@@ -9,12 +9,12 @@ const H5_DATASET_NAME = "img"
 const H5_DATASET_ELEMENT_TYPE = UInt8
 const DATASET_NDIMS = 3
 
-export AlignedBigArray
+export AlignedBigArray, boundingbox
 
 # register item of one section / hdf5 file
 typealias Tsecreg Dict{Symbol, Union{AbstractString, Int}}
 # the whole register records filename, xstart, ystart, xdim, ydim
-typealias Tregister Dict{Tuple{Int, Int}, Tsecreg}
+typealias Tregister Dict{Int, Tsecreg}
 
 type AlignedBigArray <: AbstractBigArray
     register::Tregister
@@ -25,13 +25,17 @@ construct from a register file,
 which was the final output of registration pipeline in seunglab
 """
 function AlignedBigArray(fregister::AbstractString)
-    register = Tregister()
     f = open(fregister)
     lines = readlines(f)
     close(f)
-    for line in lines
+    register = Tregister()
+    # sizehint!(Tregister, length(lines))
+    z = 0
+    for i in eachindex(lines)
+        z += 1
         # initialize the registration of a section image
         d = Tsecreg()
+        line = lines[i]
         if length(split(line)) == 7
             registerFile, tmpZero, xoff, yoff, xdim, ydim, tf = split(line)
         elseif length(split(line))==6
@@ -39,8 +43,8 @@ function AlignedBigArray(fregister::AbstractString)
         else
             error("unsupported format of register file: $(line)")
         end
-        z = parse(split(split(registerFile,'_')[1], ',')[2]) + 1
-        waiverID = parse(split(split(registerFile,'_')[1], ',')[1])
+        d[:secIDinWaver] = parse(split(split(registerFile,'_')[1], ',')[2])
+        d[:waiverID] = parse(split(split(registerFile,'_')[1], ',')[1])
         d[:registerFile] = joinpath(dirname(fregister), registerFile * ".h5")
         d[:xoff] = parse(xoff)
         d[:yoff] = parse(yoff)
@@ -48,7 +52,7 @@ function AlignedBigArray(fregister::AbstractString)
         d[:xdim] = parse(xdim)
         d[:ydim] = parse(ydim)
         d[:zdim] = 1
-        register[(waiverID, z)] = d
+        register[z] = d
     end
     AlignedBigArray(register)
 end
@@ -89,7 +93,7 @@ end
 """
 bounding box of the whole volume
 """
-function Tbbox(A::AlignedBigArray)
+function boundingbox(A::AlignedBigArray)
     x1 = Inf;   x2 = -Inf;
     y1 = Inf;   y2 = -Inf;
     z1 = Inf;   z2 = -Inf;
@@ -103,7 +107,6 @@ function Tbbox(A::AlignedBigArray)
     end
     (Int64(x1):Int64(x2), Int64(y1):Int64(y2), Int64(z1):Int64(z2))
 end
-bbox(A::AlignedBigArray) = Tbbox(A)
 
 """
 compute size from bounding box
@@ -119,37 +122,38 @@ end
 
 function Base.show(A::AlignedBigArray)
     println("type: $(typeof(A))")
-    println("bounding box: $(bbox(A))")
+    println("bounding box: $(boundingbox(A))")
     println("the data is in disk, can not ")
 end
 
 """
 read out part of the image from HDF5 file
 """
-function read_subimage(  registerFile::AbstractString,
-                    sizeX::Integer,
-                    sizeY::Integer,
-                    xidx::Union{Int, UnitRange},
-                    yidx::Union{Int, UnitRange})
+function read_subimage!(buf,
+                        registerFile::AbstractString,
+                        sizeX::Integer,
+                        sizeY::Integer,
+                        xidxSection::Union{Int, UnitRange},
+                        yidxSection::Union{Int, UnitRange},
+                        zidxSection::Integer)
     @assert ishdf5(registerFile)
-    buf = zeros(H5_DATASET_ELEMENT_TYPE, (length(xidx), length(yidx)))
 
     while true
         try
             # the explicit coordinate range
-            x1 = max(1, first(xidx));   x2 = min(sizeX, last(xidx));
-            y1 = max(1, first(yidx));   y2 = min(sizeY, last(yidx));
+            x1 = max(1, first(xidxSection));   x2 = min(sizeX, last(xidxSection));
+            y1 = max(1, first(yidxSection));   y2 = min(sizeY, last(yidxSection));
             if x1>x2 || y1>y2
                 warn("no overlaping region in this section: $(registerFile)")
             else
                 # index in buffer
-                bufx1 = x1 - first(xidx) + 1;
-                bufx2 = x2 - first(xidx) + 1;
-                bufy1 = y1 - first(yidx) + 1;
-                bufy2 = y2 - first(yidx) + 1;
-                buf[bufx1:bufx2, bufy1:bufy2] = h5read(registerFile, H5_DATASET_NAME, (x1:x2, y1:y2))
+                bufx1 = x1 - first(xidxSection) + 1;
+                bufx2 = x2 - first(xidxSection) + 1;
+                bufy1 = y1 - first(yidxSection) + 1;
+                bufy2 = y2 - first(yidxSection) + 1;
+                buf[bufx1:bufx2, bufy1:bufy2, zidxSection] = h5read(registerFile, H5_DATASET_NAME, (x1:x2, y1:y2))
             end
-            return buf
+            return
         catch
             rethrow()
             sleep(2)
@@ -173,23 +177,20 @@ function Base.getindex(A::AlignedBigArray, idxes::Union{UnitRange, Int}...)
     # create buffer
     buf = zeros(H5_DATASET_ELEMENT_TYPE, (sx,sy,sz))
     @show idxes
-    for globalZ in idxes[3]
-        key = (WAIVER_ID,globalZ)
-        if haskey(A.register, key)
-            registerFile = A.register[key][:registerFile]
-            xidx = idxes[1] - A.register[key][:xoff]
-            yidx = idxes[2] - A.register[key][:yoff]
-            zidx = globalZ  - first(idxes[3]) + 1
+    for z in idxes[3]
+        if haskey(A.register, z)
+            registerFile = A.register[z][:registerFile]
+            xidxSection = idxes[1] - A.register[z][:xoff]
+            yidxSection = idxes[2] - A.register[z][:yoff]
+            zidxSection = z  - first(idxes[3]) + 1
             # println("registerFile: $(basename(registerFile)), xidx: $(xidx), yidx: $(yidx), zidx: $(zidx)")
-            @assert xidx.start > 0
-            @assert yidx.start > 0
-            @assert zidx > 0
-            buf[:,:,zidx] = read_subimage(registerFile,
-                                A.register[key][:xdim],
-                                A.register[key][:ydim],
-                                xidx, yidx)
+            read_subimage!( buf,
+                            registerFile,
+                            A.register[z][:xdim],
+                            A.register[z][:ydim],
+                            xidxSection, yidxSection, zidxSection)
         else
-            warn("section file not exist: $(key)")
+            warn("section file not exist: $z")
         end
     end
     buf
