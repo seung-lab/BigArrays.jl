@@ -172,16 +172,17 @@ bounding box of the whole volume
 """
 function boundingbox(ba::H5sBigArray)
     D = ndims(ba)
-    ret_start = CartesianIndex([typemax(Int) for i = 1:D]...)
-    ret_stop  = CartesianIndex([typemin(Int) for i = 1:D]...)
+    ret_start = CartesianIndex([div(typemax(Int),2) for i = 1:D]...)
+    ret_stop  = CartesianIndex([div(typemin(Int),2) for i = 1:D]...)
 
     @show H5SBIGARRAY_DIRECTORY
     for file in readdir(H5SBIGARRAY_DIRECTORY)
         fileName = joinpath(H5SBIGARRAY_DIRECTORY, file)
         # if fileName[end-2:end]==".h5"
-        if contains(fileName, ".h5")
+        if contains(file, ".h5")
             start = fileName2origin(file)
-            # @show start
+            @show file
+            @show start
             # f = h5open(fileName)
             # sz = size(f[H5_DATASET_NAME])
             # close(f)
@@ -197,7 +198,14 @@ end
 compute size from bounding box
 """
 function Base.size(ba::H5sBigArray)
-    size(boundingbox(ba))
+    sz = size(boundingbox(ba))
+    @show boundingbox(ba)
+    @show sz
+    if any(x->x<=0, sz)
+        return ([0 for i = 1:ndims(ba)]...)
+    else
+        return sz
+    end
 end
 
 function Base.size(ba::H5sBigArray, i::Int)
