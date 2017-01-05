@@ -5,7 +5,7 @@ using HDF5
 using JSON
 using Blosc
 
-# Blosc.set_num_threads(Threads.nthreads())
+Blosc.set_num_threads(8)
 
 # include("../types.jl")
 # include("../index.jl")
@@ -19,7 +19,7 @@ const DEFAULT_RANGE         = CartesianRange(
         CartesianIndex((typemax(Int), typemax(Int), typemax(Int))),
         CartesianIndex((0,0,0)))
 
-const DEFAULT_COMPRESSION = :deflate
+const DEFAULT_COMPRESSION = :blosc
 
 export H5sBigArray, boundingbox
 
@@ -181,8 +181,6 @@ function boundingbox(ba::H5sBigArray)
         # if fileName[end-2:end]==".h5"
         if contains(file, ".h5")
             start = fileName2origin(file)
-            @show file
-            @show start
             # f = h5open(fileName)
             # sz = size(f[H5_DATASET_NAME])
             # close(f)
