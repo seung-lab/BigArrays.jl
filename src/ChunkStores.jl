@@ -1,5 +1,6 @@
 module ChunkStores
 
+using ..BigArrays
 using Blosc
 export ChunkStore, get_config_dict
 
@@ -18,27 +19,51 @@ function __init__()
     # Blosc.set_compressor("blosclz")
 end
 
-immutable ChunkStore{T,N} <: AbstractChunkStore
-    kvStore     ::Associative
-    chunkSize   ::NTuple{Int,N}
-    function (::Type{ChunkStore}){T,N}( kvStore::Associative,
-                                T::DataType, chunkSize::NTuple{Int,N})
-        new{T,N}(kvStore, chunkSize)
+immutable ChunkStore{ChunkSize,T,N} <: AbstractChunkStore
+    kvStore         ::Associative
+    # elementType     ::DataType
+    # chunkSize       ::NTuple{Int,N}
+    # function (::Type{ChunkStore})( kvStore::Associative,
+    #                             T::DataType, chunkSize::NTuple{Int,N})
+    #     new{T,N}(kvStore, chunkSize)
+    # end
+    # function ChunkStore{T,N}( kv::Associative, T::DataType, chksz::NTuple{Int,N} )
+    #     ChunkStore(kv, T, chksz)
+    # end
+    # function SArray(x::Associative)
+    #     new(x)
+    # end
+end
+
+
+@generated function (::Type{ChunkStore{ChunkSize,T,N}}){ChunkSize,T,N}(d::Associative)
+    return quote
+        $(Expr(:meta, :inline))
+        ChunkStore{ChunkSize,T,N}(d)
     end
 end
 
-function ChunkStore{T,N}( d::Associative )
-    configDict = get_config_dict( d )
-    T = eval(parse(configDict[:dataType]))
-    chunkSize = ([configDict[:chunkSize]]...)
-    ChunkStore( d, T,  chunkSize)
+@generated function (::Type{ChunkStore{ChunkSize,T}}){ChunkSize,T}(d::Associative)
+    return quote
+        $(Expr(:meta, :inline))
+        ChunkStore{ChunkSize,T,$(length(ChunkSize))}(d)
+    end
 end
 
-function Base.setindex!( chunkStore::ChunkStore{T,N}, v::Array{T,N}, key )
+function ChunkStore( d::Associative )
+    configDict = get_config_dict( d )
+    T = eval(parse(configDict[:dataType]))
+    @show T
+    chunkSize = ([configDict[:chunkSize]]...)
+    N = length(chunkSize)
+    ChunkStore{chunkSize, T,N}( d )
+end
+
+function Base.setindex!{ChunkSize,T,N}( chunkStore::ChunkStore{ChunkSize,T,N}, v::Array{T,N}, key )
     chunkStore.kvStore[string(key)] = Blosc.compress(v)
 end
 
-function Base.getindex( chunkStore::ChunkStore{T,N}, k )
+function Base.getindex{ChunkSize,T,N}( chunkStore::ChunkStore{ChunkSize,T,N}, k )
     v = chunkStore.kvStore[string(k)]
     return reshape(Blosc.decompress(T, v), chunkStore.chunkSize)
 end
@@ -58,4 +83,4 @@ function get_config_dict end
 #     h[string(key)] = v
 # end
 
-end
+end # end of module

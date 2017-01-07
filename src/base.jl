@@ -1,6 +1,4 @@
-export BigArray
-
-using Iterators
+using BigArrayIterators
 using ChunkStores
 
 export BigArray
@@ -11,7 +9,7 @@ currently, assume that the array dimension (x,y,z,...) is >= 3
 all the manipulation effects in the x,y,z dimension
 """
 immutable BigArray{D, T, N} <: AbstractBigArray
-    chunkStore  ::ChunkStore{K,T,N}
+    chunkStore  ::ChunkStore{ChunkSize,T,N}
     function (::Type{BigArray}){D,T,N}( chunkStore::ChunkStore{T,N} )
         new{typeof(chunkStore), T, N}(chunkStore)
     end
