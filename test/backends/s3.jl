@@ -11,7 +11,7 @@ ba = BigArray( d )
 
 info("\n test 3D image reading and saving...")
 a = rand(UInt8, 200,200,10)
-ba = BigArray(d, UInt8, (8,8,2))
+ba = BigArray{S3Dict, UInt8, 3}(d, UInt8, (8,8,2))
 ba[201:400, 201:400, 101:110] = a
 # BigArrays.mysetindex!(ba, a, (201:400, 201:400, 101:110))
 b = ba[201:400, 201:400, 101:110]

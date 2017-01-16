@@ -7,7 +7,6 @@ include("types.jl")
 include("chunks.jl")
 include("index.jl")
 include("iterators.jl")
-include("chunkstores.jl")
 
 include("base.jl")
 include("backends.jl")
