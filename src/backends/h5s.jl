@@ -1,6 +1,6 @@
 module H5sBigArrays
 using ..BigArrays
-using ..BigArrays.Iterators
+using ..BigArrays.BigArrayIterators
 using HDF5
 using JSON
 using Blosc

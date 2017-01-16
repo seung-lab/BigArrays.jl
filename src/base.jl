@@ -29,32 +29,39 @@ function get_config_dict end
 currently, assume that the array dimension (x,y,z,...) is >= 3
 all the manipulation effects in the x,y,z dimension
 """
-immutable BigArray{D<:Associative, T<:Integer, N} <: AbstractBigArray
+immutable BigArray{D<:Associative, T<:Real, N} <: AbstractBigArray
     kvStore     ::D
     chunkSize   ::NTuple{N}
-    function (::Type{BigArray}){N}( kvStore::Associative,
+    function (::Type{BigArray}){D,N}( kvStore::D,
                                     T::DataType, chunkSize::NTuple{N} )
-        D = typeof(kvStore)
-        @show D
         new{D, T, N}(kvStore, chunkSize)
     end
 end
 
 
-BigArray{D<:Associative,N}(kvStore::D, elementDataType::DataType, chunkSize::NTuple{N}) = BigArray(kvStore, elementDataType, chunkSize)
+# BigArray{D<:Associative,N}(kvStore::D, elementDataType::DataType, chunkSize::NTuple{N}) = BigArray(kvStore, elementDataType, chunkSize)
 # BigArray{D<:Associative,N}(kvStore::D, elementDataType::DataType, chunkSize::NTuple{N}) = BigArray{D,elementDataType,N}(kvStore, chunkSize)
 
 function BigArray( d::Associative )
     configDict = get_config_dict( d )
+    return BigArray(d, configDict)
+end
+
+function BigArray( d::Associative, configDict::Dict{Symbol, Any} )
     T = eval(parse(configDict[:dataType]))
     @show T
-    chunkSize = ([configDict[:chunkSize]]...)
-    N = length(chunkSize)
+    chunkSize = (configDict[:chunkSize]...)
+    # N = length(chunkSize)
     BigArray( d, T, chunkSize )
 end
 
+# function Base.ndims{N}(ba::BigArray{D,T,N})
+#     return N
+# end
+
 function Base.ndims{D,T,N}(ba::BigArray{D,T,N})
-    return N
+    # return length(ba.chunkSize)
+    N
 end
 
 function Base.eltype{D, T, N}( ba::BigArray{D,T,N} )
@@ -65,10 +72,6 @@ end
 function Base.size{D,T,N}( ba::BigArray{D,T,N} )
     # get size according to the keys
     ret = size( CartesianRange(ba) )
-    # if all(s->s==0, ret)
-    #     ret = map(typemax(Int), ret)
-    # end
-    # ret = ([typemax(Int) for i=1:N]...)
     return ret
 end
 
@@ -92,7 +95,7 @@ end
 
 function Base.CartesianRange{D,T,N}( ba::BigArray{D,T,N} )
     warn("the size was computed according to the keys, which is a number of chunk sizes and is not accurate")
-    keyList = keys(ba.chunkStore)
+    keyList = keys(ba.kvStore)
     ret = CartesianRange(
             CartesianIndex([typemax(Int) for i=1:N]...),
             CartesianIndex([0            for i=1:N]...))
@@ -102,26 +105,12 @@ function Base.CartesianRange{D,T,N}( ba::BigArray{D,T,N} )
     ret
 end
 
-function Base.string{N}( r::CartesianRange{CartesianIndex{N}} )
-    ret = ""
-    for i in 1:N
-        ret *= "$(r.start[i]):$(r.stop[i])_"
-    end
-    return ret[1:end-1]
-end
-
-"""
-    transform x1:x2_y1:y2_z1:z2 style string to CartesianRange
-"""
-function Base.CartesianRange( s::String )
-    error("not implemented")
-end
 
 
 """
     put array in RAM to a BigArray
 """
-function Base.setindex!{T,N}( ba::BigArray{D,T,N}, buf::Array{T,N},
+function Base.setindex!{D,T,N}( ba::BigArray{D,T,N}, buf::Array{T,N},
                                 idxes::Union{UnitRange, Int, Colon} ... )
     @assert eltype(ba) == T
     @assert ndims(ba) == N

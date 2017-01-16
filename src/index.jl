@@ -88,15 +88,15 @@ function Base.CartesianIndex(idx::Union{Tuple,Vector})
 end
 
 
-function Base.string{N}(r::CartesianRange{CartesianIndex{N}})
-    ret = ""
-    for d in 1:N
-        s = r.start.I[d]
-        e = r.stop.I[d]
-        ret *= "$s:$e_"
-    end
-    return ret[1:end-1]
-end
+# function Base.string{N}(r::CartesianRange{CartesianIndex{N}})
+#     ret = ""
+#     for d in 1:N
+#         s = r.start.I[d]
+#         e = r.stop.I[d]
+#         ret *= "$s:$e_"
+#     end
+#     return ret[1:end-1]
+# end
 
 function Base.string( idxes::UnitRange...)
     ret = ""
@@ -104,26 +104,44 @@ function Base.string( idxes::UnitRange...)
     return ret[1:end-1]
 end
 
-function Base.CartesianRange( str::String )
-    secs = split(str, "_")
-    N = length(secs)
-    s = CartesianIndex{N}()
-    e = CartesianIndex{N}()
-    for i in 1:N
-        s[i] = parse( split(secs[i+1],":")[1] )
-        e[i] = parse( split(secs[i+1],":")[2] )
-    end
-    return CartesianRange(s,e)
-end
+# function Base.CartesianRange( str::String )
+#     secs = split(str, "_")
+#     N = length(secs)
+#     s = CartesianIndex{N}()
+#     e = CartesianIndex{N}()
+#     for i in 1:N
+#         s[i] = parse( split(secs[i+1],":")[1] )
+#         e[i] = parse( split(secs[i+1],":")[2] )
+#     end
+#     return CartesianRange(s,e)
+# end
 
 """
     adjust bounding box range when fitting in new subarray
 """
 function Base.union(globalRange::CartesianRange, idxes::CartesianRange)
-    start = min(globalRange.start, idxes.start)
-    stop  = max(globalRange.stop,  idxes.stop)
-    return CartesianRange(start, stop)
+    start = map(min, globalRange.start, idxes.start)
+    stop  = map(max, globalRange.stop,  idxes.stop)
+    return CartesianRange(CartesianIndex(start...), CartesianIndex(stop...))
 end
 function Base.union!(r1::CartesianRange, r2::CartesianRange)
     r1 = union(r1, r2)
+end
+
+function Base.string{N}( r::CartesianRange{CartesianIndex{N}} )
+    ret = ""
+    for i in 1:N
+        ret *= "$(r.start[i]):$(r.stop[i])_"
+    end
+    return ret[1:end-1]
+end
+
+"""
+    transform x1:x2_y1:y2_z1:z2 style string to CartesianRange
+"""
+function Base.CartesianRange( s::String )
+    secs = split(s, "_")
+    starts = map( x->parse(split(x,":")[1]), secs )
+    stops  = map( x->parse(split(x,":")[2]), secs )
+    CartesianRange( CartesianIndex(starts...), CartesianIndex( stops... ) )
 end

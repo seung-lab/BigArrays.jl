@@ -2,16 +2,21 @@
 using BigArrays
 using S3Dicts
 
-
-
 d = S3Dict( "s3://seunglab/jpwu/tmp/img/" )
-ba = BigArray( d )
+# configDict = get_config_dict(d)
+# ba = BigArray( d, configDict )
+@show d
+ba = BigArray(d)
+
+@show ba.chunkSize
+@show get_config_dict(d)
+@show ndims(ba)
 @show size(ba)
 @show eltype(ba)
 
 info("\n test 3D image reading and saving...")
 a = rand(UInt8, 200,200,10)
-ba = BigArray{S3Dict, UInt8, 3}(d, UInt8, (8,8,2))
+# ba = BigArray(d, UInt8, (128,128,8))
 ba[201:400, 201:400, 101:110] = a
 # BigArrays.mysetindex!(ba, a, (201:400, 201:400, 101:110))
 b = ba[201:400, 201:400, 101:110]
@@ -20,9 +25,9 @@ b = ba[201:400, 201:400, 101:110]
 
 # test affinity map
 info("\n\n test affinity map reading and saving...")
-d = S3Dict() "s3://seunglab/jpwu//tmp/aff/" )
+d = S3Dict( "s3://seunglab/jpwu//tmp/aff/" )
 a = rand(Float32, 200,200,10,3)
-ba = BigArray(d, Float32, (16,16,4,3))
+ba = BigArray(d, Float32, (128,128,8,3))
 
 ba[201:400, 201:400, 101:110, 1:3] = a
 b = ba[201:400, 201:400, 101:110, 1:3]

@@ -18,7 +18,7 @@ function BigArrayIterator{N}( globalRange::CartesianRange{CartesianIndex{N}},
     BigArrayIterator( globalRange, chunkSize, chunkIDRange )
 end
 
-function BigArrayIterator{N}( idxes::Union{UnitRange, Int},
+function BigArrayIterator{N}( idxes::Tuple,
                                 chunkSize::NTuple{N})
     globalRange = CartesianRange(idxes)
     BigArrayIterator( globalRange, chunkSize )
