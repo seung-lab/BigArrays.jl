@@ -75,11 +75,12 @@ end
 """
 replace Colon of indexes by UnitRange
 """
-function colon2unitRange{N}(buf::Union{Array,AbstractBigArray}, indexes::NTuple{N})
+function colon2unitRange(buf::Union{Array,AbstractBigArray}, indexes::Tuple)
     colon2unitRange(size(buf), indexes)
 end
 
-function colon2unitRange{N}(sz::NTuple{N}, indexes::NTuple{N})
+function colon2unitRange{N}(sz::NTuple{N}, indexes::Tuple)
+    @show sz
     map((x,y)-> x==Colon() ? UnitRange(1:y):x, indexes, sz)
 end
 
