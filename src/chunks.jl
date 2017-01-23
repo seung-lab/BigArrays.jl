@@ -20,14 +20,6 @@ blend chunk to BigArray
 function blendchunk(ba::AbstractBigArray, chunk::Chunk)
     gr = global_range( chunk )
     ba[gr...] = chunk.data
-    # @show gr
-    # if ndims(chunk) == 3 && isa(chunk.data, Array)
-    # ba[gr[1], gr[2], gr[3]] = chunk.data
-    # elseif ndims(chunk) == 3 && isa(chunk.data, SegMST)
-    # ba[gr[1], gr[2], gr[3]] = chunk.data.segmentation
-    # elseif ndims(chunk) == 4
-    # ba[gr[1], gr[2], gr[3], gr[4]] = chunk.data
-    # end
 end
 
 """

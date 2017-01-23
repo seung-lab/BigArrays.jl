@@ -112,7 +112,7 @@ end
 compute size from bounding box
 """
 function Base.size(A::AlignedBigArray)
-    bb = Tbbox(A)
+    bb = boundingbox(A)
     size(bb)
 end
 

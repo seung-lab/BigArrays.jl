@@ -10,7 +10,7 @@ using Blosc
 # include("../types.jl")
 # include("../index.jl")
 const CONFIG_FILE = "config.json"
-const DEFAULT_H5FILE_PREFIX = "chunk_"
+const DEFAULT_H5FILE_PREFIX = "block_"
 const H5_DATASET_NAME = "img"
 const DEFAULT_CHUNK_SIZE = (1024, 1024, 128)
 const DEFAULT_INNER_CHUNK_SIZE = (32,32,4)
@@ -25,8 +25,8 @@ definition of h5s big array
 type H5sBigArray <: AbstractBigArray
     h5FilePrefix  ::AbstractString
     globalOffset  ::Tuple
-    chunkSize     ::Tuple
-    innerChunkSize::Tuple
+    blockSize     ::Tuple
+    chunkSize::Tuple
     compression   ::Symbol              # deflate || blosc
 end
 
@@ -44,17 +44,17 @@ function H5sBigArray( configDict::Dict{Symbol, Any} )
     if isa(configDict[:globalOffset], Vector)
         configDict[:globalOffset] = (configDict[:globalOffset]...)
     end
+    if isa(configDict[:blockSize], Vector)
+        configDict[:blockSize] = (configDict[:blockSize]...)
+    end
     if isa(configDict[:chunkSize], Vector)
         configDict[:chunkSize] = (configDict[:chunkSize]...)
-    end
-    if isa(configDict[:innerChunkSize], Vector)
-        configDict[:innerChunkSize] = (configDict[:innerChunkSize]...)
     end
     configDict[:compression] = Symbol(configDict[:compression])
     H5sBigArray(    configDict[:h5FilePrefix],
                     configDict[:globalOffset],
+                    configDict[:blockSize],
                     configDict[:chunkSize],
-                    configDict[:innerChunkSize],
                     configDict[:compression] )
 end
 """
@@ -63,8 +63,8 @@ construct from a register file, which defines file architecture
 function H5sBigArray{N}(   dir::AbstractString;
                         h5FilePrefix::AbstractString    = DEFAULT_H5FILE_PREFIX,
                         globalOffset::NTuple{N}         = DEFAULT_GLOBAL_OFFSET,
-                        chunkSize::NTuple{N}            = DEFAULT_CHUNK_SIZE,
-                        innerChunkSize::NTuple{N}       = DEFAULT_INNER_CHUNK_SIZE,
+                        blockSize::NTuple{N}            = DEFAULT_CHUNK_SIZE,
+                        chunkSize::NTuple{N}       = DEFAULT_INNER_CHUNK_SIZE,
                         compression::Symbol             = DEFAULT_COMPRESSION)
     dir = expanduser(dir)
     configFile = joinpath(dir, CONFIG_FILE)
@@ -86,8 +86,8 @@ function H5sBigArray{N}(   dir::AbstractString;
           mkdir(dir)
         end
         global H5SBIGARRAY_DIRECTORY = dir
-        ba = H5sBigArray(h5FilePrefix, globalOffset, chunkSize,
-                            innerChunkSize, compression)
+        ba = H5sBigArray(h5FilePrefix, globalOffset, blockSize,
+                            chunkSize, compression)
         updateconfigfile(ba)
     end
     ba
@@ -101,8 +101,8 @@ function bigArray2dict(ba::H5sBigArray)
     d = Dict{Symbol, Any}()
     d[:h5FilePrefix]    = ba.h5FilePrefix
     d[:globalOffset]    = ba.globalOffset
-    d[:chunkSize]       = ba.chunkSize
-    d[:innerChunkSize]  = ba.innerChunkSize
+    d[:blockSize]       = ba.blockSize
+    d[:chunkSize]  = ba.chunkSize
     d[:compression]     = ba.compression
     return d
 end
@@ -170,8 +170,8 @@ function boundingbox(ba::H5sBigArray)
     for file in readdir(H5SBIGARRAY_DIRECTORY)
         fileName = joinpath(H5SBIGARRAY_DIRECTORY, file)
         if fileName[end-2:end]==".h5"
-            chunkStart = fileName2origin(file)
-            chunkStop = map((x,y)->x+y-1, chunkStart, ba.chunkSize)
+            chunkStart = fileName2origin(file; prefix = basename(ba.h5FilePrefix))
+            chunkStop = map((x,y)->x+y-1, chunkStart, ba.blockSize)
             ret_start = CartesianIndex(map(min, ret_start, chunkStart))
             ret_stop  = CartesianIndex(map(max, ret_stop,  chunkStop))
         end
@@ -203,7 +203,7 @@ get h5 file name
 function get_filename(ba::H5sBigArray, globalOrigin::Union{Tuple, Vector})
     h5FileName = ba.h5FilePrefix
     for i in 1:length(globalOrigin)
-        h5FileName *= "$(globalOrigin[i])-$(globalOrigin[i]+ba.chunkSize[i]-1)_"
+        h5FileName *= "$(globalOrigin[i])-$(globalOrigin[i]+ba.blockSize[i]-1)_"
     end
     return joinpath(H5SBIGARRAY_DIRECTORY, "$(h5FileName[1:end-1]).h5")
 end
@@ -237,7 +237,7 @@ function Base.getindex(ba::H5sBigArray, idxes::Union{UnitRange, Int, Colon}...)
     idxes = map((x,y)-> x-y, idxes, ba.globalOffset)
     bufferGlobalRange = CartesianRange(idxes)
 
-    baIter = BigArrayIterator(bufferGlobalRange, ba.chunkSize)
+    baIter = BigArrayIterator(bufferGlobalRange, ba.blockSize)
     for (chunkID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
         chunkFileName = get_block_file_name(ba, chunkID)
         info("read $(globalRange) from $(rangeInChunk) of $(chunkFileName) to buffer $(rangeInBuffer) ...")
@@ -268,7 +268,7 @@ end
 get block file name from a
 """
 function get_block_file_name{N}( ba::H5sBigArray, chunkID::NTuple{N})
-    chunkGlobalRange = chunkid2global_range( chunkID, ba.chunkSize )
+    chunkGlobalRange = chunkid2global_range( chunkID, ba.blockSize )
 
     fileName = ba.h5FilePrefix
     for i in 1:N
@@ -277,7 +277,7 @@ function get_block_file_name{N}( ba::H5sBigArray, chunkID::NTuple{N})
     return joinpath(H5SBIGARRAY_DIRECTORY, "$(fileName[1:end-1]).h5")
 end
 function get_block_file_name(ba::H5sBigArray, idx::CartesianIndex)
-    chunkID = index2blockid( idx, ba.chunkSize )
+    chunkID = index2blockid( idx, ba.blockSize )
     get_block_file_name(ba, chunkID)
 end
 
@@ -296,7 +296,7 @@ function Base.setindex!{T,N}(ba::H5sBigArray, buf::Array{T,N},
     idxes = map((x,y)-> x-y, idxes, ba.globalOffset)
     bufferGlobalRange = CartesianRange(idxes)
 
-    baIter = BigArrayIterator(bufferGlobalRange, ba.chunkSize)
+    baIter = BigArrayIterator(bufferGlobalRange, ba.blockSize)
 
     # temporal block as a buffer to reduce memory allocation
     for (chunkID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
@@ -322,15 +322,15 @@ end
 decode file name to origin coordinate
 to-do: support negative coordinate.
 """
-function fileName2origin( fileName::AbstractString )
-    # fileName = replace(fileName, DEFAULT_H5FILE_PREFIX, "")
+function fileName2origin( fileName::AbstractString; prefix = DEFAULT_H5FILE_PREFIX )
+    fileName = replace(fileName, prefix, "")
     fileName = replace(fileName, ".h5", "")
     fileName = replace(fileName, "-",  ":")
     fileName = replace(fileName, "_:", "_-")
     secs = split(fileName, "_")
-    origin = zeros(Int, length(secs)-1)
+    origin = zeros(Int, length(secs))
     for i in 1:length(origin)
-        origin[i] = parse( split(secs[i+1],":")[1] )
+        origin[i] = parse( split(secs[i],":")[1] )
     end
     return origin
 end
@@ -349,8 +349,8 @@ function save_buffer{T,N}(  buf::Array{T,N}, chunkFileName::AbstractString,
     else
         f = h5open(chunkFileName, "w")
         dataSet = d_create(f, H5_DATASET_NAME, datatype(eltype(buf)),
-            dataspace(ba.chunkSize...),
-            "chunk", ba.innerChunkSize,
+            dataspace(ba.blockSize...),
+            "chunk", ba.chunkSize,
             "blosc", 5)
     end
     dataSet[rangeInChunk] = buf[rangeInBuffer]
