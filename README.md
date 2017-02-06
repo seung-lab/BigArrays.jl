@@ -1,6 +1,15 @@
 # BigArrays.jl
 storing and accessing large julia array using different backends.
 
+# Features
+- N dimension
+- arbitrary data type
+- arbitrary subset cutout (saving should be chunk size aligned)
+- extensible with multiple backends
+- arbitrary shape
+- arbitrary dataset size (in theory, tested dataset size: ~ 9 TB)
+- chunk compression
+
 ## Installation
     Pkg.clone("https://github.com/seung-lab/BigArrays.jl.git")
     
