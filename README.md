@@ -6,7 +6,7 @@ storing and accessing large julia array using different backends.
 - arbitrary data type
 - arbitrary subset cutout (saving should be chunk size aligned)
 - extensible with multiple backends
-- arbitrary shape
+- arbitrary shape, the dataset boundary can be curve-like
 - arbitrary dataset size (in theory, tested dataset size: ~ 9 TB)
 - support negative coordinates
 - chunk compression
