@@ -10,6 +10,8 @@ storing and accessing large julia array using different backends.
 - arbitrary dataset size (in theory, tested dataset size: ~ 9 TB)
 - support negative coordinates
 - chunk compression
+- serverless, clients do IO directly
+- highly scalable
 
 ## Installation
     Pkg.clone("https://github.com/seung-lab/BigArrays.jl.git")
