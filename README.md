@@ -8,6 +8,7 @@ storing and accessing large julia array using different backends.
 - extensible with multiple backends
 - arbitrary shape
 - arbitrary dataset size (in theory, tested dataset size: ~ 9 TB)
+- support negative coordinates
 - chunk compression
 
 ## Installation
