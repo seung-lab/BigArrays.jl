@@ -123,7 +123,6 @@ compute size from bounding box
 """
 function Base.size(A::AlignedBigArray)
     bb = boundingbox(A)
-    # size(bb)
     map(length, bb)
 end
 

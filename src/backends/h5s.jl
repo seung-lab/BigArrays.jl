@@ -5,7 +5,7 @@ using HDF5
 using JSON
 using Blosc
 
-# Blosc.set_num_threads(Threads.nthreads())
+Blosc.set_num_threads(8)
 
 # include("../types.jl")
 # include("../index.jl")
@@ -15,7 +15,11 @@ const H5_DATASET_NAME = "img"
 const DEFAULT_CHUNK_SIZE = (1024, 1024, 128)
 const DEFAULT_INNER_CHUNK_SIZE = (32,32,4)
 const DEFAULT_GLOBAL_OFFSET = (0,0,0)
-const DEFAULT_COMPRESSION = :deflate
+const DEFAULT_RANGE         = CartesianRange(
+        CartesianIndex((typemax(Int), typemax(Int), typemax(Int))),
+        CartesianIndex((0,0,0)))
+
+const DEFAULT_COMPRESSION = :blosc
 
 export H5sBigArray, boundingbox
 
