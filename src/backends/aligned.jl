@@ -8,6 +8,7 @@ const WAIVER_ID = 1
 const H5_DATASET_NAME = "img"
 const H5_DATASET_ELEMENT_TYPE = UInt8
 const DATASET_NDIMS = 3
+# const GLOBAL_OFFSET = [16384,16384,16384]
 
 export AlignedBigArray, boundingbox
 
@@ -16,8 +17,11 @@ typealias Tsecreg Dict{Symbol, Union{AbstractString, Int}}
 # the whole register records filename, xstart, ystart, xdim, ydim
 typealias Tregister Dict{Int, Tsecreg}
 
-type AlignedBigArray <: AbstractBigArray
+type AlignedBigArray{T, N} <: AbstractBigArray
     register::Tregister
+    function (::Type{AlignedBigArray})( register::Tregister )
+        new{UInt8, 3}(register)
+    end
 end
 
 """
@@ -25,6 +29,11 @@ construct from a register file,
 which was the final output of registration pipeline in seunglab
 """
 function AlignedBigArray(fregister::AbstractString)
+    if isdir( fregister )
+        fregister = joinpath(fregister, "registry.txt")
+    end
+    @assert isfile(fregister)
+    
     f = open(fregister)
     lines = readlines(f)
     close(f)
@@ -60,8 +69,9 @@ end
 """
 specialized for UInt8 raw image data type
 """
-function Base.eltype(A::AlignedBigArray)
-    return H5_DATASET_ELEMENT_TYPE
+function Base.eltype{T,N}(A::AlignedBigArray{T,N})
+    return T
+    # return H5_DATASET_ELEMENT_TYPE
     # for key in keys(A.register)
     #     registerFile = A.register[key][:registerFile]
     #     if isfile(registerFile) && ishdf5(registerFile)
@@ -113,7 +123,8 @@ compute size from bounding box
 """
 function Base.size(A::AlignedBigArray)
     bb = boundingbox(A)
-    size(bb)
+    # size(bb)
+    map(length, bb)
 end
 
 function Base.size(A::AlignedBigArray, i::Int)
@@ -163,12 +174,15 @@ function read_subimage!(buf,
     end
 end
 
+function Base.getindex(A::AlignedBigArray, r::CartesianRange)
+    getindex(A, cartesian_range2unitrange(r)...)
+end
+
 """
 extract chunk from a bigarray
 only works for 3D now.
 """
 function Base.getindex(A::AlignedBigArray, idxes::Union{UnitRange, Int}...)
-    # only support 3D image now, could support arbitrary dimensions in the future
     @assert length(idxes) == 3
     # allocate memory
     sx = length(idxes[1])
@@ -194,6 +208,13 @@ function Base.getindex(A::AlignedBigArray, idxes::Union{UnitRange, Int}...)
         end
     end
     buf
+end
+
+function Base.CartesianRange( ba::AlignedBigArray, z::Int )
+    d = ba.register[z]
+    start = CartesianIndex( d[:xoff]+1, d[:yoff]+1, z )
+    stop  = CartesianIndex( d[:xoff]+d[:xdim], d[:yoff]+d[:ydim], z)
+    return CartesianRange( start, stop )
 end
 
 end # end of module AlignedBackend
