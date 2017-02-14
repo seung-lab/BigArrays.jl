@@ -1,49 +1,128 @@
-export Chunks
+module Chunks
 
-typealias Coordinate Vector{Int}
-typealias Size Vector{Int}
+using EMIRT
+using HDF5
+using ..BigArrays
 
-immutable Chunks
-    ba::AbstractBigArray
-    # where do we start in the bigarray
-    origin::Coordinate
-    # dimension of each chunk
-    chunkSize::Size
-    # overlap of each chunk
-    overlap::Size
-    # grid of chunks. let's say gridsz=(2,2,2), will produce 16 chunks
-    gridsz::Size
-    # voxel size
-    voxelSize::Size
+abstract AbstractChunk
+
+export Chunk, blendchunk, global_range, crop_border, physical_offset, save, savechunk, readchunk
+
+immutable Chunk <: AbstractChunk
+    data::Union{Array, SegMST} # could be 3 or 4 Dimensional array
+    origin::Vector{Int}     # measured by voxel number
+    voxelSize::Vector{UInt32}  # physical size of each voxel
 end
 
-function Chunks(ba::AbstractBigArray; origin::Coordinate=[0,0,0],
-                chunkSize::Size=[1024,1024,128], overlap::Size=[0,0,0],
-                gridsz::Size=[1,1,1], voxelSize::Size=[4,4,40])
-    Chunks(ba, origin, chunkSize, overlap, gridsz, voxelSize)
+"""
+blend chunk to BigArray
+"""
+function blendchunk(ba::AbstractBigArray, chunk::Chunk)
+    gr = global_range( chunk )
+    ba[gr...] = chunk.data
 end
-# iteration functions
-# grid index as state, start from the first grid
-Base.start(chks::Chunks) = Vector{UInt32}([1,1,1])
-Base.done(chks::Chunks, grididx) = grididx[1]>chks.gridsz[1]
 
-function Base.next(chks::Chunks, grididx::Vector)
-    # get current chunk_
-    step = chks.chunkSize .- chks.overlap
-    start = chks.origin + (grididx-1) .* step
-    stop = start + chks.chunkSize - 1
-    arr = chks.ba[start[1]:stop[1], start[2]:stop[2], start[3]:stop[3]]
-    chk = Chunk(arr, start, chks.voxelSize)
+"""
+get global index range
+"""
+function global_range( chunk::Chunk )
+    map((x,y)->x:x+y-1, chunk.origin, size(chunk))
+end
 
-    # next grid index
-    if grididx[1] < chks.gridsz[1]
-        nextGridIndex = [grididx[1]+1, grididx[2], grididx[3]]
-    elseif grididx[2] < chks.gridsz[2]
-        nextGridIndex = [1, grididx[2]+1, grididx[3]]
-    elseif grididx[3] < chks.gridsz[3]
-        nextGridIndex = [1,1, grididx[3]+1]
-    else
-        nextGridIndex = grididx .+ [1,0,0]
+function Base.size( chunk::Chunk )
+  if isa(chunk.data, Array)
+    return size(chunk.data)
+  elseif isa(chunk.data, SegMST)
+    return size(chunk.data.segmentation)
+  else
+    error("the chunk data type is invalid: $(typeof(chunk.data))")
+  end
+end
+
+function Base.ndims( chunk::Chunk )
+  if isa(chunk.data, Array)
+    return ndims(chunk.data)
+  elseif isa(chunk.data, SegMST)
+    return ndims(chunk.data.segmentation)
+  else
+    error("the chunk data type is invalid: $(typeof(chunk.data))")
+  end
+end
+
+"""
+crop the 3D surrounding margin
+"""
+function crop_border(chk::Chunk, cropMarginSize::Union{Vector,Tuple})
+    @assert typeof(chk.data) <: Array
+    @assert length(cropMarginSize) == ndims(chk.data)
+    idx = map((x,y)->x+1:y-x, cropMarginSize, size(chk.data))
+    data = chk.data[idx...]
+    origin = chk.origin .+ cropMarginSize
+    Chunk(data, origin, chk.voxelSize)
+end
+
+"""
+compute the physical offset
+"""
+function physical_offset( chk::Chunk )
+    Vector{Int}((chk.origin.-1) .* chk.voxelSize)
+end
+
+"""
+save chunk in a hdf5 file
+"""
+function save(fname::AbstractString, chk::Chunk)
+    if isfile(fname)
+        rm(fname)
     end
-    return chk, nextGridIndex
+    f = h5open(fname, "w")
+    f["type"] = "chunk"
+    if isa(chk.data, Array{Float32,4})
+        # save with compression
+        f["affinityMap", "chunk", (64,64,8,3), "shuffle", (), "deflate", 3] = chk.data
+    elseif isa(chk.data, Array{UInt8,3})
+        f["image", "chunk", (64,64,8), "shuffle", (), "deflate", 3] = chk.data
+    elseif isa(chk.data, Array{UInt32,3})
+        f["segmentation", "chunk", (64,64,8), "shuffle", (), "deflate", 3] = chk.data
+    elseif :segmentation in fieldnames(typeof(chk.data))
+        f["segmentation", "chunk", (64,64,8), "shuffle", (), "deflate", 3] = chk.data.segmentation
+        f["segmentPairs"] = chk.data.segmentPairs
+        f["segmentPairAffinities"] = chk.data.segmentPairAffinities
+    else
+        error("This is an unsupported type: $(typeof(chk.data))")
+    end
+    f["origin"] = Vector{Int}(chk.origin)
+    f["voxelSize"] = Vector{UInt32}(chk.voxelSize)
+    close(f)
 end
+savechunk = save
+
+function readchunk(fname::AbstractString)
+    f = h5open(fname)
+    if has(f, "main")
+        data = read(f["main"])
+    elseif has(f, "affinityMap")
+        data = read(f["affinityMap"])
+    elseif has(f, "image")
+        data = read(f, "image")
+    elseif has(f, "segmentPairs")
+      data = readsgm(fname)
+    elseif has(f, "segmentation")
+        data = readseg(fname)
+    else
+        error("not a standard chunk file")
+    end
+    origin = read(f["origin"])
+    voxelSize = read(f["voxelSize"])
+    close(f)
+    return Chunk(data, origin, voxelSize)
+end
+
+"""
+cutout a chunk from BigArray
+"""
+function cutout(ba::AbstractBigArray, indexes::Union{UnitRange, Integer, Colon} ...)
+    error("unimplemented")
+end
+
+end # end of module

@@ -1,0 +1,4 @@
+{
+    "chunkSize":    [512,512,16],
+    "dataType":     "UInt8"
+}
