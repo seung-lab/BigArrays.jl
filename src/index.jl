@@ -10,7 +10,7 @@ end
 function Base.getindex{T,N}(A::Array{T,N},
                             range::CartesianRange{CartesianIndex{N}})
     ur = cartesian_range2unitrange( range )
-    @show ur
+    # @show ur
     A[ur...]
 end
 
@@ -18,7 +18,7 @@ function Base.setindex!{T,N}(A::Array{T,N}, buf::Array{T,N},
                                 range::CartesianRange{CartesianIndex{N}})
     @assert size(buf) == size(range)
     ur = cartesian_range2unitrange( range )
-    @show ur
+    # @show ur
     A[ur...] = buf
 end
 
@@ -80,7 +80,7 @@ function colon2unitRange(buf::Union{Array,AbstractBigArray}, indexes::Tuple)
 end
 
 function colon2unitRange{N}(sz::NTuple{N}, indexes::Tuple)
-    @show sz
+    # @show sz
     map((x,y)-> x==Colon() ? UnitRange(1:y):x, indexes, sz)
 end
 

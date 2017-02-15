@@ -1,6 +1,6 @@
 {
     "prefix":       "",
-    "chunkSize":    [256,256,32,3],
+    "chunkSize":    [512,512,16,3],
     "dataType":     "Float32",
     "compression":  "blosclz"
 }

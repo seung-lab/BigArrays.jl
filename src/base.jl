@@ -49,7 +49,7 @@ end
 
 function BigArray( d::Associative, configDict::Dict{Symbol, Any} )
     T = eval(parse(configDict[:dataType]))
-    @show T
+    # @show T
     chunkSize = (configDict[:chunkSize]...)
     # N = length(chunkSize)
     BigArray( d, T, chunkSize )
@@ -65,7 +65,7 @@ function Base.ndims{D,T,N}(ba::BigArray{D,T,N})
 end
 
 function Base.eltype{D, T, N}( ba::BigArray{D,T,N} )
-    @show T
+    # @show T
     return T
 end
 
@@ -114,7 +114,7 @@ function Base.setindex!{D,T,N}( ba::BigArray{D,T,N}, buf::Array{T,N},
                                 idxes::Union{UnitRange, Int, Colon} ... )
     @assert eltype(ba) == T
     @assert ndims(ba) == N
-    @show idxes
+    # @show idxes
     idxes = colon2unitRange(buf, idxes)
     baIter = BigArrayIterator(idxes, ba.chunkSize)
     chk = Array(T, ba.chunkSize)
@@ -133,8 +133,10 @@ function Base.getindex{D,T,N}( ba::BigArray{D, T, N}, idxes::Union{UnitRange, In
     baIter = BigArrayIterator(idxes, ba.chunkSize)
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
         v = ba.kvStore[string(chunkGlobalRange)]
-        chk = reshape(Blosc.decompress(T, v), ba.chunkSize)
-        buf[rangeInBuffer] = chk[rangeInChunk]
+        if isa(v, Array)
+            chk = reshape(Blosc.decompress(T, v), ba.chunkSize)
+            buf[rangeInBuffer] = chk[rangeInChunk]
+        end # otherwise v is an error, which means that it is all zero, do nothing
     end
     return buf
 end
