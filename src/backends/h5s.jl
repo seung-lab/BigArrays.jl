@@ -21,17 +21,17 @@ const DEFAULT_RANGE         = CartesianRange(
 
 const DEFAULT_COMPRESSION = :blosc
 
-export H5sBigArray, boundingbox
+export H5sBigArray, boundingbox, get_chunk_size
 
 """
 definition of h5s big array
 """
 type H5sBigArray <: AbstractBigArray
-    h5FilePrefix  ::AbstractString
-    globalOffset  ::Tuple
-    blockSize     ::Tuple
-    chunkSize::Tuple
-    compression   ::Symbol              # deflate || blosc
+    h5FilePrefix    ::AbstractString
+    globalOffset    ::Tuple
+    blockSize       ::Tuple
+    chunkSize       ::Tuple
+    compression     ::Symbol              # deflate || blosc
 end
 
 """
@@ -97,6 +97,9 @@ function H5sBigArray{N}(   dir::AbstractString;
     ba
 end
 
+function get_chunk_size(ba::H5sBigArray)
+    ba.blockSize
+end
 
 """
 transform bigarray to string

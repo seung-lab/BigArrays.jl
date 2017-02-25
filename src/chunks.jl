@@ -7,11 +7,20 @@ using ..BigArrays
 abstract AbstractChunk
 
 export Chunk, blendchunk, global_range, crop_border, physical_offset, save, savechunk, readchunk
+export get_offset
 
 immutable Chunk <: AbstractChunk
     data::Union{Array, SegMST} # could be 3 or 4 Dimensional array
     origin::Vector{Int}     # measured by voxel number
     voxelSize::Vector{UInt32}  # physical size of each voxel
+end
+
+function Base.eltype( chk::Chunk )
+    eltype(chk.data)
+end
+
+function get_offset(chk::Chunk)
+    chk.origin.-1
 end
 
 """
