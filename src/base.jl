@@ -2,7 +2,7 @@ using .BigArrayIterators
 using Blosc
 
 
-export BigArray, get_config_dict
+export BigArray, get_config_dict, get_chunk_size
 
 function __init__()
     # use the same number of threads with Julia
@@ -38,7 +38,9 @@ immutable BigArray{D<:Associative, T<:Real, N} <: AbstractBigArray
     end
 end
 
-
+function get_chunk_size(ba::AbstractBigArray)
+    ba.chunkSize
+end
 # BigArray{D<:Associative,N}(kvStore::D, elementDataType::DataType, chunkSize::NTuple{N}) = BigArray(kvStore, elementDataType, chunkSize)
 # BigArray{D<:Associative,N}(kvStore::D, elementDataType::DataType, chunkSize::NTuple{N}) = BigArray{D,elementDataType,N}(kvStore, chunkSize)
 
