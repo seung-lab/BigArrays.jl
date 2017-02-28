@@ -6,7 +6,7 @@ using ..BigArrays
 
 abstract AbstractChunk
 
-export Chunk, blendchunk, global_range, crop_border, physical_offset,
+export Chunk, blendchunk, global_range, crop_border, physical_offset
 export save, savechunk, readchunk, downsample, get_offset
 
 immutable Chunk <: AbstractChunk
@@ -134,7 +134,7 @@ function cutout(ba::AbstractBigArray, indexes::Union{UnitRange, Integer, Colon} 
     error("unimplemented")
 end
 
-function downsample{N}(chk::Chunk; scale::NTuple{N,Int} = (2,2,1))
+function downsample(chk::Chunk; scale::Union{Vector, Tuple} = (2,2,1))
     return Chunk( downsample(chk.data, scale),
                     (chk.origin-1).*[scale...].+1,
                     chk.voxelSize .* scale  )
