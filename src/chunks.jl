@@ -135,9 +135,9 @@ function cutout(ba::AbstractBigArray, indexes::Union{UnitRange, Integer, Colon} 
 end
 
 function downsample(chk::Chunk; scale::Union{Vector, Tuple} = (2,2,1))
-    return Chunk( downsample(chk.data, scale),
-                    (chk.origin-1).*[scale...].+1,
-                    chk.voxelSize .* scale  )
+    return Chunk( EMIRT.downsample(chk.data; scale = scale),
+                    (chk.origin.-1).*[scale...].+1,
+                    chk.voxelSize .* [scale[1:3]...]  )
 end
 
 end # end of module

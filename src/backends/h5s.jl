@@ -1,6 +1,7 @@
 module H5sBigArrays
 using ..BigArrays
 using ..BigArrays.BigArrayIterators
+using ..BigArrays.Utils
 using HDF5
 using JSON
 using Blosc
@@ -64,12 +65,7 @@ end
 """
 construct from a register file, which defines file architecture
 """
-function H5sBigArray{N}(   dir::AbstractString;
-                        h5FilePrefix::AbstractString    = DEFAULT_H5FILE_PREFIX,
-                        globalOffset::NTuple{N}         = DEFAULT_GLOBAL_OFFSET,
-                        blockSize::NTuple{N}            = DEFAULT_CHUNK_SIZE,
-                        chunkSize::NTuple{N}       = DEFAULT_INNER_CHUNK_SIZE,
-                        compression::Symbol             = DEFAULT_COMPRESSION)
+function H5sBigArray(   dir::AbstractString )
     dir = expanduser(dir)
     configFile = joinpath(dir, CONFIG_FILE)
     if isfile(dir)
@@ -223,6 +219,25 @@ function get_filename(ba::H5sBigArray, globalOrigin::Union{Tuple, Vector})
 end
 
 """
+    Base.keys(ba::H5sBigArray)
+
+"""
+function Base.keys(ba::H5sBigArray)
+    fileNames = readdir(dirname(H5SBIGARRAY_DIRECTORY))
+    for i in eachindex(fileNames)
+        if fileNames[i] == CONFIG_FILE
+            splice!(fileNames, i)
+            break
+        end
+    end
+    return fileNames
+end
+
+function Base.getindex(ba::H5sBigArray, key::String)
+    return h5read(joinpath(H5SBIGARRAY_DIRECTORY, key), H5_DATASET_NAME)
+end
+
+"""
     h5read{N}(chunkFileName::AbstractString,
                     H5_DATASET_NAME::AbstractString,
                     rangeInChunk::CartesianRange{CartesianIndex{N}})
@@ -335,23 +350,6 @@ function Base.setindex!{T,N}(ba::H5sBigArray, buf::Array{T,N},
         #     end
         # end
     end
-end
-
-"""
-decode file name to origin coordinate
-to-do: support negative coordinate.
-"""
-function fileName2origin( fileName::AbstractString; prefix = DEFAULT_H5FILE_PREFIX )
-    fileName = replace(fileName, prefix, "")
-    fileName = replace(fileName, ".h5", "")
-    fileName = replace(fileName, "-",  ":")
-    fileName = replace(fileName, "_:", "_-")
-    secs = split(fileName, "_")
-    origin = zeros(Int, length(secs))
-    for i in 1:length(origin)
-        origin[i] = parse( split(secs[i],":")[1] )
-    end
-    return origin
 end
 
 """

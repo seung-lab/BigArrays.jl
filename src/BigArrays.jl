@@ -9,6 +9,7 @@ include("index.jl")
 include("iterators.jl")
 
 include("base.jl")
+include("utils.jl")
 
 include("backends.jl")
 
