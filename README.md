@@ -35,5 +35,15 @@ ba[101:200, 201:300, 1:3] = rand(UInt8, 100,100,3)
 - [x] cuboids in AWS S3 
 - [x] Google Cloud Storage
 - [x] [Janelia DVID](https://github.com/janelia-flyem/dvid)
-- [ ] [google subvolume](https://developers.google.com/brainmaps/v1beta2/rest/v1beta2/volumes/subvolume)
+- [ ] [Google Subvolume](https://developers.google.com/brainmaps/v1beta2/rest/v1beta2/volumes/subvolume)
 - [ ] [KLB](http://www.nature.com/nprot/journal/v10/n11/abs/nprot.2015.111.html), [the repo](https://bitbucket.org/fernandoamat/keller-lab-block-filetype)
+
+# Development
+BigArrays is a high-level architecture to transform Key-Value store (backend) to Julia Array (frontend). it provide an interface of AbstractArray, and implement the get_index and set_index functions. 
+
+## add backend
+The backends are different key-value stores. To add a new backend, you can simply do the following:
+
+- wrap the key-value store as a Julia `Associate` type. [S3Dicts is an example](https://github.com/seung-lab/S3Dicts.jl/blob/master/src/S3Dicts.jl#L15) is a good example. 
+- implement the `getindex` and `setindex!` functions. [S3Dicts example](https://github.com/seung-lab/S3Dicts.jl/blob/master/src/S3Dicts.jl#L29)
+- implement the `get_config_dict` function to get a Julia Dict, which defines the datatype and chunk size. [S3Dicts example](https://github.com/seung-lab/S3Dicts.jl/blob/master/src/S3Dicts.jl#L23)
