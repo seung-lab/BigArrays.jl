@@ -41,7 +41,7 @@ ba[101:200, 201:300, 1:3] = rand(UInt8, 100,100,3)
 # Development
 BigArrays is a high-level architecture to transform Key-Value store (backend) to Julia Array (frontend). it provide an interface of AbstractArray, and implement the get_index and set_index functions. 
 
-## add backend
+## Add backend
 The backends are different key-value stores. To add a new backend, you can simply do the following:
 
 - wrap the key-value store as a Julia `Associate` type. [S3Dicts is an example](https://github.com/seung-lab/S3Dicts.jl/blob/master/src/S3Dicts.jl#L15) is a good example. 
