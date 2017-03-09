@@ -105,6 +105,14 @@ function Base.string( idxes::UnitRange...)
     return ret[1:end-1]
 end
 
+function Base.string{N}( r::CartesianRange{CartesianIndex{N}} )
+    ret = ""
+    for i in 1:N
+        ret *= "$(r.start[i]-1)-$(r.stop[i])_"
+    end
+    return ret[1:end-1]
+end
+
 # function Base.CartesianRange( str::String )
 #     secs = split(str, "_")
 #     N = length(secs)
@@ -129,13 +137,6 @@ function Base.union!(r1::CartesianRange, r2::CartesianRange)
     r1 = union(r1, r2)
 end
 
-function Base.string{N}( r::CartesianRange{CartesianIndex{N}} )
-    ret = ""
-    for i in 1:N
-        ret *= "$(r.start[i]):$(r.stop[i])_"
-    end
-    return ret[1:end-1]
-end
 
 """
     transform x1:x2_y1:y2_z1:z2 style string to CartesianRange

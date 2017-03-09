@@ -1,7 +1,9 @@
 using .BigArrayIterators
-using .Coding 
+using .Coding
 
 export BigArray, get_config_dict, get_chunk_size
+
+const DEFAULT_CODING = RawCoding
 
 # a function expected to be inherited by backends
 # refer the idea of modular design here:
@@ -15,15 +17,15 @@ function get_config_dict end
 currently, assume that the array dimension (x,y,z,...) is >= 3
 all the manipulation effects in the x,y,z dimension
 """
-immutable BigArray{D<:Associative, T<:Real, N} <: AbstractBigArray
+immutable BigArray{D<:Associative, T<:Real, N, C<:AbstractBigArrayCoding} <: AbstractBigArray
     kvStore     :: D
     chunkSize   :: NTuple{N}
-    coding      :: AbstractBigArrayCoding
-    function (::Type{BigArray}){D,N}( kvStore::D,
-                            T::DataType,
-                            chunkSize::NTuple{N},
-                            coding ::Symbol )
-        new{D, T, N}(kvStore, chunkSize, coding)
+    function (::Type{BigArray}){D,T,N,C}(
+                            kvStore     ::D,
+                            foo         ::Type{T},
+                            chunkSize   ::NTuple{N},
+                            coding      ::Type{C} )
+        new{D, T, N, C}(kvStore, chunkSize)
     end
 end
 
@@ -43,7 +45,7 @@ function BigArray( d::Associative, configDict::Dict{Symbol, Any} )
             coding = JPEGCoding
         elseif contains( configDict[:coding], "blosclz")
             coding = BlosclzCoding
-        else 
+        else
             error("unknown coding")
         end
     else
@@ -101,7 +103,7 @@ end
 """
     put array in RAM to a BigArray
 """
-function Base.setindex!{D,T,N}( ba::BigArray{D,T,N}, buf::Array{T,N},
+function Base.setindex!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
                                 idxes::Union{UnitRange, Int, Colon} ... )
     @assert eltype(ba) == T
     @assert ndims(ba) == N
@@ -114,21 +116,25 @@ function Base.setindex!{D,T,N}( ba::BigArray{D,T,N}, buf::Array{T,N},
         # chk = reshape(Blosc.decompress(T, chk), ba.chunkSize)
         fill!(chk, convert(T, 0))
         chk[rangeInChunk] = buf[rangeInBuffer]
-        ba.kvStore[ string(chunkGlobalRange) ] = encoding( chk, ba.coding)
+        ba.kvStore[ string(chunkGlobalRange) ] = encoding( chk, C)
     end
 end
 
-function Base.getindex{D,T,N}( ba::BigArray{D, T, N}, idxes::Union{UnitRange, Int}...)
+function Base.getindex{D,T,N,C}( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...)
     sz = map(length, idxes)
     buf = zeros(eltype(ba), sz)
     baIter = BigArrayIterator(idxes, ba.chunkSize)
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
         v = ba.kvStore[string(chunkGlobalRange)]
         if isa(v, Array)
-            chk = decoding(v, ba.coding)
+            @show C
+            chk = decoding(v, C)
             chk = reshape(reinterpret(T, chk), ba.chunkSize)
             buf[rangeInBuffer] = chk[rangeInChunk]
-        end # otherwise v is an error, which means that it is all zero, do nothing
+        else
+            # otherwise v is an error, which means that it is all zero, do nothing
+            println("get all zero chunk")
+        end
     end
     return buf
 end

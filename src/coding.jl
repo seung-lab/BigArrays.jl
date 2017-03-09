@@ -2,7 +2,12 @@ module Coding
 
 using ImageMagick
 using Blosc
+using Libz
 
+export AbstractBigArrayCoding, JPEGCoding, RawCoding, BlosclzCoding
+export encoding, decoding
+
+abstract AbstractBigArrayCoding
 
 function __init__()
     # use the same number of threads with Julia
@@ -17,26 +22,24 @@ function __init__()
     # Blosc.set_compressor("blosclz")
 end
 
-abstract AbstractBigArrayCoding
+immutable JPEGCoding    <: AbstractBigArrayCoding end
+immutable RawCoding     <: AbstractBigArrayCoding end
+immutable BlosclzCoding <: AbstractBigArrayCoding end
 
-immutable JPEGCoding    ::AbstractBigArrayCoding end
-immutable RawCoding     ::AbstractBigArrayCoding end
-immutable BlosclzCoding ::AbstractBigArrayCoding end
-
-function encoding(data::Array, coding::RawCoding)
+function encoding(data::Array, coding::Type{RawCoding})
     reinterpret(UInt8, data[:])
 end
 
-function decoding(data::Vector{UInt8}, coding::RawCoding)
+function decoding(data::Vector{UInt8}, coding::Type{RawCoding})
     return data
 end
 
-function encoding( data::Array, coding::JPEGCoding )
+function encoding( data::Array, coding::Type{JPEGCoding} )
     error("unimplemented!")
 end
 
-function decoding( data::Vector{UInt8}, coding::JPEGCoding )
-    ImageMagick.load_(data)
+function decoding( data::Vector{UInt8}, coding::Type{JPEGCoding} )
+    return ImageMagick.load_(data)
 end
 
 end # end of module
