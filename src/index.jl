@@ -101,7 +101,7 @@ end
 
 function Base.string( idxes::UnitRange...)
     ret = ""
-    ret = map(x->"$(start(x)):$(x[end])_", idxes)
+    ret = map(x->"$(start(x)-1)-$(x[end])_", idxes)
     return ret[1:end-1]
 end
 
@@ -142,7 +142,7 @@ end
 """
 function Base.CartesianRange( s::String )
     secs = split(s, "_")
-    starts = map( x->parse(split(x,":")[1]), secs )
-    stops  = map( x->parse(split(x,":")[2]), secs )
+    starts = map( x->parse(split(x,"-")[1])+1, secs )
+    stops  = map( x->parse(split(x,"-")[2]), secs )
     CartesianRange( CartesianIndex(starts...), CartesianIndex( stops... ) )
 end

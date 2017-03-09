@@ -3,6 +3,7 @@ __precompile__()
 module BigArrays
 
 # basic functions
+include("coding.jl")
 include("types.jl")
 include("chunks.jl")
 include("index.jl")
