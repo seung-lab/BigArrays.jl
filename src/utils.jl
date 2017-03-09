@@ -1,6 +1,6 @@
 module Utils
 
-export fileName2origin
+export fileName2origin, key2symbol
 
 """
 decode file name to origin coordinate
@@ -19,6 +19,8 @@ function fileName2origin( fileName::AbstractString; prefix = "block_" )
     end
     return origin
 end
+
+
 
 
 end # end of module
