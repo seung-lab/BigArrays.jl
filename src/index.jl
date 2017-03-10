@@ -101,13 +101,13 @@ end
 
 function Base.string( idxes::UnitRange...)
     ret = ""
-    ret = map(x->"$(start(x)-1)-$(x[end])_", idxes)
+    ret = map(x->"$(start(x)-1)-$(x[end])_", idxes[1:3])
     return ret[1:end-1]
 end
 
 function Base.string{N}( r::CartesianRange{CartesianIndex{N}} )
     ret = ""
-    for i in 1:N
+    for i in 1:3
         ret *= "$(r.start[i]-1)-$(r.stop[i])_"
     end
     return ret[1:end-1]
