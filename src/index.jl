@@ -101,7 +101,15 @@ end
 
 function Base.string( idxes::UnitRange...)
     ret = ""
-    ret = map(x->"$(start(x)):$(x[end])_", idxes)
+    ret = map(x->"$(start(x)-1)-$(x[end])_", idxes[1:3])
+    return ret[1:end-1]
+end
+
+function Base.string{N}( r::CartesianRange{CartesianIndex{N}} )
+    ret = ""
+    for i in 1:3
+        ret *= "$(r.start[i]-1)-$(r.stop[i])_"
+    end
     return ret[1:end-1]
 end
 
@@ -129,20 +137,13 @@ function Base.union!(r1::CartesianRange, r2::CartesianRange)
     r1 = union(r1, r2)
 end
 
-function Base.string{N}( r::CartesianRange{CartesianIndex{N}} )
-    ret = ""
-    for i in 1:N
-        ret *= "$(r.start[i]):$(r.stop[i])_"
-    end
-    return ret[1:end-1]
-end
 
 """
     transform x1:x2_y1:y2_z1:z2 style string to CartesianRange
 """
 function Base.CartesianRange( s::String )
     secs = split(s, "_")
-    starts = map( x->parse(split(x,":")[1]), secs )
-    stops  = map( x->parse(split(x,":")[2]), secs )
+    starts = map( x->parse(split(x,"-")[1])+1, secs )
+    stops  = map( x->parse(split(x,"-")[2]), secs )
     CartesianRange( CartesianIndex(starts...), CartesianIndex( stops... ) )
 end
