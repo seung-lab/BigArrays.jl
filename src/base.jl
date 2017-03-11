@@ -95,7 +95,9 @@ function Base.CartesianRange{D,T,N}( ba::BigArray{D,T,N} )
             CartesianIndex([typemax(Int) for i=1:N]...),
             CartesianIndex([0            for i=1:N]...))
     for key in keyList
-        union!(ret, CartesianRange(key))
+        if !isempty(key)
+            union!(ret, CartesianRange(key))
+        end
     end
     ret
 end

@@ -143,6 +143,7 @@ end
 """
 function Base.CartesianRange( s::String )
     secs = split(s, "_")
+    @show s
     starts = map( x->parse(split(x,"-")[1])+1, secs )
     stops  = map( x->parse(split(x,"-")[2]), secs )
     CartesianRange( CartesianIndex(starts...), CartesianIndex( stops... ) )
