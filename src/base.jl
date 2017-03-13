@@ -129,7 +129,7 @@ function Base.getindex{D,T,N,C}( ba::BigArray{D, T, N, C}, idxes::Union{UnitRang
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
         v = ba.kvStore[string(chunkGlobalRange)]
         if isa(v, Array)
-            @show C
+            #@show C
             chk = decoding(v, C)
             chk = reshape(reinterpret(T, chk), ba.chunkSize)
             buf[rangeInBuffer] = chk[rangeInChunk]

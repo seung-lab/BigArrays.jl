@@ -10,7 +10,6 @@ end
 function Base.getindex{T,N}(A::Array{T,N},
                             range::CartesianRange{CartesianIndex{N}})
     ur = cartesian_range2unitrange( range )
-    # @show ur
     A[ur...]
 end
 
@@ -143,7 +142,7 @@ end
 """
 function Base.CartesianRange( s::String )
     secs = split(s, "_")
-    @show s
+    #@show s
     starts = map( x->parse(split(x,"-")[1])+1, secs )
     stops  = map( x->parse(split(x,"-")[2]), secs )
     CartesianRange( CartesianIndex(starts...), CartesianIndex( stops... ) )
