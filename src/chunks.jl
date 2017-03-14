@@ -28,7 +28,12 @@ blend chunk to BigArray
 """
 function blendchunk(ba::AbstractBigArray, chunk::Chunk)
     gr = global_range( chunk )
-    ba[gr...] = chunk.data
+    T = eltype(ba)
+    if T == eltype(chunk.data)
+        ba[gr...] = chunk.data
+    else 
+        ba[gr...] = Array{T}(chunk.data)
+    end
 end
 
 """
