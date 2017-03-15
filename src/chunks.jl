@@ -26,7 +26,7 @@ end
 """
 blend chunk to BigArray
 """
-function blendchunk(ba::AbstractBigArray, chunk::Chunk)
+function blendchunk(ba::AbstractArray, chunk::Chunk)
     gr = global_range( chunk )
     ba[gr...] = chunk.data
 end
