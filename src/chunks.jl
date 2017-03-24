@@ -2,7 +2,6 @@ module Chunks
 
 using EMIRT
 using HDF5
-using ..BigArrays
 
 abstract AbstractChunk
 
@@ -26,7 +25,7 @@ end
 """
 blend chunk to BigArray
 """
-function blendchunk(ba::AbstractBigArray, chunk::Chunk)
+function blendchunk(ba::AbstractArray, chunk::Chunk)
     gr = global_range( chunk )
     T = eltype(ba)
     if T == eltype(chunk.data)
@@ -135,7 +134,7 @@ end
 """
 cutout a chunk from BigArray
 """
-function cutout(ba::AbstractBigArray, indexes::Union{UnitRange, Integer, Colon} ...)
+function cutout(ba::AbstractArray, indexes::Union{UnitRange, Integer, Colon} ...)
     error("unimplemented")
 end
 
