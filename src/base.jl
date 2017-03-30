@@ -127,7 +127,13 @@ function Base.getindex{D,T,N,C}( ba::BigArray{D, T, N, C}, idxes::Union{UnitRang
     buf = zeros(eltype(ba), sz)
     baIter = BigArrayIterator(idxes, ba.chunkSize)
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
-        v = ba.kvStore[string(chunkGlobalRange)]
+        local v
+        try
+            v = ba.kvStore[string(chunkGlobalRange)]
+        catch e
+            println("catch a kvstore key error: $(e), will fill this block as zeros")
+            continue
+        end
         if isa(v, Array)
             #@show C
             chk = decoding(v, C)

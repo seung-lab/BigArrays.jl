@@ -73,13 +73,13 @@ function H5sBigArray(   dir::AbstractString )
         global H5SBIGARRAY_DIRECTORY = dirname(dir)
         # string format of config
         configDict = JSON.parsefile(dir, dicttype=Dict{Symbol, Any})
-        @show configDict
+        # @show configDict
         ba = H5sBigArray( configDict )
     elseif isdir(dir) && isfile(configFile)
         global H5SBIGARRAY_DIRECTORY = dir
         # string format of config
         configDict = JSON.parsefile(configFile, dicttype=Dict{Symbol, Any})
-        @show configDict
+        # @show configDict
         ba = H5sBigArray( configDict )
     else
         if !isdir(dir)
@@ -169,7 +169,7 @@ function boundingbox(ba::H5sBigArray)
     ret_start = CartesianIndex([div(typemax(Int),2) for i = 1:D]...)
     ret_stop  = CartesianIndex([div(typemin(Int),2) for i = 1:D]...)
 
-    @show H5SBIGARRAY_DIRECTORY
+    # @show H5SBIGARRAY_DIRECTORY
     for file in readdir(H5SBIGARRAY_DIRECTORY)
         fileName = joinpath(H5SBIGARRAY_DIRECTORY, file)
         if fileName[end-2:end]==".h5"
@@ -187,8 +187,8 @@ compute size from bounding box
 """
 function Base.size(ba::H5sBigArray)
     sz = size(boundingbox(ba))
-    @show boundingbox(ba)
-    @show sz
+    # @show boundingbox(ba)
+    # @show sz
     if any(x->x<=0, sz)
         return ([0 for i = 1:ndims(ba)]...)
     else
@@ -378,7 +378,7 @@ end
 function Base.setindex!{T,N}(dataSet::HDF5.HDF5Dataset, buf::Array{T,N},
                                 rangeInChunk::CartesianRange{CartesianIndex{N}})
     ur = cartesian_range2unitrange(rangeInChunk)
-    @show ur
+    # @show ur
     dataSet[ur...] = buf
 end
 
