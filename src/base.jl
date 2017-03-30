@@ -134,7 +134,13 @@ function Base.getindex{D,T,N}( ba::BigArray{D, T, N}, idxes::Union{UnitRange, In
     buf = zeros(eltype(ba), sz)
     baIter = BigArrayIterator(idxes, ba.chunkSize)
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
-        v = ba.kvStore[string(chunkGlobalRange)]
+        local v
+        try
+            v = ba.kvStore[string(chunkGlobalRange)]
+        catch e
+            println("catch a kvstore key error: $(e), will fill this block as zeros")
+            continue
+        end
         if isa(v, Array)
             chk = reshape(Blosc.decompress(T, v), ba.chunkSize)
             buf[rangeInBuffer] = chk[rangeInChunk]
