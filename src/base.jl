@@ -90,16 +90,18 @@ end
 
 function Base.CartesianRange{D,T,N}( ba::BigArray{D,T,N} )
     warn("the size was computed according to the keys, which is a number of chunk sizes and is not accurate")
-    keyList = keys(ba.kvStore)
     ret = CartesianRange(
             CartesianIndex([typemax(Int) for i=1:N]...),
             CartesianIndex([0            for i=1:N]...))
-    for key in keyList
-        if !isempty(key)
-            union!(ret, CartesianRange(key))
-        end
-    end
-    ret
+    warn("boundingbox function abanduned due to the malfunction of keys in S3Dicts")
+
+    #keyList = keys(ba.kvStore)
+    #for key in keyList
+     #   if !isempty(key)
+    #        union!(ret, CartesianRange(key))
+    #    end
+    #end
+    return ret
 end
 
 """
