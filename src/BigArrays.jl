@@ -4,6 +4,7 @@ module BigArrays
 
 # basic functions
 include("coding.jl")
+using .Coding
 include("types.jl")
 include("chunks.jl")
 include("index.jl")

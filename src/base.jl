@@ -1,9 +1,6 @@
 using .BigArrayIterators
-using .Coding
 
-export BigArray, get_config_dict, get_chunk_size
-
-const DEFAULT_CODING = RawCoding
+export get_config_dict, get_chunk_size
 
 # a function expected to be inherited by backends
 # refer the idea of modular design here:
@@ -51,7 +48,6 @@ function BigArray( d::Associative, configDict::Dict{Symbol, Any} )
     else
         coding = DEFAULT_CODING
     end
-    # N = length(chunkSize)
     BigArray( d, T, chunkSize, coding )
 end
 

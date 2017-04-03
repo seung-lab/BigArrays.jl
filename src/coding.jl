@@ -4,10 +4,10 @@ using ImageMagick
 using Blosc
 using Libz
 
+abstract AbstractBigArrayCoding
+
 export AbstractBigArrayCoding, JPEGCoding, RawCoding, BlosclzCoding
 export encoding, decoding
-
-abstract AbstractBigArrayCoding
 
 function __init__()
     # use the same number of threads with Julia
@@ -26,12 +26,21 @@ immutable JPEGCoding    <: AbstractBigArrayCoding end
 immutable RawCoding     <: AbstractBigArrayCoding end
 immutable BlosclzCoding <: AbstractBigArrayCoding end
 
+const DEFAULT_CODING = RawCoding
+
 function encoding(data::Array, coding::Type{RawCoding})
     reinterpret(UInt8, data[:])
 end
 
 function decoding(data::Vector{UInt8}, coding::Type{RawCoding})
     return data
+end
+
+function encoding( data::Array, coding::Type{BlosclzCoding} )
+    Blosc.compress( data )
+end
+function decoding( data::Vector{UInt8}, coding::Type{BlosclzCoding} )
+    Blosc.decompress(UInt8, data)
 end
 
 function encoding( data::Array, coding::Type{JPEGCoding} )
