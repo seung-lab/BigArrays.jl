@@ -35,3 +35,17 @@ b = ba[201:400, 201:400, 101:110, 1:3]
 @show size(a)
 @show size(b)
 @assert all(a.==b)
+
+
+# test semantic map
+info("\n\n test semantic map reading and saving...")
+d = S3Dict( "s3://seunglab/jpwu/test/semanticmap/4_4_40/" )
+a = rand(Float32, 200,200,10,4)
+ba = BigArray(d)
+
+ba[401:600, 401:600, 121:130, 1:4] = a
+b = ba[401:600, 401:600, 121:130, 1:4]
+
+@show size(a)
+@show size(b)
+@assert all(a.==b)
