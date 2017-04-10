@@ -130,6 +130,13 @@ function updateconfigfile(ba::H5sBigArray)
   close(f)
 end
 
+
+function Base.display(ba::H5sBigArray)
+    for fieldName in fieldnames(ba)
+        println("$fieldName : $(getfield(ba, fieldName))")
+    end
+end
+
 """
 element type of big array
 """
