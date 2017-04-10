@@ -23,6 +23,8 @@ storing and accessing large julia array using different backends.
 - [ ] [KLB](http://www.nature.com/nprot/journal/v10/n11/abs/nprot.2015.111.html), [the repo](https://bitbucket.org/fernandoamat/keller-lab-block-filetype)
 
 ## Installation
+    Pkg.clone("https://github.com/jingpengwu/AWS.jl.git")
+    Pkg.clone("https://github.com/jingpengwu/GoogleCloud.jl.git")
     Pkg.clone("https://github.com/seung-lab/BigArrays.jl.git")
     Pkg.clone("https://github.com/seung-lab/S3Dicts.jl.git")
     Pkg.clone("https://github.com/seung-lab/GSDicts.jl.git")
