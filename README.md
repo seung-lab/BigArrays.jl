@@ -2,25 +2,20 @@
 storing and accessing large julia array using different backends.
 
 # Features
-- N dimension
-- arbitrary data type
+- serverless, clients do IO directly
 - arbitrary subset cutout (saving should be chunk size aligned)
 - extensible with multiple backends
 - arbitrary shape, the dataset boundary can be curve-like
 - arbitrary dataset size (in theory, tested dataset size: ~ 9 TB)
-- support negative coordinates
-- chunk compression
-- serverless, clients do IO directly
+- chunk compression with gzip/blosclz/jpeg
 - highly scalable
+- arbitrary data type (depends on implementation of backends)
 
 ## supported backends
 - [x] hdf5 files. 
 - [x] seunglab aligned 2D image hdf5 files.
 - [x] cuboids in AWS S3 
 - [x] Google Cloud Storage
-- [x] [Janelia DVID](https://github.com/janelia-flyem/dvid)
-- [ ] [Google Subvolume](https://developers.google.com/brainmaps/v1beta2/rest/v1beta2/volumes/subvolume)
-- [ ] [KLB](http://www.nature.com/nprot/journal/v10/n11/abs/nprot.2015.111.html), [the repo](https://bitbucket.org/fernandoamat/keller-lab-block-filetype)
 
 ## Installation
     Pkg.clone("https://github.com/jingpengwu/AWS.jl.git")
