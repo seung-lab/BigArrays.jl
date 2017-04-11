@@ -6,7 +6,7 @@ using Libz
 
 abstract AbstractBigArrayCoding
 
-export AbstractBigArrayCoding, JPEGCoding, RawCoding, BlosclzCoding
+export AbstractBigArrayCoding, JPEGCoding, RawCoding, BlosclzCoding, GZipCoding
 export encoding, decoding
 
 function __init__()
@@ -25,6 +25,7 @@ end
 immutable JPEGCoding    <: AbstractBigArrayCoding end
 immutable RawCoding     <: AbstractBigArrayCoding end
 immutable BlosclzCoding <: AbstractBigArrayCoding end
+immutable GZipCoding    <: AbstractBigArrayCoding end
 
 const DEFAULT_CODING = RawCoding
 
@@ -34,6 +35,14 @@ end
 
 function decoding(data::Vector{UInt8}, coding::Type{RawCoding})
     return data
+end
+
+function encoding(data::Array, coding::Type{GZipCoding})
+    Libz.deflate(reinterpret(UInt8, data[:]))
+end
+
+function decoding(data::Vector{UInt8}, coding::Type{GZipCoding})
+    Libz.inflate(data)
 end
 
 function encoding( data::Array, coding::Type{BlosclzCoding} )

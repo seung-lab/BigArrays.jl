@@ -42,6 +42,8 @@ function BigArray( d::Associative, configDict::Dict{Symbol, Any} )
             coding = JPEGCoding
         elseif contains( configDict[:coding], "blosclz")
             coding = BlosclzCoding
+        elseif contains( configDict[:coding], "gzip" )
+            coding = GZipCoding
         else
             error("unknown coding")
         end
