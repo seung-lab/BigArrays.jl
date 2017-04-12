@@ -17,10 +17,53 @@ ba = BigArray(d)
 info("\n test 3D image reading and saving...")
 a = rand(UInt8, 200,200,10)
 # ba = BigArray(d, UInt8, (128,128,8))
-ba[201:400, 201:400, 101:110] = a
+ba[501:700, 501:700, 121:130] = a
 # BigArrays.mysetindex!(ba, a, (201:400, 201:400, 101:110))
-b = ba[201:400, 201:400, 101:110]
+b = ba[501:700, 501:700, 121:130]
 @assert all(a.==b)
+
+# test segmenation
+d = S3Dict( "s3://seunglab/jpwu/test/segmentation/4_4_40/" )
+# configDict = get_config_dict(d)
+# ba = BigArray( d, configDict )
+@show d
+ba = BigArray(d)
+
+@show ba.chunkSize
+@show get_config_dict(d)
+@show ndims(ba)
+@show size(ba)
+@show eltype(ba)
+
+info("\n test 3D image reading and saving...")
+a = rand(UInt32, 200,200,10)
+# ba = BigArray(d, UInt8, (128,128,8))
+ba[501:700, 501:700, 121:130] = a
+# BigArrays.mysetindex!(ba, a, (201:400, 201:400, 101:110))
+b = ba[501:700, 501:700, 121:130]
+@assert all(a.==b)
+
+# test segmenation with uint64
+d = S3Dict( "s3://seunglab/jpwu/test/segmentation-uint64/4_4_40/" )
+# configDict = get_config_dict(d)
+# ba = BigArray( d, configDict )
+@show d
+ba = BigArray(d)
+
+@show ba.chunkSize
+@show get_config_dict(d)
+@show ndims(ba)
+@show size(ba)
+@show eltype(ba)
+
+info("\n test 3D image reading and saving...")
+a = rand(UInt64, 200,200,10)
+# ba = BigArray(d, UInt8, (128,128,8))
+ba[501:700, 501:700, 121:130] = a
+# BigArrays.mysetindex!(ba, a, (201:400, 201:400, 101:110))
+b = ba[501:700, 501:700, 121:130]
+@assert all(a.==b)
+
 
 
 # test affinity map
