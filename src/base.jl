@@ -37,7 +37,7 @@ function BigArray( d::Associative, configDict::Dict{Symbol, Any} )
     chunkSize = (configDict[:chunkSize]...)
     if haskey( configDict, :coding )
         if contains( configDict[:coding], "raw" )
-            coding = RawCoding
+            coding = GZipCoding
         elseif contains(  configDict[:coding], "jpeg")
             coding = JPEGCoding
         elseif contains( configDict[:coding], "blosclz")
