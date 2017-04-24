@@ -3,8 +3,6 @@ using BigArrays
 using S3Dicts
 
 d = S3Dict( "s3://seunglab/jpwu/test/image/4_4_40/" )
-# configDict = get_config_dict(d)
-# ba = BigArray( d, configDict )
 @show d
 ba = BigArray(d)
 
@@ -72,8 +70,8 @@ d = S3Dict( "s3://seunglab/jpwu/test/affinitymap/4_4_40/" )
 a = rand(Float32, 200,200,10,3)
 ba = BigArray(d)
 
-ba[201:400, 201:400, 101:110, 1:3] = a
-b = ba[201:400, 201:400, 101:110, 1:3]
+ba[501:700, 501:700, 121:130, 1:3] = a
+b = ba[501:700, 501:700, 121:130, 1:3]
 
 @show size(a)
 @show size(b)

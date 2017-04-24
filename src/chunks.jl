@@ -6,7 +6,7 @@ using HDF5
 abstract AbstractChunk
 
 export Chunk, blendchunk, global_range, crop_border, physical_offset
-export save, savechunk, readchunk, downsample, get_offset, get_offset, get_voxel_size, get_data
+export save, savechunk, readchunk, downsample, get_offset, get_offset, get_voxel_size, get_data, get_origin, get_start
 
 immutable Chunk <: AbstractChunk
     data::Union{Array, SegMST} # could be 3 or 4 Dimensional array
@@ -25,6 +25,8 @@ end
 function get_origin(chk::Chunk)
     chk.origin
 end
+
+get_start = get_origin
 
 function get_offset(chk::Chunk)
     chk.origin.-1
