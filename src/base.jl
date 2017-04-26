@@ -17,12 +17,22 @@ all the manipulation effects in the x,y,z dimension
 immutable BigArray{D<:Associative, T<:Real, N, C<:AbstractBigArrayCoding} <: AbstractBigArray
     kvStore     :: D
     chunkSize   :: NTuple{N}
+    offset      :: CartesianIndex{N}
     function (::Type{BigArray}){D,T,N,C}(
                             kvStore     ::D,
                             foo         ::Type{T},
                             chunkSize   ::NTuple{N},
                             coding      ::Type{C} )
-        new{D, T, N, C}(kvStore, chunkSize)
+        new{D, T, N, C}(kvStore, chunkSize, CartesianIndex(N) - 1)
+    end
+
+    function (::Type{BigArray}){D,T,N,C}(
+                            kvStore     ::D,
+                            foo         ::Type{T},
+                            chunkSize   ::NTuple{N},
+                            coding      ::Type{C},
+                            offset      :: CartesianIndex{N} )
+        new{D, T, N, C}(kvStore, chunkSize, offset)
     end
 end
 
@@ -50,7 +60,13 @@ function BigArray( d::Associative, configDict::Dict{Symbol, Any} )
     else
         coding = DEFAULT_CODING
     end
-    BigArray( d, T, chunkSize, coding )
+
+    if haskey(configDict, :offset)
+      offset = CartesianIndex(configDict[:offset]...)
+      return BigArray( d, T, chunkSize, coding, offset )
+    else
+      return BigArray( d, T, chunkSize, coding )
+    end
 end
 
 function Base.ndims{D,T,N}(ba::BigArray{D,T,N})
@@ -78,7 +94,7 @@ end
 
 function Base.display(ba::BigArray)
     for field in fieldnames(ba)
-        println("$field: $(ba.(field))")
+        println("$field: $(getfield(ba,field))")
     end
 end
 
@@ -125,7 +141,8 @@ end
 function Base.getindex{D,T,N,C}( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...)
     sz = map(length, idxes)
     buf = zeros(eltype(ba), sz)
-    baIter = BigArrayIterator(idxes, ba.chunkSize)
+
+    baIter = BigArrayIterator(idxes, ba.chunkSize, ba.offset)
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
         local v
         try
