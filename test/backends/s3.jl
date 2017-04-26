@@ -67,9 +67,9 @@ b = ba[501:700, 501:700, 121:130]
 # test affinity map
 info("\n\n test affinity map reading and saving...")
 d = S3Dict( "s3://seunglab/jpwu/test/affinitymap/4_4_40/" )
-a = rand(Float32, 200,200,10,3)
 ba = BigArray(d)
 
+a = rand(Float32, 200,200,10,3)
 ba[501:700, 501:700, 121:130, 1:3] = a
 b = ba[501:700, 501:700, 121:130, 1:3]
 

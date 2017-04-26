@@ -148,28 +148,18 @@ function read_subimage!(buf,
                         zidxSection::Integer)
     @assert ishdf5(registerFile)
 
-    while true
-        try
-            # the explicit coordinate range
-            x1 = max(1, first(xidxSection));   x2 = min(sizeX, last(xidxSection));
-            y1 = max(1, first(yidxSection));   y2 = min(sizeY, last(yidxSection));
-            if x1>x2 || y1>y2
-                warn("no overlaping region in this section: $(registerFile)")
-            else
-                # index in buffer
-                bufx1 = x1 - first(xidxSection) + 1;
-                bufx2 = x2 - first(xidxSection) + 1;
-                bufy1 = y1 - first(yidxSection) + 1;
-                bufy2 = y2 - first(yidxSection) + 1;
-                buf[bufx1:bufx2, bufy1:bufy2, zidxSection] = h5read(registerFile, H5_DATASET_NAME, (x1:x2, y1:y2))
-            end
-            return
-        catch
-            rethrow()
-            sleep(2)
-            warn("file was opened, wait for 2 seconds and try again.")
-            warn("file name: $registerFile")
-        end
+    # the explicit coordinate range
+    x1 = max(1, first(xidxSection));   x2 = min(sizeX, last(xidxSection));
+    y1 = max(1, first(yidxSection));   y2 = min(sizeY, last(yidxSection));
+    if x1>x2 || y1>y2
+        warn("no overlaping region in this section: $(registerFile)")
+    else
+        # index in buffer
+        bufx1 = x1 - first(xidxSection) + 1;
+        bufx2 = x2 - first(xidxSection) + 1;
+        bufy1 = y1 - first(yidxSection) + 1;
+        bufy2 = y2 - first(yidxSection) + 1;
+        buf[bufx1:bufx2, bufy1:bufy2, zidxSection] = h5read(registerFile, H5_DATASET_NAME, (x1:x2, y1:y2))
     end
 end
 
