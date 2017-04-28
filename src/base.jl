@@ -131,18 +131,18 @@ function Base.getindex{D,T,N,C}( ba::BigArray{D, T, N, C}, idxes::Union{UnitRang
         try
             v = ba.kvStore[string(chunkGlobalRange)]
         catch e
-            println("catch a kvstore key error: $(e), will fill this block as zeros")
-            continue
+            @show typeof(e)
+            if e.code=="NoSuchKey"
+                println("catch a kvstore key error: $(e), will fill this block as zeros")
+                continue
+            else
+                rethrow(e)
+            end
         end
-        if isa(v, Array)
-            #@show C
-            chk = decoding(v, C)
-            chk = reshape(reinterpret(T, chk), ba.chunkSize)
-            buf[rangeInBuffer] = chk[rangeInChunk]
-        else
-            # otherwise v is an error, which means that it is all zero, do nothing
-            println("get all zero chunk")
-        end
+        @assert isa(v, Array)
+        chk = decoding(v, C)
+        chk = reshape(reinterpret(T, chk), ba.chunkSize)
+        buf[rangeInBuffer] = chk[rangeInChunk]
     end
     return buf
 end
