@@ -63,6 +63,12 @@ function BigArray( d::Associative, configDict::Dict{Symbol, Any} )
 
     if haskey(configDict, :offset)
       offset = CartesianIndex(configDict[:offset]...)
+
+      if length(offset) < length(chunkSize)
+        N = length(chunkSize)
+        offset = CartesianIndex{N}(Base.fill_to_length((offset...), 0, Val{N}))
+      end
+
       return BigArray( d, T, chunkSize, coding, offset )
     else
       return BigArray( d, T, chunkSize, coding )
