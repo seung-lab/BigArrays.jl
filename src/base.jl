@@ -23,7 +23,7 @@ immutable BigArray{D<:Associative, T<:Real, N, C<:AbstractBigArrayCoding} <: Abs
                             foo         ::Type{T},
                             chunkSize   ::NTuple{N},
                             coding      ::Type{C} )
-        new{D, T, N, C}(kvStore, chunkSize, CartesianIndex(N) - 1)
+        new{D, T, N, C}(kvStore, chunkSize, CartesianIndex{N}() - 1)
     end
 
     function (::Type{BigArray}){D,T,N,C}(
