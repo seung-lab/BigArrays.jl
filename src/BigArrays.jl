@@ -2,6 +2,8 @@ __precompile__()
 
 module BigArrays
 
+using Retry
+
 # basic functions
 include("coding.jl")
 using .Coding

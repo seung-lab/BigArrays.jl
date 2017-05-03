@@ -143,10 +143,16 @@ function Base.setindex!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
         # chk = ba.chunkStore[chunkGlobalRange]
         # chk = reshape(Blosc.decompress(T, chk), ba.chunkSize)
         fill!(chk, convert(T, 0))
-        chk[rangeInChunk] = buf[rangeInBuffer]
-        ba.kvStore[ string(chunkGlobalRange) ] = encoding( chk, C)
+        @repeat 4 try
+            chk[rangeInChunk] = buf[rangeInBuffer]
+            ba.kvStore[ string(chunkGlobalRange) ] = encoding( chk, C)
+        catch e 
+            println("catch an error while saving in BigArray: $e")
+            @show typeof(e)
+            @delay_retry if true end 
+        end
     end
-end
+end 
 
 function Base.getindex{D,T,N,C}( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...)
     sz = map(length, idxes)
@@ -155,17 +161,17 @@ function Base.getindex{D,T,N,C}( ba::BigArray{D, T, N, C}, idxes::Union{UnitRang
     baIter = BigArrayIterator(idxes, ba.chunkSize, ba.offset)
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
         local v
-        try
+        @repeat 4 try
             println("global range of chunk: $(string(chunkGlobalRange))") 
             v = ba.kvStore[string(chunkGlobalRange)]
         catch e
+            println("catch an error while getindex in BigArray: $e")
             @show typeof(e)
             if isa(e, NoSuchKeyException)
                 println("no suck key in kvstore: $(e), will fill this block as zeros")
                 continue
-            else
-                rethrow(e)
             end
+            @delay_retry if !isa(e, NoSuchKeyException) end 
         end
         @assert isa(v, Array)
         chk = decoding(v, C)
