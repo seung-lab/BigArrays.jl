@@ -8,20 +8,30 @@ immutable BigArrayIterator{N}
     globalRange     ::CartesianRange{CartesianIndex{N}}
     chunkSize       ::NTuple{N}
     chunkIDRange    ::CartesianRange{CartesianIndex{N}}
+    offset          ::CartesianIndex{N}
 end
 
 function BigArrayIterator{N}( globalRange::CartesianRange{CartesianIndex{N}},
-                            chunkSize::NTuple{N})
-    chunkIDStart = CartesianIndex(index2chunkid( globalRange.start, chunkSize ))
-    chunkIDStop  = CartesianIndex(index2chunkid( globalRange.stop,  chunkSize ))
+                              chunkSize::NTuple{N},
+                              offset::CartesianIndex{N} )
+    chunkIDStart = CartesianIndex(index2chunkid( globalRange.start, chunkSize, offset ))
+    chunkIDStop  = CartesianIndex(index2chunkid( globalRange.stop,  chunkSize, offset ))
     chunkIDRange = CartesianRange(chunkIDStart, chunkIDStop)
-    BigArrayIterator( globalRange, chunkSize, chunkIDRange )
+    BigArrayIterator( globalRange, chunkSize, chunkIDRange, offset )
 end
 
 function BigArrayIterator{N}( idxes::Tuple,
-                                chunkSize::NTuple{N})
+                              chunkSize::NTuple{N})
     globalRange = CartesianRange(idxes)
-    BigArrayIterator( globalRange, chunkSize )
+    offset = CartesianIndex{N}() - 1
+    BigArrayIterator( globalRange, chunkSize, offset )
+end
+
+function BigArrayIterator{N}( idxes::Tuple,
+                              chunkSize::NTuple{N},
+                              offset::CartesianIndex)
+    globalRange = CartesianRange(idxes)
+    BigArrayIterator( globalRange, chunkSize, offset )
 end
 
 function BigArrayIterator( ba::AbstractBigArray )
@@ -54,19 +64,20 @@ function Base.next{N}(  iter    ::BigArrayIterator{N},
     chunkID = tuple(chunkIDIndex.I...)
 
     # get current global range in this chunk
-    start = CartesianIndex(( map((x,y,z)->max((x-1)*y+1, z), chunkID,
-                            iter.chunkSize, iter.globalRange.start )...))
-    stop  = CartesianIndex(( map((x,y,z)->min(x*y, z),       chunkID,
-                            iter.chunkSize, iter.globalRange.stop )...))
+    start = CartesianIndex(( map((x,y,z,o)->max((x-1)*y+1+o, z), chunkID,
+                            iter.chunkSize, iter.globalRange.start,
+                            iter.offset )...))
+    stop  = CartesianIndex(( map((x,y,z,o)->min(x*y+o, z),       chunkID,
+                            iter.chunkSize, iter.globalRange.stop,
+                            iter.offset )...))
     # the global range of the cutout in this chunk
     globalRange = CartesianRange(start, stop)
-    @show globalRange
     # the range inside this chunk
-    rangeInChunk  = global_range2chunk_range( globalRange, iter.chunkSize)
+    rangeInChunk  = global_range2chunk_range( globalRange, iter.chunkSize, iter.offset)
     # the range inside the buffer
     rangeInBuffer = global_range2buffer_range(globalRange, iter.globalRange)
     # the global range of this chunk
-    chunkGlobalRange = chunkid2global_range( chunkID, iter.chunkSize )
+    chunkGlobalRange = chunkid2global_range( chunkID, iter.chunkSize, iter.offset )
     return (chunkID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer), state
 end
 
