@@ -139,6 +139,7 @@ function Base.setindex!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     baIter = BigArrayIterator(idxes, ba.chunkSize)
     chk = Array(T, ba.chunkSize)
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
+        println("global range of chunk: $(string(chunkGlobalRange))")
         # chk = ba.chunkStore[chunkGlobalRange]
         # chk = reshape(Blosc.decompress(T, chk), ba.chunkSize)
         fill!(chk, convert(T, 0))
