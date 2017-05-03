@@ -132,8 +132,8 @@ function Base.getindex{D,T,N,C}( ba::BigArray{D, T, N, C}, idxes::Union{UnitRang
             v = ba.kvStore[string(chunkGlobalRange)]
         catch e
             @show typeof(e)
-            if isa(e, ZeroChunkException)
-                println("catch a kvstore key error: $(e), will fill this block as zeros")
+            if isa(e, NoSuchKeyException)
+                println("no suck key in kvstore: $(e), will fill this block as zeros")
                 continue
             else
                 rethrow(e)
