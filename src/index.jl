@@ -168,3 +168,7 @@ function Base.CartesianRange( s::String )
     stops  = map( x->parse(split(x,"-")[2]), secs )
     CartesianRange( CartesianIndex(starts...), CartesianIndex( stops... ) )
 end
+
+function Base.UnitRange(x::Int)
+    x:x
+end

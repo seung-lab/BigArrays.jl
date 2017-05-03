@@ -20,6 +20,13 @@ ba[501:700, 501:700, 121:130] = a
 b = ba[501:700, 501:700, 121:130]
 @assert all(a.==b)
 
+info("\n test single voxel indexing ...")
+x = a[100,100,5]
+y = ba[600,600,125]
+@show x
+@show y
+@assert x==y
+
 # test segmenation
 d = S3Dict( "s3://seunglab/jpwu/test/segmentation/4_4_40/" )
 # configDict = get_config_dict(d)

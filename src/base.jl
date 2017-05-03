@@ -172,7 +172,13 @@ function Base.getindex{D,T,N,C}( ba::BigArray{D, T, N, C}, idxes::Union{UnitRang
         chk = reshape(reinterpret(T, chk), ba.chunkSize)
         buf[rangeInBuffer] = chk[rangeInChunk]
     end
-    return buf
+    # handle single element indexing, return the single value
+    if length(buf) == 1
+        return buf[1]
+    else 
+        # otherwise return array
+        return buf
+    end 
 end
 
 function get_chunk_size(ba::AbstractBigArray)

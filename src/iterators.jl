@@ -22,6 +22,7 @@ end
 
 function BigArrayIterator{N}( idxes::Tuple,
                               chunkSize::NTuple{N})
+    idxes = map(UnitRange, idxes)
     globalRange = CartesianRange(idxes)
     offset = CartesianIndex{N}() - 1
     BigArrayIterator( globalRange, chunkSize, offset )
@@ -30,6 +31,7 @@ end
 function BigArrayIterator{N}( idxes::Tuple,
                               chunkSize::NTuple{N},
                               offset::CartesianIndex)
+    idxes = map(UnitRange, idxes)
     globalRange = CartesianRange(idxes)
     BigArrayIterator( globalRange, chunkSize, offset )
 end
