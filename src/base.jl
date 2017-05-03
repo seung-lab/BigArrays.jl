@@ -31,7 +31,10 @@ immutable BigArray{D<:Associative, T<:Real, N, C<:AbstractBigArrayCoding} <: Abs
                             foo         ::Type{T},
                             chunkSize   ::NTuple{N},
                             coding      ::Type{C},
-                            offset      :: CartesianIndex{N} )
+                            offset      ::CartesianIndex{N} )
+        # force the offset to be 0s to shutdown the functionality of offset for now
+        # because it corrupted all the other bigarrays in aws s3
+        offset = CartesianIndex{N}() - 1 
         new{D, T, N, C}(kvStore, chunkSize, offset)
     end
 end
@@ -152,6 +155,7 @@ function Base.getindex{D,T,N,C}( ba::BigArray{D, T, N, C}, idxes::Union{UnitRang
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
         local v
         try
+            println("global range of chunk: $(string(chunkGlobalRange))") 
             v = ba.kvStore[string(chunkGlobalRange)]
         catch e
             @show typeof(e)
