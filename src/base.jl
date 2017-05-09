@@ -160,23 +160,22 @@ function Base.getindex{D,T,N,C}( ba::BigArray{D, T, N, C}, idxes::Union{UnitRang
 
     baIter = BigArrayIterator(idxes, ba.chunkSize, ba.offset)
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
-        local v
         @repeat 4 try
             println("global range of chunk: $(string(chunkGlobalRange))") 
             v = ba.kvStore[string(chunkGlobalRange)]
+            @assert isa(v, Array)
+            chk = decoding(v, C)
+            chk = reshape(reinterpret(T, chk), ba.chunkSize)
+            buf[rangeInBuffer] = chk[rangeInChunk]
         catch e
             println("catch an error while getindex in BigArray: $e")
             @show typeof(e)
+            @delay_retry if !isa(e, NoSuchKeyException) end 
             if isa(e, NoSuchKeyException)
                 println("no suck key in kvstore: $(e), will fill this block as zeros")
                 continue
             end
-            @delay_retry if !isa(e, NoSuchKeyException) end 
         end
-        @assert isa(v, Array)
-        chk = decoding(v, C)
-        chk = reshape(reinterpret(T, chk), ba.chunkSize)
-        buf[rangeInBuffer] = chk[rangeInChunk]
     end
     # handle single element indexing, return the single value
     if length(buf) == 1
