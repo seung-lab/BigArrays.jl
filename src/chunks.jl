@@ -106,7 +106,7 @@ function save(fname::AbstractString, chk::Chunk)
     f["type"] = "chunk"
     if isa(chk.data, Array{Float32,4}) || size(chk.data, 4)==3
         # save with compression
-        f["affinityMap", "chunk", (64,64,8,3), "shuffle"] = chk.data
+        f["affinityMap", "chunk", (64,64,8,3), "shuffle", (), "deflate", 3] = chk.data
     elseif isa(chk.data, Array{UInt8,3})
         f["image", "chunk", (64,64,8), "shuffle", (), "deflate", 3] = chk.data
     elseif isa(chk.data, Array{UInt32,3})

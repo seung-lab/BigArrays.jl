@@ -57,6 +57,7 @@ function encoding( data::Array, coding::Type{JPEGCoding} )
 end
 
 function decoding( data::Vector{UInt8}, coding::Type{JPEGCoding} )
+    error("not working correctly with neuroglancer")
     return ImageMagick.load_(data)
 end
 

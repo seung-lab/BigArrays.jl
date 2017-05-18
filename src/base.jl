@@ -166,21 +166,30 @@ function Base.getindex{D,T,N,C}( ba::BigArray{D, T, N, C}, idxes::Union{UnitRang
     @sync begin
         for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
             @async begin
-                @repeat 4 try
-                    println("global range of chunk: $(string(chunkGlobalRange))") 
-                    v = ba.kvStore[string(chunkGlobalRange)]
-                    @assert isa(v, Array)
-                    chk = decoding(v, C)
-                    chk = reshape(reinterpret(T, chk), ba.chunkSize)
-                    buf[rangeInBuffer] = chk[rangeInChunk]
-                catch e
-                    println("catch an error while getindex in BigArray: $e")
-                    @show typeof(e)
-                    @delay_retry if !isa(e, NoSuchKeyException) end 
-                    if isa(e, NoSuchKeyException)
-                        println("no suck key in kvstore: $(e), will fill this block as zeros")
-                        continue
-                    end
+                # explicit error handling to deal with EOFError
+                delay = 0.05
+                for t in 1:4
+                    try 
+                        println("global range of chunk: $(string(chunkGlobalRange))") 
+                        v = ba.kvStore[string(chunkGlobalRange)]
+                        @assert isa(v, Array)
+                        chk = decoding(v, C)
+                        chk = reshape(reinterpret(T, chk), ba.chunkSize)
+                        buf[rangeInBuffer] = chk[rangeInChunk]
+                        break 
+                    catch e
+                        println("catch an error while getindex in BigArray: $e")
+                        if isa(e, NoSuchKeyException)
+                            println("no suck key in kvstore: $(e), will fill this block as zeros")
+                            break
+                        else
+                            if isa(e, EOFError)
+                                println("get EOFError in bigarray getindex: $e")
+                            end 
+                            sleep(delay*(0.8+(0.4*rand())))
+                            delay *= 10
+                        end
+                    end 
                 end
             end 
         end
