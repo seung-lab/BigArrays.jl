@@ -13,7 +13,7 @@ end
 
 function BigArrayIterator{N}( globalRange::CartesianRange{CartesianIndex{N}},
                               chunkSize::NTuple{N},
-                              offset::CartesianIndex{N} )
+                              offset::CartesianIndex{N} = CartesianIndex{N}() - 1 )
     chunkIDStart = CartesianIndex(index2chunkid( globalRange.start, chunkSize, offset ))
     chunkIDStop  = CartesianIndex(index2chunkid( globalRange.stop,  chunkSize, offset ))
     chunkIDRange = CartesianRange(chunkIDStart, chunkIDStop)

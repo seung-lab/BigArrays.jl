@@ -103,11 +103,15 @@ end
 """
 bounding box of the whole volume
 """
-function boundingbox(A::AlignedBigArray)
+function boundingbox(A::AlignedBigArray; zmin=-Inf, zmax =Inf)
     x1 = Inf;   x2 = -Inf;
     y1 = Inf;   y2 = -Inf;
     z1 = Inf;   z2 = -Inf;
     for d in values( A.register )
+        if d[:zoff] < zmin-1 || d[:zoff] > zmax-1
+            continue
+        end
+        @show d[:zoff]
         x1 = min(x1, d[:xoff] + 1)
         y1 = min(y1, d[:yoff] + 1)
         z1 = min(z1, d[:zoff] + 1)

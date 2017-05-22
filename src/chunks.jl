@@ -57,23 +57,11 @@ function global_range( chunk::Chunk )
 end
 
 function Base.size( chunk::Chunk )
-  if isa(chunk.data, Array)
-    return size(chunk.data)
-  elseif isa(chunk.data, SegMST)
-    return size(chunk.data.segmentation)
-  else
-    error("the chunk data type is invalid: $(typeof(chunk.data))")
-  end
+    return size(chunk.data)  
 end
 
 function Base.ndims( chunk::Chunk )
-  if isa(chunk.data, Array)
     return ndims(chunk.data)
-  elseif isa(chunk.data, SegMST)
-    return ndims(chunk.data.segmentation)
-  else
-    error("the chunk data type is invalid: $(typeof(chunk.data))")
-  end
 end
 
 """
@@ -102,22 +90,9 @@ function save(fname::AbstractString, chk::Chunk)
     if isfile(fname)
         rm(fname)
     end
+    EMIRT.save(fname, chk.data)
     f = h5open(fname, "w")
     f["type"] = "chunk"
-    if isa(chk.data, Array{Float32,4}) || size(chk.data, 4)==3
-        # save with compression
-        f["affinityMap", "chunk", (64,64,8,3), "shuffle", (), "deflate", 3] = chk.data
-    elseif isa(chk.data, Array{UInt8,3})
-        f["image", "chunk", (64,64,8), "shuffle", (), "deflate", 3] = chk.data
-    elseif isa(chk.data, Array{UInt32,3})
-        f["segmentation", "chunk", (64,64,8), "shuffle", (), "deflate", 3] = chk.data
-    elseif :segmentation in fieldnames(typeof(chk.data))
-        f["segmentation", "chunk", (64,64,8), "shuffle", (), "deflate", 3] = chk.data.segmentation
-        f["segmentPairs"] = chk.data.segmentPairs
-        f["segmentPairAffinities"] = chk.data.segmentPairAffinities
-    else
-        error("This is an unsupported type: $(typeof(chk.data))")
-    end
     f["origin"] = Vector{Int}(chk.origin)
     f["voxelSize"] = Vector{UInt32}(chk.voxelSize)
     close(f)
