@@ -91,7 +91,7 @@ function save(fname::AbstractString, chk::Chunk)
         rm(fname)
     end
     EMIRT.save(fname, chk.data)
-    f = h5open(fname, "w")
+    f = h5open(fname, "r+")
     f["type"] = "chunk"
     f["origin"] = Vector{Int}(chk.origin)
     f["voxelSize"] = Vector{UInt32}(chk.voxelSize)
