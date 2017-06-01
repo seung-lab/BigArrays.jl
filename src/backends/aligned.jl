@@ -184,22 +184,25 @@ function Base.getindex(A::AlignedBigArray, idxes::Union{UnitRange, Int}...)
     # create buffer
     buf = zeros(H5_DATASET_ELEMENT_TYPE, (sx,sy,sz))
     @show idxes
-    for z in idxes[3]
-        if haskey(A.register, z)
-            registerFile = A.register[z][:registerFile]
-            xidxSection = idxes[1] - A.register[z][:xoff]
-            yidxSection = idxes[2] - A.register[z][:yoff]
-            zidxSection = z  - first(idxes[3]) + 1
-            # println("registerFile: $(basename(registerFile)), xidx: $(xidx), yidx: $(yidx), zidx: $(zidx)")
-            read_subimage!( buf,
-                            registerFile,
-                            A.register[z][:xdim],
-                            A.register[z][:ydim],
-                            xidxSection, yidxSection, zidxSection)
-        else
-            warn("section file not exist: $z")
+    @sync begin
+        for z in idxes[3]
+            @async begin 
+                if haskey(A.register, z)
+                    registerFile = A.register[z][:registerFile]
+                    xidxSection = idxes[1] - A.register[z][:xoff]
+                    yidxSection = idxes[2] - A.register[z][:yoff]
+                    zidxSection = z  - first(idxes[3]) + 1
+                    read_subimage!( buf,
+                                    registerFile,
+                                    A.register[z][:xdim],
+                                    A.register[z][:ydim],
+                                    xidxSection, yidxSection, zidxSection)
+                else
+                    warn("section file not exist: $z")
+                end
+            end 
         end
-    end
+    end 
     buf
 end
 

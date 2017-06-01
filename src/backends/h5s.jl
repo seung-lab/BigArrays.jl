@@ -274,32 +274,24 @@ function Base.getindex(ba::H5sBigArray, idxes::Union{UnitRange, Int, Colon}...)
     bufferGlobalRange = CartesianRange(idxes)
 
     baIter = BigArrayIterator(bufferGlobalRange, ba.blockSize)
-    for (chunkID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
-        # local chunkFileName
-        chunkFileName = get_block_file_name(ba, chunkID)
-        info("read $(globalRange) from $(rangeInChunk) of $(chunkFileName) to buffer $(rangeInBuffer) ...")
+    @sync begin
+        for (chunkID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
+            @async begin 
+                # local chunkFileName
+                chunkFileName = get_block_file_name(ba, chunkID)
+                info("read $(globalRange) from $(rangeInChunk) of $(chunkFileName) to buffer $(rangeInBuffer) ...")
 
-        # if have data fill with data,
-        # if not, no need to change, keep as zero
-        if isfile(chunkFileName) && ishdf5(chunkFileName)
-            buf[rangeInBuffer] = h5read(chunkFileName, H5_DATASET_NAME,
-                                        rangeInChunk)
-            # # assign data value, preserve existing value
-            # while true
-            #     try
-            #         buf[rangeInBuffer] = h5read(chunkFileName, H5_DATASET_NAME,
-            #                                     rangeInChunk)
-            #         break
-            #     catch
-            #         rethrow()
-            #         warn("open and read $chunkFileName failed, will try 5 seconds later...")
-            #         sleep(5)
-            #     end
-            # end
-        else
-            warn("filled with zeros because file do not exist: $(chunkFileName)")
+                # if have data fill with data,
+                # if not, no need to change, keep as zero
+                if isfile(chunkFileName) && ishdf5(chunkFileName)
+                    buf[rangeInBuffer] = h5read(chunkFileName, H5_DATASET_NAME,
+                                                rangeInChunk)
+                else
+                    warn("filled with zeros because file do not exist: $(chunkFileName)")
+                end
+            end 
         end
-    end
+    end 
     buf
 end
 
@@ -338,24 +330,8 @@ function Base.setindex!{T,N}(ba::H5sBigArray, buf::Array{T,N},
     baIter = BigArrayIterator(bufferGlobalRange, ba.blockSize)
 
     # temporal block as a buffer to reduce memory allocation
-    for (chunkID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
-        # refresh the temporal block
-        # map((x,y)->tempBlock[x]=buf[y], rangeInChunk, rangeInBuffer)
-        # local chunkFileName
-        # chunkFileName = get_block_file_name(ba, chunkID)
-        # info("save $(globalRange) from buffer $(rangeInBuffer) to $(rangeInChunk) of $(chunkFileName) ...")
-        save_buffer( buf, get_block_file_name(ba, chunkID), ba, rangeInChunk, rangeInBuffer)
-        # while true
-        #     try
-        #         save_buffer( buf, chunkFileName, ba, rangeInChunk, rangeInBuffer)
-        #         info("save $(globalRange) from buffer $(rangeInBuffer) to $(rangeInChunk) of $(chunkFileName) ...")
-        #         break
-        #     catch
-        #         rethrow()
-        #         warn("open and write $h5FileName failed, will try 5 seconds later...")
-        #         sleep(5)
-        #     end
-        # end
+    @sync for (chunkID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
+        @async save_buffer( buf, get_block_file_name(ba, chunkID), ba, rangeInChunk, rangeInBuffer)
     end
 end
 
