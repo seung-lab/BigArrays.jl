@@ -173,20 +173,20 @@ bounding box of the whole volume
 """
 function boundingbox(ba::H5sBigArray)
     D = ndims(ba)
-    ret_start = CartesianIndex([div(typemax(Int),2) for i = 1:D]...)
-    ret_stop  = CartesianIndex([div(typemin(Int),2) for i = 1:D]...)
+    ret_start = ([div(typemax(Int),2) for i = 1:D]...)
+    ret_stop  = ([div(typemin(Int),2) for i = 1:D]...)
 
     # @show H5SBIGARRAY_DIRECTORY
     for file in readdir(H5SBIGARRAY_DIRECTORY)
         fileName = joinpath(H5SBIGARRAY_DIRECTORY, file)
         if fileName[end-2:end]==".h5"
-            chunkStart = fileName2origin(file; prefix = basename(ba.h5FilePrefix))
-            chunkStop = map((x,y)->x+y-1, chunkStart, ba.blockSize)
-            ret_start = CartesianIndex(map(min, ret_start, chunkStart))
-            ret_stop  = CartesianIndex(map(max, ret_stop,  chunkStop))
+            blockStart = fileName2origin(file; prefix = basename(ba.h5FilePrefix))
+            blockStop = map((x,y)->x+y-1, blockStart, ba.blockSize)
+            ret_start = (map(min, ret_start, blockStart))
+            ret_stop  = (map(max, ret_stop,  blockStop))
         end
     end
-    return CartesianRange(ret_start, ret_stop)
+    return CartesianRange(CartesianIndex(ret_start), CartesianIndex(ret_stop))
 end
 
 """
