@@ -145,13 +145,24 @@ function Base.setindex!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
                 # chk = ba.chunkStore[chunkGlobalRange]
                 # chk = reshape(Blosc.decompress(T, chk), ba.chunkSize)
                 fill!(chk, convert(T, 0))
-                @repeat 4 try
-                    chk[rangeInChunk] = buf[rangeInBuffer]
-                    ba.kvStore[ string(chunkGlobalRange) ] = encoding( chk, C)
-                catch e 
-                    println("catch an error while saving in BigArray: $e")
-                    @show typeof(e)
-                    @delay_retry if true end 
+                delay = 0.05
+                for t in 1:4
+                    try 
+                        chk[rangeInChunk] = buf[rangeInBuffer]
+                        ba.kvStore[ string(chunkGlobalRange) ] = encoding( chk, C)
+                        break
+                    catch e
+                        println("catch an error while saving in BigArray: $e")
+                        @show typeof(e)
+                        @show stacktrace()
+                        if t==4
+                            println("rethrow the error: $e")
+                            rethrow()
+                        end 
+                        sleep(delay*(0.8+(0.4*rand())))
+                        delay *= 10
+                        println("retry for the $(t)'s time")
+                    end
                 end
             end 
         end
@@ -185,7 +196,10 @@ function Base.getindex{D,T,N,C}( ba::BigArray{D, T, N, C}, idxes::Union{UnitRang
                         else
                             if isa(e, EOFError)
                                 println("get EOFError in bigarray getindex: $e")
-                            end 
+                            end
+                            if t==4
+                                rethrow()
+                            end
                             sleep(delay*(0.8+(0.4*rand())))
                             delay *= 10
                         end
