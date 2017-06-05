@@ -142,8 +142,6 @@ function Base.setindex!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
         for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
             @async begin
                 println("global range of chunk: $(string(chunkGlobalRange))")
-                # chk = ba.chunkStore[chunkGlobalRange]
-                # chk = reshape(Blosc.decompress(T, chk), ba.chunkSize)
                 fill!(chk, convert(T, 0))
                 delay = 0.05
                 for t in 1:4
@@ -161,7 +159,7 @@ function Base.setindex!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
                         end 
                         sleep(delay*(0.8+(0.4*rand())))
                         delay *= 10
-                        println("retry for the $(t)'s time")
+                        println("retry for the $(t)'s time: $(string(chunkGlobalRange))")
                     end
                 end
             end 
