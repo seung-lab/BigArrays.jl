@@ -10,7 +10,7 @@ const H5_DATASET_ELEMENT_TYPE = UInt8
 const DATASET_NDIMS = 3
 # const GLOBAL_OFFSET = [16384,16384,16384]
 
-export AlignedBigArray, boundingbox
+export AlignedBigArray, boundingbox, get_section_filename
 
 # register item of one section / hdf5 file
 typealias Tsecreg Dict{Symbol, Union{AbstractString, Int}}
@@ -65,6 +65,14 @@ function AlignedBigArray(fregister::AbstractString)
     end
     AlignedBigArray(register)
 end
+
+"""
+get the section file name of the z coordinate
+"""
+function get_section_filename( ba::AlignedBigArray, z::Int )
+    return ba.register[z][:registerFile]
+end 
+    
 
 """
 specialized for UInt8 raw image data type
