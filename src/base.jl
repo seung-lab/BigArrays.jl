@@ -1,14 +1,5 @@
 using .BigArrayIterators
 
-export get_config_dict, get_chunk_size
-
-# a function expected to be inherited by backends
-# refer the idea of modular design here:
-# http://www.juliabloggers.com/modular-algorithms-for-scientific-computing-in-julia/
-# a similar function:
-# https://github.com/JuliaDiffEq/DiffEqBase.jl/blob/master/src/DiffEqBase.jl#L62
-function get_config_dict end
-
 """
     BigArray
 currently, assume that the array dimension (x,y,z,...) is >= 3
@@ -40,8 +31,7 @@ immutable BigArray{D<:Associative, T<:Real, N, C<:AbstractBigArrayCoding} <: Abs
 end
 
 function BigArray( d::Associative )
-    configDict = get_config_dict( d )
-    return BigArray(d, configDict)
+    return BigArray(d, d.configDict)
 end
 
 function BigArray( d::Associative, configDict::Dict{Symbol, Any} )

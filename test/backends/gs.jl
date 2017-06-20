@@ -1,4 +1,3 @@
-# import BigArrays: get_config
 using BigArrays
 using GSDicts
 
@@ -7,7 +6,6 @@ d = GSDict( "gs://seunglab/jpwu/test/image/4_4_40/" )
 ba = BigArray(d)
 
 @show ba.chunkSize
-@show get_config_dict(d)
 @show ndims(ba)
 @show size(ba)
 @show eltype(ba)
@@ -29,13 +27,11 @@ y = ba[600,600,125]
 
 # test segmenation
 d = GSDict( "gs://seunglab/jpwu/test/segmentation/4_4_40/" )
-# configDict = get_config_dict(d)
 # ba = BigArray( d, configDict )
 @show d
 ba = BigArray(d)
 
 @show ba.chunkSize
-@show get_config_dict(d)
 @show ndims(ba)
 @show size(ba)
 @show eltype(ba)
@@ -50,13 +46,11 @@ b = ba[501:700, 501:700, 121:130]
 
 # test segmenation with uint64
 d = GSDict( "gs://seunglab/jpwu/test/segmentation-uint64/4_4_40/" )
-# configDict = get_config_dict(d)
 # ba = BigArray( d, configDict )
 @show d
 ba = BigArray(d)
 
 @show ba.chunkSize
-@show get_config_dict(d)
 @show ndims(ba)
 @show size(ba)
 @show eltype(ba)
