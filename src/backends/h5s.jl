@@ -11,10 +11,11 @@ Blosc.set_num_threads(8)
 # include("../types.jl")
 # include("../index.jl")
 const CONFIG_FILE = "config.json"
+const DEFAULT_DATA_TYPE = UInt8
 const DEFAULT_H5FILE_PREFIX = "block_"
 const H5_DATASET_NAME = "img"
-const DEFAULT_CHUNK_SIZE = (1024, 1024, 128)
-const DEFAULT_INNER_CHUNK_SIZE = (32,32,4)
+const DEFAULT_BLOCK_SIZE = (1024, 1024, 128)
+const DEFAULT_CHUNK_SIZE = (32,32,4)
 const DEFAULT_GLOBAL_OFFSET = (0,0,0)
 const DEFAULT_RANGE         = CartesianRange(
         CartesianIndex((typemax(Int), typemax(Int), typemax(Int))),
@@ -29,6 +30,7 @@ definition of h5s big array
 """
 type H5sBigArray <: AbstractBigArray
     h5FilePrefix    ::AbstractString
+    dataType        ::DataType
     globalOffset    ::Tuple
     blockSize       ::Tuple
     chunkSize       ::Tuple
@@ -57,6 +59,7 @@ function H5sBigArray( configDict::Dict{Symbol, Any} )
     end
     configDict[:compression] = Symbol(configDict[:compression])
     H5sBigArray(    configDict[:h5FilePrefix],
+                    configDict[:dataType],
                     configDict[:globalOffset],
                     configDict[:blockSize],
                     configDict[:chunkSize],
@@ -65,11 +68,21 @@ end
 """
 construct from a register file, which defines file architecture
 """
-function H5sBigArray(   dir::AbstractString )
+function H5sBigArray(   dir::AbstractString; 
+                        h5FilePrefix::AbstractString = DEFAULT_H5FILE_PREFIX,
+                        dataType        = DEFAULT_DATA_TYPE,
+                        chunkSize       = DEFAULT_CHUNK_SIZE,
+                        blockSize       = DEFAULT_BLOCK_SIZE,
+                        globalOffset    = DEFAULT_GLOBAL_OFFSET,
+                        compression     = DEFAULT_COMPRESSION )
+    # transform string to Julia DataType
+    if isa(dataType, AbstractString)
+        dataType = eval(Symbol(dataType))
+    end 
     dir = expanduser(dir)
     configFile = joinpath(dir, CONFIG_FILE)
     if isfile(dir)
-        warn("take this file as bigarray config file: $(dir)")
+        warn("find an existing config file: $(dir) \n will ignore the input parameters!")
         global H5SBIGARRAY_DIRECTORY = dirname(dir)
         # string format of config
         configDict = JSON.parsefile(dir, dicttype=Dict{Symbol, Any})
@@ -86,14 +99,13 @@ function H5sBigArray(   dir::AbstractString )
           mkdir(dir)
         end
         global H5SBIGARRAY_DIRECTORY = dir
-        ba = H5sBigArray(h5FilePrefix, globalOffset, blockSize,
-                            chunkSize, compression)
+        ba = H5sBigArray(h5FilePrefix, dataType, globalOffset, blockSize, chunkSize, compression) 
         updateconfigfile(ba)
     end
     ba
 end
 
-function get_chunk_size(ba::H5sBigArray)
+function get_block_size(ba::H5sBigArray)
     ba.blockSize
 end
 
@@ -103,6 +115,7 @@ transform bigarray to string
 function bigArray2dict(ba::H5sBigArray)
     d = Dict{Symbol, Any}()
     d[:h5FilePrefix]    = ba.h5FilePrefix
+    d[:dataType]        = ba.dataType
     d[:globalOffset]    = ba.globalOffset
     d[:blockSize]       = ba.blockSize
     d[:chunkSize]  = ba.chunkSize
@@ -141,16 +154,7 @@ end
 element type of big array
 """
 function Base.eltype(ba::H5sBigArray)
-  files = readdir(H5SBIGARRAY_DIRECTORY)
-  for file in files
-    h5FileName = joinpath(H5SBIGARRAY_DIRECTORY, file)
-    if ishdf5(h5FileName)
-      f = h5open(h5FileName)
-      ret = eltype(f[H5_DATASET_NAME])
-      close(f)
-      return ret
-    end
-  end
+    return ba.dataType 
 end
 
 """
@@ -324,6 +328,8 @@ function Base.setindex!{T,N}(ba::H5sBigArray, buf::Array{T,N},
     # adjust_range!(ba, idxes)
     # updateconfigfile(ba)
     # transform to originate from (0,0,0)
+    @show idxes
+    @show ba.globalOffset
     idxes = map((x,y)-> x-y, idxes, ba.globalOffset)
     bufferGlobalRange = CartesianRange(idxes)
 

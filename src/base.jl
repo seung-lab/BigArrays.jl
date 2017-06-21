@@ -128,9 +128,9 @@ function Base.setindex!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     idxes = colon2unitRange(buf, idxes)
     baIter = BigArrayIterator(idxes, ba.chunkSize)
     chk = Array(T, ba.chunkSize)
-    @sync begin 
+    #@sync begin 
         for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
-            @async begin
+            #@async begin
                 println("global range of chunk: $(string(chunkGlobalRange))")
                 fill!(chk, convert(T, 0))
                 delay = 0.05
@@ -152,9 +152,9 @@ function Base.setindex!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
                         println("retry for the $(t)'s time: $(string(chunkGlobalRange))")
                     end
                 end
-            end 
+            #end 
         end
-    end 
+    #end 
 end 
 
 function Base.getindex{D,T,N,C}( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...)
