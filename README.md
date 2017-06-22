@@ -11,12 +11,13 @@ storing and accessing large julia array using different backends.
 - arbitrary shape, the dataset boundary can be curve-like
 - arbitrary dataset size (in theory, tested dataset size: ~ 9 TB)
 - chunk compression with gzip/blosclz/jpeg
-- highly scalable
-- arbitrary data type (depends on implementation of backends)
+- highly scalable due to the serverless design
+- arbitrary data type 
 
 ## supported backends
 - [x] AWS S3 
 - [x] Google Cloud Storage
+- [x] Local HDF5 files
 
 ## Installation
     Pkg.clone("https://github.com/jingpengwu/AWS.jl.git")
