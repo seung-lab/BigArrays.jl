@@ -162,9 +162,9 @@ function Base.getindex{D,T,N,C}( ba::BigArray{D, T, N, C}, idxes::Union{UnitRang
     buf = zeros(eltype(ba), sz)
 
     baIter = BigArrayIterator(idxes, ba.chunkSize, ba.offset)
-    @sync begin
+    #@sync begin
         for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
-            @async begin
+     #       @async begin
                 # explicit error handling to deal with EOFError
                 delay = 0.05
                 for t in 1:4
@@ -193,9 +193,9 @@ function Base.getindex{D,T,N,C}( ba::BigArray{D, T, N, C}, idxes::Union{UnitRang
                         end
                     end 
                 end
-            end 
+     #       end 
         end
-    end 
+    #end 
     # handle single element indexing, return the single value
     if length(buf) == 1
         return buf[1]
