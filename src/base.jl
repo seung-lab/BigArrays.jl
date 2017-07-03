@@ -109,7 +109,7 @@ function do_work_getindex!{D,T,N,C}(chan::Channel{Tuple}, buf::Array, ba::BigArr
                 break 
             catch e
                 println("catch an error while getindex in BigArray: $e")
-                if isa(e, NoSuchKeyException)
+                if isa(e, NoSuchKeyException) || isa(e, KeyError)
                     println("no suck key in kvstore: $(e), will fill this block as zeros")
                     break
                 else
