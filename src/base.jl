@@ -44,11 +44,10 @@ end
 
 """
 	put data in bigarray
-if the buffer data is not aligned with the block size of bigarray, the empty regions will be filled with zeros and the regions will be overwritten. Otherwise, if we would like to keep the original data in the empty regions, the original data should be readout first which is pretty costly in the case of cloud IO. It's the user's duty to make sure that the buffer is aligned with blocks if they don't want zero filling. 
 
 the asynchronized requests could be overwhelming to the cloud and get a lot of errors.
 """
-function Base.setindex!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
+function setindex_v1!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
                                 idxes::Union{UnitRange, Int, Colon} ... )
     # @show idxes
     idxes = colon2unitRange(buf, idxes)
@@ -57,8 +56,10 @@ function Base.setindex!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     #@sync begin 
         for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
             #@async begin
+				# make sure that it is aligned
+				@assert all(x->x==1, rangeInChunk.start)
                 println("global range of chunk: $(string(chunkGlobalRange))")
-                fill!(chk, convert(T, 0))
+                #fill!(chk, convert(T, 0))
                 delay = 0.05
                 for t in 1:4
                     try 
@@ -87,7 +88,10 @@ function do_work_setindex{D,T,N,C}( channel::Channel{Tuple}, buf::Array{T,N}, ba
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in channel 
         println("global range of chunk: $(string(chunkGlobalRange))")
         chk = Array(T, ba.chunkSize)
-        fill!(chk, convert(T, 0))
+		# only accept aligned writting
+		@assert all(x->x==1, rangeInChunk.start) "the writting buffer should be aligned with bigarray blocks"
+		# it looks like this fill! function will cause a memory leaking issue!
+        #fill!(chk, convert(T, 0))
         delay = 0.05
         for t in 1:4
             try 
@@ -115,9 +119,9 @@ end
 
 """
     put array in RAM to a BigArray
-this version uses channel to control the number of asynchronized request, but it has a memory leak issue!
+this version uses channel to control the number of asynchronized request
 """
-function setindex_v2!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
+function Base.setindex!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
                                 idxes::Union{UnitRange, Int, Colon} ... )
     idxes = colon2unitRange(buf, idxes)
     baIter = BigArrayIterator(idxes, ba.chunkSize)
