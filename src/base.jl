@@ -42,15 +42,59 @@ function Base.CartesianRange{D,T,N}( ba::BigArray{D,T,N} )
     return ret
 end
 
-function do_work_setindex{D,T,N,C}( chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C}, chk::Array{T,N} )
-    for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in chan
+"""
+	put data in bigarray
+if the buffer data is not aligned with the block size of bigarray, the empty regions will be filled with zeros and the regions will be overwritten. Otherwise, if we would like to keep the original data in the empty regions, the original data should be readout first which is pretty costly in the case of cloud IO. It's the user's duty to make sure that the buffer is aligned with blocks if they don't want zero filling. 
+
+the asynchronized requests could be overwhelming to the cloud and get a lot of errors.
+"""
+function Base.setindex!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
+                                idxes::Union{UnitRange, Int, Colon} ... )
+    # @show idxes
+    idxes = colon2unitRange(buf, idxes)
+    baIter = BigArrayIterator(idxes, ba.chunkSize)
+    chk = Array(T, ba.chunkSize)
+    #@sync begin 
+        for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
+            #@async begin
+                println("global range of chunk: $(string(chunkGlobalRange))")
+                fill!(chk, convert(T, 0))
+                delay = 0.05
+                for t in 1:4
+                    try 
+                        chk[rangeInChunk] = buf[rangeInBuffer]
+                        ba.kvStore[ string(chunkGlobalRange) ] = encoding( chk, C)
+                        break
+                    catch e
+                        println("catch an error while saving in BigArray: $e")
+                        @show typeof(e)
+                        @show stacktrace()
+                        if t==4
+                            println("rethrow the error: $e")
+                            rethrow()
+                        end 
+                        sleep(delay*(0.8+(0.4*rand())))
+                        delay *= 10
+                        println("retry for the $(t)'s time: $(string(chunkGlobalRange))")
+                    end
+                end
+            #end 
+        end
+    #end 
+end 
+
+function do_work_setindex{D,T,N,C}( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C} )
+    for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in channel 
         println("global range of chunk: $(string(chunkGlobalRange))")
+        chk = Array(T, ba.chunkSize)
         fill!(chk, convert(T, 0))
         delay = 0.05
         for t in 1:4
             try 
                 chk[rangeInChunk] = buf[rangeInBuffer]
                 ba.kvStore[ string(chunkGlobalRange) ] = encoding( chk, C)
+                chk = nothing
+                gc()
                 break
             catch e
                 println("catch an error while saving in BigArray: $e")
@@ -58,6 +102,7 @@ function do_work_setindex{D,T,N,C}( chan::Channel{Tuple}, buf::Array{T,N}, ba::B
                 @show stacktrace()
                 if t==4
                     println("rethrow the error: $e")
+                    gc()
                     rethrow()
                 end 
                 sleep(delay*(0.8+(0.4*rand())))
@@ -70,25 +115,22 @@ end
 
 """
     put array in RAM to a BigArray
+this version uses channel to control the number of asynchronized request, but it has a memory leak issue!
 """
-function Base.setindex!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
+function setindex_v2!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
                                 idxes::Union{UnitRange, Int, Colon} ... )
-    @assert eltype(ba) == T
-    @assert ndims(ba) == N
-    # @show idxes
     idxes = colon2unitRange(buf, idxes)
     baIter = BigArrayIterator(idxes, ba.chunkSize)
-    chk = Array(T, ba.chunkSize)
     @sync begin 
-        chan = Channel{Tuple}(4)
+        channel = Channel{Tuple}(1)
         @async begin 
             for iter in baIter
-                put!(chan, iter)
+                put!(channel, iter)
             end
-            close(chan)
+            close(channel)
         end
         for i in 1:4
-            @async do_work_setindex(chan, buf, ba, chk)
+            @schedule do_work_setindex(channel, buf, ba)
         end
     end 
 end 
@@ -109,7 +151,7 @@ function do_work_getindex!{D,T,N,C}(chan::Channel{Tuple}, buf::Array, ba::BigArr
                 break 
             catch e
                 println("catch an error while getindex in BigArray: $e")
-                if isa(e, NoSuchKeyException) || isa(e, KeyError)
+                if isa(e, KeyError)
                     println("no suck key in kvstore: $(e), will fill this block as zeros")
                     break
                 else
@@ -142,7 +184,7 @@ function Base.getindex{D,T,N,C}( ba::BigArray{D, T, N, C}, idxes::Union{UnitRang
         end
         # control the number of concurrent requests here
         for i in 1:4
-            @async do_work_getindex!(chan, buf, ba)
+            @schedule do_work_getindex!(chan, buf, ba)
         end
     end 
     # handle single element indexing, return the single value

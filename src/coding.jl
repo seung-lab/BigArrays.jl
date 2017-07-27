@@ -1,6 +1,6 @@
 module Coding
 
-using ImageMagick
+#using ImageMagick
 using Blosc
 using Libz
 
@@ -58,7 +58,7 @@ end
 
 function decoding( data::Vector{UInt8}, coding::Type{JPEGCoding} )
     error("not working correctly with neuroglancer")
-    return ImageMagick.load_(data)
+#    return ImageMagick.load_(data)
 end
 
 end # end of module
