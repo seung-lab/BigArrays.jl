@@ -89,13 +89,17 @@ function do_work_setindex{D,T,N,C}( channel::Channel{Tuple}, buf::Array{T,N}, ba
         println("global range of chunk: $(string(chunkGlobalRange))")
         chk = Array(T, ba.chunkSize)
 		# only accept aligned writting
+        #@show globalRange
+        #@show chunkGlobalRange
+        #@show rangeInChunk
+        #@show rangeInBuffer 
 		@assert all(x->x==1, rangeInChunk.start) "the writting buffer should be aligned with bigarray blocks"
 		# it looks like this fill! function will cause a memory leaking issue!
         #fill!(chk, convert(T, 0))
         delay = 0.05
         for t in 1:4
             try 
-                chk[rangeInChunk] = buf[rangeInBuffer]
+                chk = buf[rangeInBuffer]
                 ba.kvStore[ string(chunkGlobalRange) ] = encoding( chk, C)
                 chk = nothing
                 gc()
@@ -134,13 +138,13 @@ function Base.setindex!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
             close(channel)
         end
         for i in 1:4
-            @schedule do_work_setindex(channel, buf, ba)
+            @async do_work_setindex(channel, buf, ba)
         end
     end 
 end 
 
 
-function do_work_getindex!{D,T,N,C}(chan::Channel{Tuple}, buf::Array, ba::BigArray{D,T,N,C})
+function do_work_getindex!{D,T,N,C}(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C})
     for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in chan 
         # explicit error handling to deal with EOFError
         delay = 0.05
@@ -176,19 +180,18 @@ end
 function Base.getindex{D,T,N,C}( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...)
     sz = map(length, idxes)
     buf = zeros(eltype(ba), sz)
-
     baIter = BigArrayIterator(idxes, ba.chunkSize, ba.offset)
     @sync begin
-        chan = Channel{Tuple}(4)
+        channel = Channel{Tuple}(4)
         @async begin
             for iter in baIter
-                put!(chan, iter)
+                put!(channel, iter)
             end
-            close(chan)
+            close(channel)
         end
         # control the number of concurrent requests here
         for i in 1:4
-            @schedule do_work_getindex!(chan, buf, ba)
+            @async do_work_getindex!(channel, buf, ba)
         end
     end 
     # handle single element indexing, return the single value
