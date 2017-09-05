@@ -18,6 +18,7 @@ storing and accessing large julia array using different backends.
 - [x] AWS S3 
 - [x] Google Cloud Storage
 - [x] Local HDF5 files
+- [ ] Local binary files
 
 ## Installation
     Pkg.clone("https://github.com/jingpengwu/AWS.jl.git")
