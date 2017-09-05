@@ -2,6 +2,7 @@ module H5sBigArrays
 using ..BigArrays
 using ..BigArrays.BigArrayIterators
 using ..BigArrays.Utils
+using ..BigArrays.Index
 using HDF5
 using JSON
 using Blosc
@@ -57,6 +58,9 @@ function H5sBigArray( configDict::Dict{Symbol, Any} )
     if isa(configDict[:chunkSize], Vector)
         configDict[:chunkSize] = (configDict[:chunkSize]...)
     end
+    if isa(configDict[:dataType], AbstractString)
+        configDict[:dataType] = eval(Symbol(configDict[:dataType]))
+    end 
     configDict[:compression] = Symbol(configDict[:compression])
     H5sBigArray(    configDict[:h5FilePrefix],
                     configDict[:dataType],
@@ -92,7 +96,7 @@ function H5sBigArray(   dir::AbstractString;
         global H5SBIGARRAY_DIRECTORY = dir
         # string format of config
         configDict = JSON.parsefile(configFile, dicttype=Dict{Symbol, Any})
-        # @show configDict
+        @show configDict
         ba = H5sBigArray( configDict )
     else
         if !isdir(dir)
@@ -258,7 +262,7 @@ read h5 file using CartesianRange.
 function HDF5.h5read{N}(chunkFileName::AbstractString,
                     H5_DATASET_NAME::AbstractString,
                     rangeInChunk::CartesianRange{CartesianIndex{N}})
-    blockIndexes = cartesian_range2unitrange( rangeInChunk )
+    blockIndexes = cartesianrange2unitrange( rangeInChunk )
     h5read(chunkFileName, H5_DATASET_NAME, blockIndexes)
 end
 
@@ -288,8 +292,9 @@ function Base.getindex(ba::H5sBigArray, idxes::Union{UnitRange, Int, Colon}...)
                 # if have data fill with data,
                 # if not, no need to change, keep as zero
                 if isfile(chunkFileName) && ishdf5(chunkFileName)
-                    buf[rangeInBuffer] = h5read(chunkFileName, H5_DATASET_NAME,
-                                                rangeInChunk)
+                    buf[cartesianrange2unitrange(rangeInBuffer)...] = 
+                        h5read(chunkFileName, H5_DATASET_NAME,
+                               cartesianrange2unitrange(rangeInChunk))
                 else
                     warn("filled with zeros because file do not exist: $(chunkFileName)")
                 end
@@ -359,14 +364,15 @@ function save_buffer{T,N}(  buf::Array{T,N}, chunkFileName::AbstractString,
             "chunk", ba.chunkSize,
             "blosc", 5)
     end
-    dataSet[rangeInChunk] = buf[rangeInBuffer]
+    dataSet[cartesianrange2unitrange(rangeInChunk)...] = 
+        buf[cartesianrange2unitrange(rangeInBuffer)...]
     close(f)
 end
 
 
 function Base.setindex!{T,N}(dataSet::HDF5.HDF5Dataset, buf::Array{T,N},
                                 rangeInChunk::CartesianRange{CartesianIndex{N}})
-    ur = cartesian_range2unitrange(rangeInChunk)
+    ur = cartesianrange2unitrange(rangeInChunk)
     # @show ur
     dataSet[ur...] = buf
 end

@@ -1,37 +1,13 @@
+module Index
+using ..BigArrays
+
 export colon2unitRange, chunkid2global_range, index2chunkid
 export global_range2buffer_range, global_range2chunk_range
-export cartesian_range2unitrange
+export cartesianrange2unitrange, unitrange2string, cartesianrange2string 
 
 # make Array accept cartetian range as index
-function cartesian_range2unitrange{N}(r::CartesianRange{CartesianIndex{N}})
-    ( map((x,y)->x:y, r.start, r.stop)...)
-end
-
-function Base.getindex{T,N}(A::Array{T,N},
-                            range::CartesianRange{CartesianIndex{N}})
-    ur = cartesian_range2unitrange( range )
-    A[ur...]
-end
-
-function Base.setindex!{T,N}(A::Array{T,N}, buf::Array{T,N},
-                                range::CartesianRange{CartesianIndex{N}})
-    @assert size(buf) == size(range)
-    ur = cartesian_range2unitrange( range )
-    # @show ur
-    A[ur...] = buf
-end
-
-# iteration for CartesianIndex
-function Base.start{N}( idx::CartesianIndex{N} )
-    1
-end
-
-function Base.next{N}( idx::CartesianIndex{N}, state::Integer )
-    return idx[state], state+1
-end
-
-function Base.done{N}( idx::CartesianIndex{N}, state::Integer )
-    state > N
+function cartesianrange2unitrange{N}(r::CartesianRange{CartesianIndex{N}})
+    map((x,y)->x:y, r.start.I, r.stop.I)
 end
 
 """
@@ -55,10 +31,10 @@ function global_range2chunk_range{N}(globalRange::CartesianRange{CartesianIndex{
                                     chunkSize::NTuple{N},
                                     offset::CartesianIndex{N})
     chunkID = index2chunkid(globalRange.start, chunkSize, offset)
-    start = CartesianIndex((map((x,y,z,o)->x-(y-1)*z-o, globalRange.start,
-                                chunkID, chunkSize, offset)...))
-    stop  = CartesianIndex((map((x,y,z,o)->x-(y-1)*z-o, globalRange.stop,
-                                chunkID, chunkSize, offset)...))
+    start = CartesianIndex(map((x,y,z,o)->x-(y-1)*z-o, globalRange.start.I,
+                                chunkID, chunkSize, offset.I))
+    stop  = CartesianIndex(map((x,y,z,o)->x-(y-1)*z-o, globalRange.stop.I,
+                                chunkID, chunkSize, offset.I))
     return CartesianRange(start, stop)
 end
 
@@ -70,7 +46,7 @@ end
 
 function index2chunkid{N}(idx::CartesianIndex{N}, chunkSize::NTuple{N},
                           offset::CartesianIndex{N})
-    ( map((x,y,o)->fld(x-1-o, y)+1, idx, chunkSize, offset) ... )
+    ( map((x,y,o)->fld(x-1-o, y)+1, idx.I, chunkSize, offset.I) ... )
 end
 
 function index2chunkid{N}(idx::CartesianIndex{N}, chunkSize::NTuple{N})
@@ -119,13 +95,13 @@ end
 #     return ret[1:end-1]
 # end
 
-function Base.string( idxes::UnitRange...)
+function unitrange2string(idexes::UnitRange...)
     ret = ""
     ret = map(x->"$(start(x)-1)-$(x[end])_", idxes[1:3])
     return ret[1:end-1]
 end
 
-function Base.string{N}( r::CartesianRange{CartesianIndex{N}} )
+function cartesianrange2string{N}(r::CartesianRange{CartesianIndex{N}})
     ret = ""
     for i in 1:3
         ret *= "$(r.start[i]-1)-$(r.stop[i])_"
@@ -149,9 +125,9 @@ end
     adjust bounding box range when fitting in new subarray
 """
 function Base.union(globalRange::CartesianRange, idxes::CartesianRange)
-    start = map(min, globalRange.start, idxes.start)
-    stop  = map(max, globalRange.stop,  idxes.stop)
-    return CartesianRange(CartesianIndex(start...), CartesianIndex(stop...))
+    start = map(min, globalRange.start.I, idxes.start.I)
+    stop  = map(max, globalRange.stop.I,  idxes.stop.I)
+    return CartesianRange(start, stop)
 end
 function Base.union!(r1::CartesianRange, r2::CartesianRange)
     r1 = union(r1, r2)
@@ -172,3 +148,5 @@ end
 function Base.UnitRange(x::Int)
     x:x
 end
+
+end # end of module

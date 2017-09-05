@@ -63,7 +63,7 @@ function BigArray( d::Associative, configDict::Dict{Symbol, Any} )
 
       if length(offset) < length(chunkSize)
         N = length(chunkSize)
-        offset = CartesianIndex{N}(Base.fill_to_length((offset...), 0, Val{N}))
+        offset = CartesianIndex{N}(Base.fill_to_length((offset.I...), 0, Val{N}))
       end
 
       return BigArray( d, T, chunkSize, coding, offset )

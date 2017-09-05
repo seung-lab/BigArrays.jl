@@ -1,5 +1,6 @@
 module BigArrayIterators
 
+using ..BigArrays.Index
 using ..BigArrays
 
 export BigArrayIterator
@@ -63,15 +64,15 @@ increase start coordinate following the column-order.
 function Base.next{N}(  iter    ::BigArrayIterator{N},
                         state   ::CartesianIndex{N} )
     chunkIDIndex, state = next(iter.chunkIDRange, state)
-    chunkID = tuple(chunkIDIndex.I...)
+    chunkID = chunkIDIndex.I
 
     # get current global range in this chunk
-    start = CartesianIndex(( map((x,y,z,o)->max((x-1)*y+1+o, z), chunkID,
-                            iter.chunkSize, iter.globalRange.start,
-                            iter.offset )...))
-    stop  = CartesianIndex(( map((x,y,z,o)->min(x*y+o, z),       chunkID,
-                            iter.chunkSize, iter.globalRange.stop,
-                            iter.offset )...))
+    start = CartesianIndex( map((x,y,z,o)->max((x-1)*y+1+o, z), chunkID,
+                            iter.chunkSize, iter.globalRange.start.I,
+                            iter.offset.I ))
+    stop  = CartesianIndex( map((x,y,z,o)->min(x*y+o, z),       chunkID,
+                            iter.chunkSize, iter.globalRange.stop.I,
+                            iter.offset.I ))
     # the global range of the cutout in this chunk
     globalRange = CartesianRange(start, stop)
     # the range inside this chunk

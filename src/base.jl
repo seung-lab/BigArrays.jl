@@ -1,3 +1,5 @@
+using .Index
+
 using .BigArrayIterators
 
 function Base.ndims{D,T,N}(ba::BigArray{D,T,N})
@@ -57,14 +59,16 @@ function setindex_v1!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
         for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
             #@async begin
 				# make sure that it is aligned
-				@assert all(x->x==1, rangeInChunk.start)
+				@assert all(x->x==1, rangeInChunk.start.I)
                 println("global range of chunk: $(string(chunkGlobalRange))")
                 #fill!(chk, convert(T, 0))
                 delay = 0.05
                 for t in 1:4
                     try 
-                        chk[rangeInChunk] = buf[rangeInBuffer]
-                        ba.kvStore[ string(chunkGlobalRange) ] = encoding( chk, C)
+                        chk[cartesianrange2unitrange(rangeInChunk)...] = 
+                            buf[cartesianrange2unitrange(rangeInBuffer)...]
+                        ba.kvStore[ cartesianrange2string(chunkGlobalRange) ] = 
+                            encoding( chk, C)
                         break
                     catch e
                         println("catch an error while saving in BigArray: $e")
@@ -86,21 +90,15 @@ end
 
 function do_work_setindex{D,T,N,C}( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C} )
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in channel 
-        println("global range of chunk: $(string(chunkGlobalRange))")
-        chk = Array(T, ba.chunkSize)
+        println("global range of chunk: $(cartesianrange2string(chunkGlobalRange))")
+        chk = zeros(T, ba.chunkSize)
 		# only accept aligned writting
-        #@show globalRange
-        #@show chunkGlobalRange
-        #@show rangeInChunk
-        #@show rangeInBuffer 
-		@assert all(x->x==1, rangeInChunk.start) "the writting buffer should be aligned with bigarray blocks"
-		# it looks like this fill! function will cause a memory leaking issue!
-        #fill!(chk, convert(T, 0))
+		@assert all(x->x==1, rangeInChunk.start.I) "the writting buffer should be aligned with bigarray blocks"
         delay = 0.05
         for t in 1:4
-            try 
-                chk = buf[rangeInBuffer]
-                ba.kvStore[ string(chunkGlobalRange) ] = encoding( chk, C)
+            try
+                chk = buf[cartesianrange2unitrange(rangeInBuffer)...]
+                ba.kvStore[ cartesianrange2string(chunkGlobalRange) ] = encoding( chk, C)
                 chk = nothing
                 gc()
                 break
@@ -150,12 +148,13 @@ function do_work_getindex!{D,T,N,C}(chan::Channel{Tuple}, buf::Array{T,N}, ba::B
         delay = 0.05
         for t in 1:4
             try 
-                println("global range of chunk: $(string(chunkGlobalRange))") 
-                v = ba.kvStore[string(chunkGlobalRange)]
+                println("global range of chunk: $(cartesianrange2string(chunkGlobalRange))") 
+                v = ba.kvStore[cartesianrange2string(chunkGlobalRange)]
                 @assert isa(v, Array)
                 chk = decoding(v, C)
                 chk = reshape(reinterpret(T, chk), ba.chunkSize)
-                buf[rangeInBuffer] = chk[rangeInChunk]
+                buf[cartesianrange2unitrange(rangeInBuffer)...] = 
+                    chk[cartesianrange2unitrange(rangeInChunk)...]
                 break 
             catch e
                 println("catch an error while getindex in BigArray: $e")
