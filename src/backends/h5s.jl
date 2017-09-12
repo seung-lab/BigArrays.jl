@@ -8,7 +8,7 @@ using JSON
 using Blosc
 
 # make the thread number to be the number of physical cores
-Blosc.set_num_threads(div(Base.Sys.CPU_CORES,2))
+Blosc.set_num_threads(cld(Base.Sys.CPU_CORES,2))
 
 # include("../types.jl")
 # include("../index.jl")
