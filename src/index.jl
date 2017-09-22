@@ -28,20 +28,14 @@ end
 Transform a global range to a range inside chunk.
 """
 function global_range2chunk_range{N}(globalRange::CartesianRange{CartesianIndex{N}},
-                                    chunkSize::NTuple{N},
-                                    offset::CartesianIndex{N})
+                                    chunkSize::NTuple{N};
+                                    offset::CartesianIndex{N} = CartesianIndex{N}()-1)
     chunkID = index2chunkid(globalRange.start, chunkSize, offset)
     start = CartesianIndex(map((x,y,z,o)->x-(y-1)*z-o, globalRange.start.I,
                                 chunkID, chunkSize, offset.I))
     stop  = CartesianIndex(map((x,y,z,o)->x-(y-1)*z-o, globalRange.stop.I,
                                 chunkID, chunkSize, offset.I))
     return CartesianRange(start, stop)
-end
-
-function global_range2chunk_range{N}(globalRange::CartesianRange{CartesianIndex{N}},
-                                    chunkSize::NTuple{N})
-    offset = CartesianIndex{N}() - 1
-    return global_range2chunk_range(globalRange, chunkSize, offset)
 end
 
 function index2chunkid{N}(idx::CartesianIndex{N}, chunkSize::NTuple{N},

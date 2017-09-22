@@ -1,6 +1,6 @@
 module BigArrayIterators
 
-using ..BigArrays.Index
+using .Index
 using ..BigArrays
 
 export BigArrayIterator
@@ -9,7 +9,8 @@ immutable BigArrayIterator{N}
     globalRange     ::CartesianRange{CartesianIndex{N}}
     chunkSize       ::NTuple{N}
     chunkIDRange    ::CartesianRange{CartesianIndex{N}}
-    offset          ::CartesianIndex{N}
+    # this offset really means the starting coordinate of the real data
+    offset          ::CartesianIndex{N} 
 end
 
 function BigArrayIterator{N}( globalRange::CartesianRange{CartesianIndex{N}},
