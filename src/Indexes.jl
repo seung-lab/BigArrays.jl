@@ -1,4 +1,4 @@
-module Index
+module Indexes
 using ..BigArrays
 
 export colon2unitRange, chunkid2global_range, index2chunkid
@@ -28,8 +28,8 @@ end
 Transform a global range to a range inside chunk.
 """
 function global_range2chunk_range{N}(globalRange::CartesianRange{CartesianIndex{N}},
-                                    chunkSize::NTuple{N};
-                                    offset::CartesianIndex{N} = CartesianIndex{N}()-1)
+                                    chunkSize::NTuple{N},
+                                    offset::CartesianIndex{N})
     chunkID = index2chunkid(globalRange.start, chunkSize, offset)
     start = CartesianIndex(map((x,y,z,o)->x-(y-1)*z-o, globalRange.start.I,
                                 chunkID, chunkSize, offset.I))

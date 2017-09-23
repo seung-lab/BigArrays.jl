@@ -1,11 +1,10 @@
-module BigArrayIterators
-
-using .Index
+module Iterators
 using ..BigArrays
+using ..BigArrays.Indexes
 
-export BigArrayIterator
+export Iterator
 
-immutable BigArrayIterator{N}
+immutable Iterator{N}
     globalRange     ::CartesianRange{CartesianIndex{N}}
     chunkSize       ::NTuple{N}
     chunkIDRange    ::CartesianRange{CartesianIndex{N}}
@@ -13,56 +12,56 @@ immutable BigArrayIterator{N}
     offset          ::CartesianIndex{N} 
 end
 
-function BigArrayIterator{N}( globalRange::CartesianRange{CartesianIndex{N}},
+function Iterator{N}( globalRange::CartesianRange{CartesianIndex{N}},
                               chunkSize::NTuple{N},
                               offset::CartesianIndex{N} = CartesianIndex{N}() - 1 )
     chunkIDStart = CartesianIndex(index2chunkid( globalRange.start, chunkSize, offset ))
     chunkIDStop  = CartesianIndex(index2chunkid( globalRange.stop,  chunkSize, offset ))
     chunkIDRange = CartesianRange(chunkIDStart, chunkIDStop)
-    BigArrayIterator( globalRange, chunkSize, chunkIDRange, offset )
+    Iterator( globalRange, chunkSize, chunkIDRange, offset )
 end
 
-function BigArrayIterator{N}( idxes::Tuple,
+function Iterator{N}( idxes::Tuple,
                               chunkSize::NTuple{N})
     idxes = map(UnitRange, idxes)
     globalRange = CartesianRange(idxes)
     offset = CartesianIndex{N}() - 1
-    BigArrayIterator( globalRange, chunkSize, offset )
+    Iterator( globalRange, chunkSize, offset )
 end
 
-function BigArrayIterator{N}( idxes::Tuple,
+function Iterator{N}( idxes::Tuple,
                               chunkSize::NTuple{N},
                               offset::CartesianIndex)
     idxes = map(UnitRange, idxes)
     globalRange = CartesianRange(idxes)
-    BigArrayIterator( globalRange, chunkSize, offset )
+    Iterator( globalRange, chunkSize, offset )
 end
 
-function BigArrayIterator( ba::AbstractBigArray )
-    BigArrayIterator( ba.globalRange, ba.chunkSize )
+function Iterator( ba::AbstractBigArray )
+    Iterator( ba.globalRange, ba.chunkSize )
 end
 
-function Base.length( iter::BigArrayIterator )
+function Base.length( iter::Iterator )
     length( iter.globalRange )
 end
 
-function Base.eltype( iter::BigArrayIterator )
+function Base.eltype( iter::Iterator )
     eltype( iter.globalRange )
 end
 
 """
 the state is a tuple {chunkID, and the dimension that is increasing}
 """
-function Base.start( iter::BigArrayIterator )
+function Base.start( iter::Iterator )
     iter.chunkIDRange.start
 end
 
 """
-    Base.next( iter::BigArrayIterator, state::CartesianRange )
+    Base.next( iter::Iterator, state::CartesianRange )
 
 increase start coordinate following the column-order.
 """
-function Base.next{N}(  iter    ::BigArrayIterator{N},
+function Base.next{N}(  iter    ::Iterator{N},
                         state   ::CartesianIndex{N} )
     chunkIDIndex, state = next(iter.chunkIDRange, state)
     chunkID = chunkIDIndex.I
@@ -86,11 +85,11 @@ function Base.next{N}(  iter    ::BigArrayIterator{N},
 end
 
 """
-    Base.done( iter::BigArrayIterator,  state::CartesianRange )
+    Base.done( iter::Iterator,  state::CartesianRange )
 
 if all the axeses were saturated, stop the iteration.
 """
-function Base.done{N}(  iter::BigArrayIterator{N},
+function Base.done{N}(  iter::Iterator{N},
                         state::CartesianIndex{N})
     done(iter.chunkIDRange, state)
 end

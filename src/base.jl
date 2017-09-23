@@ -1,6 +1,6 @@
-using .Index
+using .Indexes
 
-using .BigArrayIterators
+using .Iterators
 
 function Base.ndims{D,T,N}(ba::BigArray{D,T,N})
     N
