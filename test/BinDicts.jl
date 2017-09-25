@@ -8,11 +8,14 @@ datasetDir = joinpath(tempDir, "6_6_30")
 mkdir(tempDir)
 mkdir(datasetDir)
 infoString = """
-{"num_channels": 1, "type": "image", "data_type": "uint8", "scales": [{"encoding": "gzip", "chunk_sizes": [[100, 100, 5]], "key": "6_6_30", "resolution": [6, 6, 30], "voxel_offset": [0, 0, 0], "size": [12286, 11262, 2046]}]} 
+{"num_channels": 1, "type": "image", "data_type": "uint8", "scales": [
+{"encoding": "gzip", "chunk_sizes": [[100, 100, 5]], "key": "6_6_30", "resolution": [6, 6, 30], "voxel_offset": [0, 0, 0], "size": [12286, 11262, 2046]}, 
+{"encoding": "gzip", "chunk_sizes": [[100, 100, 5]], "key": "12_12_30", "resolution": [12, 12, 30], "voxel_offset": [103, 103, 7], "size": [12286, 11262, 2046]} 
+]} 
 """
-f = open(joinpath(tempDir, "info"), "w")
-write(f, infoString)
-close(f)
+open( joinpath(tempDir, "info"), "w" ) do f
+    write(f, infoString)
+end 
 
 @testset "test BinDict" begin 
     h = BinDict(datasetDir)
@@ -30,6 +33,18 @@ end # testset
     ba[201:400, 201:400, 101:110] = a
     b = ba[201:400, 201:400, 101:110]
     @test all(a.==b)
-    rm(tempDir; recursive=true)
 end # end of testset
 
+
+@testset "test dataset not aligned starting from 0" begin 
+    datasetDir = joinpath(tempDir, "12_12_30") 
+    mkdir(datasetDir)
+    ba = BigArray( BinDict(datasetDir) )
+    a = rand(UInt8, 200,200,10)
+    ba[204:403, 204:403, 103:112] = a
+    b = ba[204:403, 204:403, 103:112] 
+    @test all(a.==b)
+end # end of testset
+
+# clean the temporary directory
+rm(tempDir; recursive=true)

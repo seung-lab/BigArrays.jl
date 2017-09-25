@@ -23,44 +23,33 @@ function global_range2buffer_range{N}(globalRange::CartesianRange{CartesianIndex
 end
 
 """
-    global_range2buffer_range(globalRange::CartesianRange, bufferGlobalRange::CartesianRange)
+    global_range2chunk_range(globalRange::CartesianRange, bufferGlobalRange::CartesianRange)
 
 Transform a global range to a range inside chunk.
 """
 function global_range2chunk_range{N}(globalRange::CartesianRange{CartesianIndex{N}},
-                                    chunkSize::NTuple{N},
-                                    offset::CartesianIndex{N})
-    chunkID = index2chunkid(globalRange.start, chunkSize, offset)
-    start = CartesianIndex(map((x,y,z,o)->x-(y-1)*z-o, globalRange.start.I,
+                                    chunkSize::NTuple{N};
+                                    offset::CartesianIndex{N} = CartesianIndex{N}()-1)
+    chunkID = index2chunkid(globalRange.start, chunkSize; offset=offset)
+    start = CartesianIndex(map((s,i,sz,o)->s-(i-1)*sz-o, globalRange.start.I,
                                 chunkID, chunkSize, offset.I))
-    stop  = CartesianIndex(map((x,y,z,o)->x-(y-1)*z-o, globalRange.stop.I,
+    stop  = CartesianIndex(map((s,i,sz,o)->s-(i-1)*sz-o, globalRange.stop.I,
                                 chunkID, chunkSize, offset.I))
     return CartesianRange(start, stop)
 end
 
-function index2chunkid{N}(idx::CartesianIndex{N}, chunkSize::NTuple{N},
-                          offset::CartesianIndex{N})
+function index2chunkid{N}(idx::CartesianIndex{N}, chunkSize::NTuple{N};
+                          offset::CartesianIndex{N} = CartesianIndex{N}()-1)
+    # the offset is actually start of the real data, it could be not aligned to 0 
     ( map((x,y,o)->fld(x-1-o, y)+1, idx.I, chunkSize, offset.I) ... )
 end
 
-function index2chunkid{N}(idx::CartesianIndex{N}, chunkSize::NTuple{N})
-    offset = CartesianIndex{N}() - 1
-    index2chunkid(idx, chunkSize, offset)
-end
-
-function chunkid2global_range{N}(chunkID::NTuple{N}, chunkSize::NTuple{N},
-                                 offset::CartesianIndex{N})
+function chunkid2global_range{N}(chunkID::NTuple{N}, chunkSize::NTuple{N};
+                                 offset::CartesianIndex{N} = CartesianIndex{N}()-1)
     start = CartesianIndex( map((x,y)->(x-1)*y+1, chunkID, chunkSize) )
     stop  = CartesianIndex( map((x,y)->x*y,       chunkID, chunkSize) )
     return CartesianRange(start+offset, stop+offset)
 end
-
-
-function chunkid2global_range{N}(chunkID::NTuple{N}, chunkSize::NTuple{N})
-    offset = CartesianIndex{N}() - 1
-    chunkid2global_range(chunkID, chunkSize, offset)
-end
-
 
 """
 replace Colon of indexes by UnitRange
