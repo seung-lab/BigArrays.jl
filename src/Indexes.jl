@@ -96,7 +96,7 @@ the format of string should look like this:
 2968-3480_1776-2288_16912-17424
 """
 function string2unit_range( str::AbstractString )
-    map(sec -> parse(split(sec,"-")[1]) : parse(split(sec,"-")[2]), split(str, "_"))
+    map(sec -> parse(split(sec,"-")[1])+1 : parse(split(sec,"-")[2]), split(str, "_"))
 end 
 
 """
