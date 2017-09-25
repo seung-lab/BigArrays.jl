@@ -81,7 +81,7 @@ this version uses channel to control the number of asynchronized request
 """
 function Base.setindex!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
                                 idxes::Union{UnitRange, Int, Colon} ... )
-    idxes = colon2unitRange(buf, idxes)
+    idxes = colon2unit_range(buf, idxes)
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     @sync begin 
         channel = Channel{Tuple}(10)
@@ -105,7 +105,7 @@ function setindex_V1!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
                                 idxes::Union{UnitRange, Int, Colon} ... )
     @assert eltype(ba) == T
     @assert ndims(ba) == N
-    idxes = colon2unitRange(buf, idxes)
+    idxes = colon2unit_range(buf, idxes)
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     chk = Array(T, ba.chunkSize)
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
