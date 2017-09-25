@@ -1,4 +1,4 @@
-module Index
+module Indexes
 using ..BigArrays
 
 export colon2unitRange, chunkid2global_range, index2chunkid
@@ -38,12 +38,6 @@ function global_range2chunk_range{N}(globalRange::CartesianRange{CartesianIndex{
     return CartesianRange(start, stop)
 end
 
-function global_range2chunk_range{N}(globalRange::CartesianRange{CartesianIndex{N}},
-                                    chunkSize::NTuple{N})
-    offset = CartesianIndex{N}() - 1
-    return global_range2chunk_range(globalRange, chunkSize, offset)
-end
-
 function index2chunkid{N}(idx::CartesianIndex{N}, chunkSize::NTuple{N},
                           offset::CartesianIndex{N})
     ( map((x,y,o)->fld(x-1-o, y)+1, idx.I, chunkSize, offset.I) ... )
@@ -76,7 +70,6 @@ function colon2unitRange(buf::Union{Array,AbstractBigArray}, indexes::Tuple)
 end
 
 function colon2unitRange{N}(sz::NTuple{N}, indexes::Tuple)
-    # @show sz
     map((x,y)-> x==Colon() ? UnitRange(1:y):x, indexes, sz)
 end
 
@@ -139,7 +132,6 @@ end
 """
 function Base.CartesianRange( s::String )
     secs = split(s, "_")
-    #@show s
     starts = map( x->parse(split(x,"-")[1])+1, secs )
     stops  = map( x->parse(split(x,"-")[2]), secs )
     CartesianRange( CartesianIndex(starts...), CartesianIndex( stops... ) )

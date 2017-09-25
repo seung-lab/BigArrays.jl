@@ -1,8 +1,9 @@
 module H5sBigArrays
+
 using ..BigArrays
-using ..BigArrays.BigArrayIterators
+using ..BigArrays.Iterators
 using ..BigArrays.Utils
-using ..BigArrays.Index
+using ..BigArrays.Indexes 
 using HDF5
 using JSON
 using Blosc
@@ -282,7 +283,7 @@ function Base.getindex(ba::H5sBigArray, idxes::Union{UnitRange, Int, Colon}...)
     idxes = map((x,y)-> x-y, idxes, ba.globalOffset)
     bufferGlobalRange = CartesianRange(idxes)
 
-    baIter = BigArrayIterator(bufferGlobalRange, ba.blockSize)
+    baIter = Iterator(bufferGlobalRange, ba.blockSize)
     @sync begin
         for (chunkID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
             @async begin 
@@ -339,7 +340,7 @@ function Base.setindex!{T,N}(ba::H5sBigArray, buf::Array{T,N},
     idxes = map((x,y)-> x-y, idxes, ba.globalOffset)
     bufferGlobalRange = CartesianRange(idxes)
 
-    baIter = BigArrayIterator(bufferGlobalRange, ba.blockSize)
+    baIter = Iterator(bufferGlobalRange, ba.blockSize)
 
     # temporal block as a buffer to reduce memory allocation
     @sync for (chunkID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter

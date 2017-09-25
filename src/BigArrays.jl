@@ -3,13 +3,12 @@ __precompile__()
 module BigArrays
 
 # basic functions
-include("coding.jl")
-using .Coding
-include("types.jl")
-include("chunks.jl")
-include("index.jl")
-include("iterators.jl")
+include("Codings.jl"); using .Codings;
+include("types.jl");
+include("Chunks.jl"); using .Chunks;
+include("Indexes.jl"); using .Indexes;
+include("Iterators.jl"); using .Iterators;
 include("base.jl")
-include("utils.jl")
+include("Utils.jl"); using .Utils;
 include("backends.jl")
 end

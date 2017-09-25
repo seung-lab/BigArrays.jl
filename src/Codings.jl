@@ -1,4 +1,4 @@
-module Coding
+module Codings
 
 #using ImageMagick
 using Blosc
@@ -16,9 +16,10 @@ function __init__()
     elseif haskey(ENV, "JULIA_NUM_THREADS")
         Blosc.set_num_threads( parse(ENV["JULIA_NUM_THREADS"]) )
     else
-        Blosc.set_num_threads(4)
+        Blosc.set_num_threads( cld(Sys.CPU_CORES, 2) )
     end
-    # use the default compression method
+    # use the default compression method, 
+    # the default compressor is blosclz.
     # Blosc.set_compressor("blosclz")
 end
 

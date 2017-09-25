@@ -3,6 +3,15 @@
 export AbstractBigArray, BigArray 
 
 abstract AbstractBigArray <: AbstractArray
+# map datatype of python to Julia 
+const DATATYPE_MAP = Dict{String, String}( 
+    "uint8"     => "UInt8", 
+    "uint16"    => "UInt16", 
+    "uint32"    => "UInt32", 
+    "uint64"    => "UInt64", 
+    "float32"   => "Float32", 
+    "float64"   => "Float64" 
+)  
 
 """
     BigArray
@@ -17,19 +26,10 @@ immutable BigArray{D<:Associative, T<:Real, N, C<:AbstractBigArrayCoding} <: Abs
                             kvStore     ::D,
                             foo         ::Type{T},
                             chunkSize   ::NTuple{N},
-                            coding      ::Type{C} )
-        new{D, T, N, C}(kvStore, chunkSize, CartesianIndex{N}() - 1)
-    end
-
-    function (::Type{BigArray}){D,T,N,C}(
-                            kvStore     ::D,
-                            foo         ::Type{T},
-                            chunkSize   ::NTuple{N},
-                            coding      ::Type{C},
-                            offset      ::CartesianIndex{N} )
+                            coding      ::Type{C};
+                            offset      ::CartesianIndex{N} = CartesianIndex{N}() - 1 )
         # force the offset to be 0s to shutdown the functionality of offset for now
         # because it corrupted all the other bigarrays in aws s3
-        offset = CartesianIndex{N}() - 1 
         new{D, T, N, C}(kvStore, chunkSize, offset)
     end
 end
@@ -55,7 +55,7 @@ function BigArray( d::Associative, configDict::Dict{Symbol, Any} )
             error("unknown coding")
         end
     else
-        coding = DEFAULT_CODING
+        coding = Codings.DEFAULT_CODING
     end
 
     if haskey(configDict, :offset)

@@ -6,11 +6,11 @@ using HDF5
 abstract AbstractChunk
 
 export Chunk, blendchunk, global_range, crop_border, physical_offset
-export save, savechunk, readchunk, downsample, get_offset, get_offset, get_voxel_size, get_data, get_origin, get_start
+export save, savechunk, readchunk, downsample, get_offset, get_offset, get_voxel_size, get_data, get_start, get_start
 
 immutable Chunk <: AbstractChunk
     data::Union{Array, SegMST} # could be 3 or 4 Dimensional array
-    origin::Vector{Int}     # measured by voxel number
+    start::Vector{Int}     # measured by voxel number
     voxelSize::Vector{UInt32}  # physical size of each voxel
 end
 
@@ -22,14 +22,13 @@ function get_data(chk::Chunk)
     chk.data
 end
 
-function get_origin(chk::Chunk)
-    chk.origin
+function get_start(chk::Chunk)
+    chk.start
 end
-
-get_start = get_origin
+get_origin = get_start 
 
 function get_offset(chk::Chunk)
-    chk.origin.-1
+    chk.start.-1
 end
 
 function get_voxel_size(chk::Chunk)
@@ -54,7 +53,7 @@ end
 get global index range
 """
 function global_range( chunk::Chunk )
-    map((x,y)->x:x+y-1, chunk.origin, size(chunk))
+    map((x,y)->x:x+y-1, chunk.start, size(chunk))
 end
 
 function Base.size( chunk::Chunk )
@@ -73,15 +72,15 @@ function crop_border(chk::Chunk, cropMarginSize::Union{Vector,Tuple})
     @assert length(cropMarginSize) == ndims(chk.data)
     idx = map((x,y)->x+1:y-x, cropMarginSize, size(chk.data))
     data = chk.data[idx...]
-    origin = chk.origin .+ cropMarginSize
-    Chunk(data, origin, chk.voxelSize)
+    start = chk.start .+ cropMarginSize
+    Chunk(data, start, chk.voxelSize)
 end
 
 """
 compute the physical offset
 """
 function physical_offset( chk::Chunk )
-    Vector{Int}((chk.origin.-1) .* chk.voxelSize)
+    Vector{Int}((chk.start.-1) .* chk.voxelSize)
 end
 
 """
@@ -94,7 +93,7 @@ function save(fname::AbstractString, chk::Chunk)
     EMIRT.save(fname, chk.data)
     f = h5open(fname, "r+")
     f["type"] = "chunk"
-    f["origin"] = Vector{Int}(chk.origin)
+    f["start"] = Vector{Int}(chk.start)
     f["voxelSize"] = Vector{UInt32}(chk.voxelSize)
     close(f)
 end
@@ -115,10 +114,10 @@ function readchunk(fname::AbstractString)
     else
         error("not a standard chunk file")
     end
-    origin = read(f["origin"])
+    start = read(f["start"])
     voxelSize = read(f["voxelSize"])
     close(f)
-    return Chunk(data, origin, voxelSize)
+    return Chunk(data, start, voxelSize)
 end
 
 """
@@ -130,7 +129,7 @@ end
 
 function downsample(chk::Chunk; scale::Union{Vector, Tuple} = (2,2,1))
     return Chunk( EMIRT.downsample(chk.data; scale = scale),
-                    (chk.origin.-1).*[scale...].+1,
+                    (chk.start.-1).*[scale...].+1,
                     chk.voxelSize .* [scale[1:3]...]  )
 end
 
