@@ -1,6 +1,7 @@
 
 using BigArrays
-include("chunks.jl")
-include("h5s.jl")
+include("Chunks.jl")
+include("H5sBigArrays.jl")
+include("BinDicts.jl")
 #include("s3.jl")
 #include("gs.jl")

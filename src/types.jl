@@ -66,7 +66,7 @@ function BigArray( d::Associative, configDict::Dict{Symbol, Any} )
         offset = CartesianIndex{N}(Base.fill_to_length((offset.I...), 0, Val{N}))
       end
 
-      return BigArray( d, T, chunkSize, coding, offset )
+      return BigArray( d, T, chunkSize, coding; offset=offset )
     else
       return BigArray( d, T, chunkSize, coding )
     end

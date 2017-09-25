@@ -8,7 +8,6 @@ export BinDict
 
 immutable BinDict <: Associative  
     path::String
-    chunkSize::Vector{Int}
     configDict::Dict{Symbol, Any}
 end 
 
@@ -28,18 +27,15 @@ function BinDict(path::AbstractString)
                 configDict[:chunkSize] = d[:chunk_sizes][1]
             else 
                 configDict[:chunkSize] = [d[:chunk_sizes][1]..., configDict[:num_channels]]
-            end 
+            end
+            configDict[:offset] = d[:voxel_offset]
         end 
     end 
-    BinDict(path, configDict[:chunkSize], configDict)
+    BinDict(path, configDict)
 end
 
 function get_path(self::BinDict)
     self.path 
-end 
-
-function get_chunk_size(self::BinDict)
-    self.chunkSize
 end 
 
 function Base.getindex( self::BinDict, key::AbstractString)

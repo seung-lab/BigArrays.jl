@@ -13,28 +13,24 @@ immutable Iterator{N}
 end
 
 function Iterator{N}( globalRange::CartesianRange{CartesianIndex{N}},
-                              chunkSize::NTuple{N},
+                              chunkSize::NTuple{N};
                               offset::CartesianIndex{N} = CartesianIndex{N}() - 1 )
-    chunkIDStart = CartesianIndex(index2chunkid( globalRange.start, chunkSize, offset ))
-    chunkIDStop  = CartesianIndex(index2chunkid( globalRange.stop,  chunkSize, offset ))
+    chunkIDStart = CartesianIndex(index2chunkid( globalRange.start, chunkSize; offset=offset ))
+    chunkIDStop  = CartesianIndex(index2chunkid( globalRange.stop,  chunkSize; offset=offset ))
     chunkIDRange = CartesianRange(chunkIDStart, chunkIDStop)
     Iterator( globalRange, chunkSize, chunkIDRange, offset )
 end
 
-function Iterator{N}( idxes::Tuple,
-                              chunkSize::NTuple{N})
+function Iterator{N}(   idxes::Tuple,
+                        chunkSize::NTuple{N};
+                        offset::CartesianIndex{N} = CartesianIndex{N}()-1)
+    # the offset in neuroglancer really means the starting coordinate of valid data
+    # since bigarray assumes infinite data range, here we only need to use it to adjust the alignment of chunks 
+    # so we only use the mod to make offset
+    offset = CartesianIndex( map((o,c) -> mod(o,c), offset.I, chunkSize) ) 
     idxes = map(UnitRange, idxes)
     globalRange = CartesianRange(idxes)
-    offset = CartesianIndex{N}() - 1
-    Iterator( globalRange, chunkSize, offset )
-end
-
-function Iterator{N}( idxes::Tuple,
-                              chunkSize::NTuple{N},
-                              offset::CartesianIndex)
-    idxes = map(UnitRange, idxes)
-    globalRange = CartesianRange(idxes)
-    Iterator( globalRange, chunkSize, offset )
+    Iterator( globalRange, chunkSize; offset=offset )
 end
 
 function Iterator( ba::AbstractBigArray )
@@ -76,11 +72,11 @@ function Base.next{N}(  iter    ::Iterator{N},
     # the global range of the cutout in this chunk
     globalRange = CartesianRange(start, stop)
     # the range inside this chunk
-    rangeInChunk  = global_range2chunk_range( globalRange, iter.chunkSize, iter.offset)
+    rangeInChunk  = global_range2chunk_range( globalRange, iter.chunkSize; offset=iter.offset)
     # the range inside the buffer
     rangeInBuffer = global_range2buffer_range(globalRange, iter.globalRange)
     # the global range of this chunk
-    chunkGlobalRange = chunkid2global_range( chunkID, iter.chunkSize, iter.offset )
+    chunkGlobalRange = chunkid2global_range( chunkID, iter.chunkSize; offset=iter.offset )
     return (chunkID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer), state
 end
 

@@ -82,21 +82,39 @@ this version uses channel to control the number of asynchronized request
 function Base.setindex!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
                                 idxes::Union{UnitRange, Int, Colon} ... )
     idxes = colon2unitRange(buf, idxes)
-    baIter = Iterator(idxes, ba.chunkSize)
+    baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     @sync begin 
-        channel = Channel{Tuple}(1)
+        channel = Channel{Tuple}(10)
         @async begin 
             for iter in baIter
                 put!(channel, iter)
             end
             close(channel)
         end
-        for i in 1:4
+        for i in 1:10
             @async do_work_setindex(channel, buf, ba)
         end
     end 
 end 
 
+"""
+sequential function, good for debuging
+"""
+# function Base.setindex!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
+function setindex_V1!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
+                                idxes::Union{UnitRange, Int, Colon} ... )
+    @assert eltype(ba) == T
+    @assert ndims(ba) == N
+    idxes = colon2unitRange(buf, idxes)
+    baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
+    chk = Array(T, ba.chunkSize)
+    for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
+        fill!(chk, convert(T, 0))
+        chk[cartesianrange2unitrange(rangeInChunk)...] = 
+                                        buf[cartesianrange2unitrange(rangeInBuffer)...]
+        ba.kvStore[ cartesianrange2string(chunkGlobalRange) ] = encoding( chk, C)
+    end
+end 
 
 function do_work_getindex!{D,T,N,C}(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C})
     for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in chan 
@@ -135,9 +153,9 @@ end
 function Base.getindex{D,T,N,C}( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...)
     sz = map(length, idxes)
     buf = zeros(eltype(ba), sz)
-    baIter = Iterator(idxes, ba.chunkSize, ba.offset)
+    baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     @sync begin
-        channel = Channel{Tuple}(4)
+        channel = Channel{Tuple}(10)
         @async begin
             for iter in baIter
                 put!(channel, iter)
@@ -145,7 +163,7 @@ function Base.getindex{D,T,N,C}( ba::BigArray{D, T, N, C}, idxes::Union{UnitRang
             close(channel)
         end
         # control the number of concurrent requests here
-        for i in 1:4
+        for i in 1:10
             @async do_work_getindex!(channel, buf, ba)
         end
     end 
