@@ -1,7 +1,7 @@
 module Indexes
 using ..BigArrays
 
-export colon2unit_range, chunkid2global_range, index2chunkid
+export colon2unit_range, chunkid2global_range, index2chunkid, index2unit_range
 export global_range2buffer_range, global_range2chunk_range
 export cartesianrange2unitrange, unitrange2string, cartesianrange2string 
 
@@ -122,7 +122,10 @@ function string2cartesian_range( s::String )
     CartesianRange( CartesianIndex(starts...), CartesianIndex( stops... ) )
 end
 
-function int2unit_range(x::Int)
+function index2unit_range(x::UnitRange)
+    x
+end 
+function index2unit_range(x::Int)
     x:x
 end
 

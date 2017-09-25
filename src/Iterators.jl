@@ -28,7 +28,7 @@ function Iterator{N}(   idxes::Tuple,
     # since bigarray assumes infinite data range, here we only need to use it to adjust the alignment of chunks 
     # so we only use the mod to make offset
     offset = CartesianIndex( map((o,c) -> mod(o,c), offset.I, chunkSize) ) 
-    idxes = map(UnitRange, idxes)
+    idxes = map(index2unit_range, idxes)
     globalRange = CartesianRange(idxes)
     Iterator( globalRange, chunkSize; offset=offset )
 end
