@@ -44,50 +44,6 @@ function Base.CartesianRange{D,T,N}( ba::BigArray{D,T,N} )
     return ret
 end
 
-"""
-	put data in bigarray
-
-the asynchronized requests could be overwhelming to the cloud and get a lot of errors.
-"""
-function setindex_v1!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
-                                idxes::Union{UnitRange, Int, Colon} ... )
-    # @show idxes
-    idxes = colon2unitRange(buf, idxes)
-    baIter = BigArrayIterator(idxes, ba.chunkSize)
-    chk = Array(T, ba.chunkSize)
-    #@sync begin 
-        for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
-            #@async begin
-				# make sure that it is aligned
-				@assert all(x->x==1, rangeInChunk.start.I)
-                println("global range of chunk: $(string(chunkGlobalRange))")
-                #fill!(chk, convert(T, 0))
-                delay = 0.05
-                for t in 1:4
-                    try 
-                        chk[cartesianrange2unitrange(rangeInChunk)...] = 
-                            buf[cartesianrange2unitrange(rangeInBuffer)...]
-                        ba.kvStore[ cartesianrange2string(chunkGlobalRange) ] = 
-                            encoding( chk, C)
-                        break
-                    catch e
-                        println("catch an error while saving in BigArray: $e")
-                        @show typeof(e)
-                        @show stacktrace()
-                        if t==4
-                            println("rethrow the error: $e")
-                            rethrow()
-                        end 
-                        sleep(delay*(0.8+(0.4*rand())))
-                        delay *= 10
-                        println("retry for the $(t)'s time: $(string(chunkGlobalRange))")
-                    end
-                end
-            #end 
-        end
-    #end 
-end 
-
 function do_work_setindex{D,T,N,C}( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C} )
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in channel 
         println("global range of chunk: $(cartesianrange2string(chunkGlobalRange))")
@@ -126,7 +82,7 @@ this version uses channel to control the number of asynchronized request
 function Base.setindex!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
                                 idxes::Union{UnitRange, Int, Colon} ... )
     idxes = colon2unitRange(buf, idxes)
-    baIter = BigArrayIterator(idxes, ba.chunkSize)
+    baIter = Iterator(idxes, ba.chunkSize)
     @sync begin 
         channel = Channel{Tuple}(1)
         @async begin 
@@ -179,7 +135,7 @@ end
 function Base.getindex{D,T,N,C}( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...)
     sz = map(length, idxes)
     buf = zeros(eltype(ba), sz)
-    baIter = BigArrayIterator(idxes, ba.chunkSize, ba.offset)
+    baIter = Iterator(idxes, ba.chunkSize, ba.offset)
     @sync begin
         channel = Channel{Tuple}(4)
         @async begin
