@@ -18,7 +18,7 @@ storing and accessing large julia array using different backends.
 - [x] AWS S3 
 - [x] Google Cloud Storage
 - [x] Local HDF5 files
-- [ ] Local binary files
+- [x] Local binary files
 
 ## Installation
     Pkg.add("BigArrays")
@@ -26,6 +26,14 @@ storing and accessing large julia array using different backends.
 ## usage
 
 `BigArrays` do not have limit of dataset size, if your reading index is outside of existing file range, will return an array filled with zeros.
+
+### use backend of local binary file 
+```julia
+using BigArrays
+using BigArrays.BinDicts
+ba = BigArray( BinDict("/path/of/dataset") )
+```
+then use `ba` as normal array
 
 ### use the hdf5 files backend
 ```julia
