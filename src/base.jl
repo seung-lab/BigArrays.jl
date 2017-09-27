@@ -46,15 +46,15 @@ end
 
 function do_work_setindex{D,T,N,C}( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C} )
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in channel 
-        println("global range of chunk: $(cartesianrange2string(chunkGlobalRange))")
+        println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))")
         chk = zeros(T, ba.chunkSize)
 		# only accept aligned writting
 		@assert all(x->x==1, rangeInChunk.start.I) "the writting buffer should be aligned with bigarray blocks"
         delay = 0.05
         for t in 1:4
             try
-                chk = buf[cartesianrange2unitrange(rangeInBuffer)...]
-                ba.kvStore[ cartesianrange2string(chunkGlobalRange) ] = encoding( chk, C)
+                chk = buf[cartesian_range2unit_range(rangeInBuffer)...]
+                ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encoding( chk, C)
                 chk = nothing
                 gc()
                 break
@@ -110,9 +110,9 @@ function setindex_V1!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     chk = Array(T, ba.chunkSize)
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
         fill!(chk, convert(T, 0))
-        chk[cartesianrange2unitrange(rangeInChunk)...] = 
-                                        buf[cartesianrange2unitrange(rangeInBuffer)...]
-        ba.kvStore[ cartesianrange2string(chunkGlobalRange) ] = encoding( chk, C)
+        chk[cartesian_range2unit_range(rangeInChunk)...] = 
+                                        buf[cartesian_range2unit_range(rangeInBuffer)...]
+        ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encoding( chk, C)
     end
 end 
 
@@ -122,13 +122,13 @@ function do_work_getindex!{D,T,N,C}(chan::Channel{Tuple}, buf::Array{T,N}, ba::B
         delay = 0.05
         for t in 1:4
             try 
-                println("global range of chunk: $(cartesianrange2string(chunkGlobalRange))") 
-                v = ba.kvStore[cartesianrange2string(chunkGlobalRange)]
+                println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))") 
+                v = ba.kvStore[cartesian_range2string(chunkGlobalRange)]
                 @assert isa(v, Array)
                 chk = decoding(v, C)
                 chk = reshape(reinterpret(T, chk), ba.chunkSize)
-                buf[cartesianrange2unitrange(rangeInBuffer)...] = 
-                    chk[cartesianrange2unitrange(rangeInChunk)...]
+                buf[cartesian_range2unit_range(rangeInBuffer)...] = 
+                    chk[cartesian_range2unit_range(rangeInChunk)...]
                 break 
             catch e
                 println("catch an error while getindex in BigArray: $e")

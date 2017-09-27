@@ -264,7 +264,7 @@ read h5 file using CartesianRange.
 function HDF5.h5read{N}(chunkFileName::AbstractString,
                     H5_DATASET_NAME::AbstractString,
                     rangeInChunk::CartesianRange{CartesianIndex{N}})
-    blockIndexes = cartesianrange2unitrange( rangeInChunk )
+    blockIndexes = cartesian_range2unit_range( rangeInChunk )
     h5read(chunkFileName, H5_DATASET_NAME, blockIndexes)
 end
 
@@ -294,9 +294,9 @@ function Base.getindex(ba::H5sBigArray, idxes::Union{UnitRange, Int, Colon}...)
                 # if have data fill with data,
                 # if not, no need to change, keep as zero
                 if isfile(chunkFileName) && ishdf5(chunkFileName)
-                    buf[cartesianrange2unitrange(rangeInBuffer)...] = 
+                    buf[cartesian_range2unit_range(rangeInBuffer)...] = 
                         h5read(chunkFileName, H5_DATASET_NAME,
-                               cartesianrange2unitrange(rangeInChunk))
+                               cartesian_range2unit_range(rangeInChunk))
                 else
                     warn("filled with zeros because file do not exist: $(chunkFileName)")
                 end
@@ -366,15 +366,15 @@ function save_buffer{T,N}(  buf::Array{T,N}, chunkFileName::AbstractString,
             "chunk", ba.chunkSize,
             "blosc", 5)
     end
-    dataSet[cartesianrange2unitrange(rangeInChunk)...] = 
-        buf[cartesianrange2unitrange(rangeInBuffer)...]
+    dataSet[cartesian_range2unit_range(rangeInChunk)...] = 
+        buf[cartesian_range2unit_range(rangeInBuffer)...]
     close(f)
 end
 
 
 function Base.setindex!{T,N}(dataSet::HDF5.HDF5Dataset, buf::Array{T,N},
                                 rangeInChunk::CartesianRange{CartesianIndex{N}})
-    ur = cartesianrange2unitrange(rangeInChunk)
+    ur = cartesian_range2unit_range(rangeInChunk)
     # @show ur
     dataSet[ur...] = buf
 end

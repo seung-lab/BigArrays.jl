@@ -3,10 +3,10 @@ using ..BigArrays
 
 export colon2unit_range, chunkid2global_range, index2chunkid, index2unit_range
 export global_range2buffer_range, global_range2chunk_range
-export cartesianrange2unitrange, unitrange2string, cartesianrange2string 
+export cartesian_range2unit_range, unit_range2string, cartesian_range2string 
 
 # make Array accept cartetian range as index
-function cartesianrange2unitrange{N}(r::CartesianRange{CartesianIndex{N}})
+function cartesian_range2unit_range{N}(r::CartesianRange{CartesianIndex{N}})
     map((x,y)->x:y, r.start.I, r.stop.I)
 end
 
@@ -76,13 +76,13 @@ end
 #     return ret[1:end-1]
 # end
 
-function unitrange2string(idexes::UnitRange...)
+function unit_range2string(idexes::UnitRange...)
     ret = ""
     ret = map(x->"$(start(x)-1)-$(x[end])_", idxes[1:3])
     return ret[1:end-1]
 end
 
-function cartesianrange2string{N}(r::CartesianRange{CartesianIndex{N}})
+function cartesian_range2string{N}(r::CartesianRange{CartesianIndex{N}})
     ret = ""
     for i in 1:3
         ret *= "$(r.start[i]-1)-$(r.stop[i])_"
