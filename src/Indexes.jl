@@ -76,9 +76,11 @@ end
 #     return ret[1:end-1]
 # end
 
-function unit_range2string(idexes::UnitRange...)
+function unit_range2string(idxes::Vector)
     ret = ""
-    ret = map(x->"$(start(x)-1)-$(x[end])_", idxes[1:3])
+    for idx in idxes
+        ret *= "$(start(idx)-1)-$(idx[end])_"
+    end 
     return ret[1:end-1]
 end
 
