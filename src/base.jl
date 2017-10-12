@@ -84,14 +84,14 @@ function Base.setindex!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     idxes = colon2unit_range(buf, idxes)
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     @sync begin 
-        channel = Channel{Tuple}(10)
+        channel = Channel{Tuple}(20)
         @async begin 
             for iter in baIter
                 put!(channel, iter)
             end
             close(channel)
         end
-        for i in 1:10
+        for i in 1:20
             @async do_work_setindex(channel, buf, ba)
         end
     end 
@@ -155,7 +155,7 @@ function Base.getindex{D,T,N,C}( ba::BigArray{D, T, N, C}, idxes::Union{UnitRang
     buf = zeros(eltype(ba), sz)
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     @sync begin
-        channel = Channel{Tuple}(10)
+        channel = Channel{Tuple}(20)
         @async begin
             for iter in baIter
                 put!(channel, iter)
@@ -163,7 +163,7 @@ function Base.getindex{D,T,N,C}( ba::BigArray{D, T, N, C}, idxes::Union{UnitRang
             close(channel)
         end
         # control the number of concurrent requests here
-        for i in 1:10
+        for i in 1:20
             @async do_work_getindex!(channel, buf, ba)
         end
     end 
