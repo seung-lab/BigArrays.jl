@@ -192,11 +192,11 @@ function boundingbox(ba::H5sBigArray)
         if fileName[end-2:end]==".h5"
             blockStart = fileName2origin(file; prefix = basename(ba.h5FilePrefix))
             blockStop = map((x,y)->x+y-1, blockStart, ba.blockSize)
-            ret_start = (map(min, ret_start, blockStart))
-            ret_stop  = (map(max, ret_stop,  blockStop))
+            ret_start = map(min, ret_start, blockStart)
+            ret_stop  = map(max, ret_stop,  blockStop)
         end
     end
-    return CartesianRange(CartesianIndex(ret_start), CartesianIndex(ret_stop))
+    return CartesianRange(CartesianIndex(ret_start...), CartesianIndex(ret_stop...))
 end
 
 """
@@ -273,7 +273,7 @@ extract chunk from a bigarray
 """
 function Base.getindex(ba::H5sBigArray, idxes::Union{UnitRange, Int, Colon}...)
     # clarify the Colon
-    idxes = colon2unitRange(size(ba), idxes)
+    idxes = colon2unit_range(size(ba), idxes)
     # only support 3D image now, could support arbitrary dimensions in the future
     # allocate memory
     sz = map(length, idxes)
@@ -330,7 +330,7 @@ function Base.setindex!{T,N}(ba::H5sBigArray, buf::Array{T,N},
                                 idxes::Union{UnitRange, Int, Colon}...)
     @assert N == length(idxes)
     # clarify the Colon
-    idxes = colon2unitRange(buf, idxes)
+    idxes = colon2unit_range(buf, idxes)
     # set bounding box
     # adjust_range!(ba, idxes)
     # updateconfigfile(ba)
