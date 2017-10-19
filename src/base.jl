@@ -46,7 +46,7 @@ end
 
 function do_work_setindex{D,T,N,C}( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C} )
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in channel 
-        println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))")
+        # println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))")
         chk = zeros(T, ba.chunkSize)
 		# only accept aligned writting
 		@assert all(x->x==1, rangeInChunk.start.I) "the writting buffer should be aligned with bigarray blocks"
@@ -81,6 +81,7 @@ this version uses channel to control the number of asynchronized request
 """
 function Base.setindex!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
                                 idxes::Union{UnitRange, Int, Colon} ... )
+    t1 = time() 
     idxes = colon2unit_range(buf, idxes)
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     @sync begin 
@@ -95,6 +96,9 @@ function Base.setindex!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
             @async do_work_setindex(channel, buf, ba)
         end
     end 
+    totalSize = length(buf) * sizeof(eltype(buf)) / 1024/1024 # MB
+    elapsed = time() - t1 # sec
+    println("saving speed: $(totalSize/elapsed) MB/s")
 end 
 
 """
@@ -122,7 +126,7 @@ function do_work_getindex!{D,T,N,C}(chan::Channel{Tuple}, buf::Array{T,N}, ba::B
         delay = 0.05
         for t in 1:4
             try 
-                println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))") 
+                # println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))") 
                 v = ba.kvStore[cartesian_range2string(chunkGlobalRange)]
                 @assert isa(v, Array)
                 chk = decoding(v, C)
@@ -151,6 +155,7 @@ function do_work_getindex!{D,T,N,C}(chan::Channel{Tuple}, buf::Array{T,N}, ba::B
 end
 
 function Base.getindex{D,T,N,C}( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...)
+    t1 = time()
     sz = map(length, idxes)
     buf = zeros(eltype(ba), sz)
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
@@ -166,7 +171,10 @@ function Base.getindex{D,T,N,C}( ba::BigArray{D, T, N, C}, idxes::Union{UnitRang
         for i in 1:20
             @async do_work_getindex!(channel, buf, ba)
         end
-    end 
+    end
+    totalSize = length(buf) * sizeof(eltype(buf)) / 1024/1024 # mega bytes
+    elapsed = time() - t1 # seconds 
+    println("cutout speed: $(totalSize/elapsed) MB/s")
     # handle single element indexing, return the single value
     if length(buf) == 1
         return buf[1]
