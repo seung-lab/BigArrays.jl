@@ -31,7 +31,7 @@ export H5sBigArray, boundingbox, get_chunk_size
 """
 definition of h5s big array
 """
-type H5sBigArray <: AbstractBigArray
+mutable struct H5sBigArray <: AbstractBigArray
     h5FilePrefix    ::AbstractString
     dataType        ::DataType
     globalOffset    ::Tuple
@@ -261,9 +261,9 @@ end
 
 read h5 file using CartesianRange.
 """
-function HDF5.h5read{N}(chunkFileName::AbstractString,
-                    H5_DATASET_NAME::AbstractString,
-                    rangeInChunk::CartesianRange{CartesianIndex{N}})
+function HDF5.h5read(chunkFileName::AbstractString,
+                 H5_DATASET_NAME::AbstractString,
+                 rangeInChunk::CartesianRange{CartesianIndex{N}}) where N
     blockIndexes = cartesian_range2unit_range( rangeInChunk )
     h5read(chunkFileName, H5_DATASET_NAME, blockIndexes)
 end
@@ -309,7 +309,7 @@ end
 """
 get block file name from a
 """
-function get_block_file_name{N}( ba::H5sBigArray, chunkID::NTuple{N})
+function get_block_file_name( ba::H5sBigArray, chunkID::NTuple{N}) where N
     chunkGlobalRange = chunkid2global_range( chunkID, ba.blockSize )
 
     fileName = ba.h5FilePrefix
@@ -326,8 +326,8 @@ end
 """
 put small array to big array
 """
-function Base.setindex!{T,N}(ba::H5sBigArray, buf::Array{T,N},
-                                idxes::Union{UnitRange, Int, Colon}...)
+function Base.setindex!(ba::H5sBigArray, buf::Array{T,N},
+                           idxes::Union{UnitRange, Int, Colon}...) where {T,N}
     @assert N == length(idxes)
     # clarify the Colon
     idxes = colon2unit_range(buf, idxes)
@@ -351,10 +351,10 @@ end
 """
 save part of or whole buffer to one hdf5 file
 """
-function save_buffer{T,N}(  buf::Array{T,N}, chunkFileName::AbstractString,
-                            ba::AbstractBigArray,
-                            rangeInChunk ::CartesianRange{CartesianIndex{N}},
-                            rangeInBuffer::CartesianRange{CartesianIndex{N}})
+function save_buffer(  buf::Array{T,N}, chunkFileName::AbstractString,
+                       ba::AbstractBigArray,
+                       rangeInChunk ::CartesianRange{CartesianIndex{N}},
+                       rangeInBuffer::CartesianRange{CartesianIndex{N}}) where {T,N}
     if isfile(chunkFileName) && ishdf5(chunkFileName)
         f = h5open(chunkFileName, "r+")
         dataSet = f[H5_DATASET_NAME]
@@ -372,8 +372,8 @@ function save_buffer{T,N}(  buf::Array{T,N}, chunkFileName::AbstractString,
 end
 
 
-function Base.setindex!{T,N}(dataSet::HDF5.HDF5Dataset, buf::Array{T,N},
-                                rangeInChunk::CartesianRange{CartesianIndex{N}})
+function Base.setindex!(dataSet::HDF5.HDF5Dataset, buf::Array{T,N},
+                           rangeInChunk::CartesianRange{CartesianIndex{N}}) where {T,N}
     ur = cartesian_range2unit_range(rangeInChunk)
     # @show ur
     dataSet[ur...] = buf

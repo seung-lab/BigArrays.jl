@@ -3,12 +3,12 @@ module Chunks
 using EMIRT
 using HDF5
 
-abstract AbstractChunk
+abstract type AbstractChunk end
 
 export Chunk, blendchunk, global_range, crop_border, physical_offset
 export save, savechunk, readchunk, downsample, get_offset, get_offset, get_voxel_size, get_data, get_start, get_start
 
-immutable Chunk <: AbstractChunk
+struct Chunk <: AbstractChunk
     data::Union{Array, SegMST} # could be 3 or 4 Dimensional array
     start::Vector{Int}     # measured by voxel number
     voxelSize::Vector{UInt32}  # physical size of each voxel

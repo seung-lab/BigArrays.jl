@@ -6,7 +6,7 @@ import BigArrays.DATATYPE_MAP
 
 export BinDict 
 
-immutable BinDict <: Associative  
+struct BinDict <: Associative  
     path::String
     configDict::Dict{Symbol, Any}
 end 

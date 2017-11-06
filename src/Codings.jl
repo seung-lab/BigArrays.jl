@@ -4,7 +4,7 @@ module Codings
 using Blosc
 using Libz
 
-abstract AbstractBigArrayCoding
+abstract type AbstractBigArrayCoding end
 
 export AbstractBigArrayCoding, JPEGCoding, RawCoding, BlosclzCoding, GZipCoding
 export encoding, decoding
@@ -23,10 +23,10 @@ function __init__()
     # Blosc.set_compressor("blosclz")
 end
 
-immutable JPEGCoding    <: AbstractBigArrayCoding end
-immutable RawCoding     <: AbstractBigArrayCoding end
-immutable BlosclzCoding <: AbstractBigArrayCoding end
-immutable GZipCoding    <: AbstractBigArrayCoding end
+struct JPEGCoding    <: AbstractBigArrayCoding end
+struct RawCoding     <: AbstractBigArrayCoding end
+struct BlosclzCoding <: AbstractBigArrayCoding end
+struct GZipCoding    <: AbstractBigArrayCoding end
 
 const DEFAULT_CODING = RawCoding
 

@@ -4,7 +4,7 @@ using ..BigArrays.Indexes
 
 export Iterator
 
-immutable Iterator{N}
+struct Iterator{N}
     globalRange     ::CartesianRange{CartesianIndex{N}}
     chunkSize       ::NTuple{N}
     chunkIDRange    ::CartesianRange{CartesianIndex{N}}
@@ -12,18 +12,18 @@ immutable Iterator{N}
     offset          ::CartesianIndex{N} 
 end
 
-function Iterator{N}( globalRange::CartesianRange{CartesianIndex{N}},
-                              chunkSize::NTuple{N};
-                              offset::CartesianIndex{N} = CartesianIndex{N}() - 1 )
+function Iterator( globalRange::CartesianRange{CartesianIndex{N}},
+                           chunkSize::NTuple{N};
+                           offset::CartesianIndex{N} = CartesianIndex{N}() - 1 ) where N
     chunkIDStart = CartesianIndex(index2chunkid( globalRange.start, chunkSize; offset=offset ))
     chunkIDStop  = CartesianIndex(index2chunkid( globalRange.stop,  chunkSize; offset=offset ))
     chunkIDRange = CartesianRange(chunkIDStart, chunkIDStop)
     Iterator( globalRange, chunkSize, chunkIDRange, offset )
 end
 
-function Iterator{N}(   idxes::Tuple,
-                        chunkSize::NTuple{N};
-                        offset::CartesianIndex{N} = CartesianIndex{N}()-1)
+function Iterator(   idxes::Tuple,
+                     chunkSize::NTuple{N};
+                     offset::CartesianIndex{N} = CartesianIndex{N}()-1) where N
     # the offset in neuroglancer really means the starting coordinate of valid data
     # since bigarray assumes infinite data range, here we only need to use it to adjust the alignment of chunks 
     # so we only use the mod to make offset
@@ -57,8 +57,8 @@ end
 
 increase start coordinate following the column-order.
 """
-function Base.next{N}(  iter    ::Iterator{N},
-                        state   ::CartesianIndex{N} )
+function Base.next(  iter    ::Iterator{N},
+                     state   ::CartesianIndex{N} ) where N
     chunkIDIndex, state = next(iter.chunkIDRange, state)
     chunkID = chunkIDIndex.I
 
@@ -85,8 +85,8 @@ end
 
 if all the axeses were saturated, stop the iteration.
 """
-function Base.done{N}(  iter::Iterator{N},
-                        state::CartesianIndex{N})
+function Base.done(  iter::Iterator{N},
+                     state::CartesianIndex{N}) where N
     done(iter.chunkIDRange, state)
 end
 
