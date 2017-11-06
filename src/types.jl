@@ -2,7 +2,7 @@
 # http://docs.julialang.org/en/release-0.4/manual/arrays/#implementation
 export AbstractBigArray, BigArray 
 
-abstract AbstractBigArray <: AbstractArray
+abstract type AbstractBigArray <: AbstractArray end
 # map datatype of python to Julia 
 const DATATYPE_MAP = Dict{String, String}( 
     "uint8"     => "UInt8", 
@@ -18,16 +18,16 @@ const DATATYPE_MAP = Dict{String, String}(
 currently, assume that the array dimension (x,y,z,...) is >= 3
 all the manipulation effects in the x,y,z dimension
 """
-immutable BigArray{D<:Associative, T<:Real, N, C<:AbstractBigArrayCoding} <: AbstractBigArray
+struct BigArray{D<:Associative, T<:Real, N, C<:AbstractBigArrayCoding} <: AbstractBigArray
     kvStore     :: D
     chunkSize   :: NTuple{N}
     offset      :: CartesianIndex{N}
-    function (::Type{BigArray}){D,T,N,C}(
-                            kvStore     ::D,
-                            foo         ::Type{T},
-                            chunkSize   ::NTuple{N},
-                            coding      ::Type{C};
-                            offset      ::CartesianIndex{N} = CartesianIndex{N}() - 1 )
+    function BigArray(
+                   kvStore     ::D,
+                   foo         ::Type{T},
+                   chunkSize   ::NTuple{N},
+                   coding      ::Type{C};
+                   offset      ::CartesianIndex{N} = CartesianIndex{N}() - 1 ) where {D,T,N,C}
         # force the offset to be 0s to shutdown the functionality of offset for now
         # because it corrupted all the other bigarrays in aws s3
         new{D, T, N, C}(kvStore, chunkSize, offset)

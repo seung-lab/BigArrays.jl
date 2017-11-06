@@ -2,16 +2,16 @@ using .Indexes
 
 using .Iterators
 
-function Base.ndims{D,T,N}(ba::BigArray{D,T,N})
+function Base.ndims(ba::BigArray{D,T,N}) where {D,T,N}
     N
 end
 
-function Base.eltype{D, T, N}( ba::BigArray{D,T,N} )
+function Base.eltype( ba::BigArray{D,T,N} ) where {D, T, N}
     # @show T
     return T
 end
 
-function Base.size{D,T,N}( ba::BigArray{D,T,N} )
+function Base.size( ba::BigArray{D,T,N} ) where {D,T,N}
     # get size according to the keys
     ret = size( CartesianRange(ba) )
     return ret
@@ -31,11 +31,11 @@ function Base.display(ba::BigArray)
     end
 end
 
-function Base.reshape{D,T,N}(ba::BigArray{D,T,N}, newShape)
+function Base.reshape(ba::BigArray{D,T,N}, newShape) where {D,T,N}
     warn("reshape failed, the shape of bigarray is immutable!")
 end
 
-function Base.CartesianRange{D,T,N}( ba::BigArray{D,T,N} )
+function Base.CartesianRange( ba::BigArray{D,T,N} ) where {D,T,N}
     warn("the size was computed according to the keys, which is a number of chunk sizes and is not accurate")
     ret = CartesianRange(
             CartesianIndex([typemax(Int) for i=1:N]...),
@@ -44,7 +44,7 @@ function Base.CartesianRange{D,T,N}( ba::BigArray{D,T,N} )
     return ret
 end
 
-function do_work_setindex{D,T,N,C}( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C} )
+function do_work_setindex( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C} ) where {D,T,N,C}
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in channel 
         # println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))")
         chk = zeros(T, ba.chunkSize)
@@ -79,8 +79,8 @@ end
     put array in RAM to a BigArray
 this version uses channel to control the number of asynchronized request
 """
-function Base.setindex!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
-                                idxes::Union{UnitRange, Int, Colon} ... )
+function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
+                       idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
     t1 = time() 
     idxes = colon2unit_range(buf, idxes)
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
@@ -105,8 +105,8 @@ end
 sequential function, good for debuging
 """
 # function Base.setindex!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
-function setindex_V1!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
-                                idxes::Union{UnitRange, Int, Colon} ... )
+function setindex_V1!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
+                       idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
     @assert eltype(ba) == T
     @assert ndims(ba) == N
     idxes = colon2unit_range(buf, idxes)
@@ -120,7 +120,7 @@ function setindex_V1!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     end
 end 
 
-function do_work_getindex!{D,T,N,C}(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C})
+function do_work_getindex!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C}) where {D,T,N,C}
     for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in chan 
         # explicit error handling to deal with EOFError
         delay = 0.05
@@ -154,7 +154,7 @@ function do_work_getindex!{D,T,N,C}(chan::Channel{Tuple}, buf::Array{T,N}, ba::B
     end
 end
 
-function Base.getindex{D,T,N,C}( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...)
+function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
     t1 = time()
     sz = map(length, idxes)
     buf = zeros(eltype(ba), sz)

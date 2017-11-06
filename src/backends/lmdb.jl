@@ -5,7 +5,7 @@ include("../bigarray.jl")
 include("../boundingbox.jl")
 include("../index.jl")
 
-immutable LMDBBigArray <: AbstractBigArray
+struct LMDBBigArray <: AbstractBigArray
     dbpath::AbstractString
     chunksz::Vector
 end
