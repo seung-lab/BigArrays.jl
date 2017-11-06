@@ -2,8 +2,7 @@ using Base.Test
 using BigArrays
 using GSDicts
 
-d = GSDict( "gs://seunglab/jpwu/test/image/4_4_40/" )
-@show d
+d = GSDict( "gs://seunglab/jpwu/test/image/4_4_40/" );
 ba = BigArray(d)
 
 @show ba.chunkSize
@@ -29,7 +28,6 @@ end
 @testset "test segmentation" begin 
     d = GSDict( "gs://seunglab/jpwu/test/segmentation/4_4_40/" )
     # ba = BigArray( d, configDict )
-    @show d
     ba = BigArray(d)
 
     @show ba.chunkSize
@@ -48,7 +46,6 @@ end
 
 @testset "test segmenation with uint64" begin 
     d = GSDict( "gs://seunglab/jpwu/test/segmentation-uint64/4_4_40/" )
-    @show d
     ba = BigArray(d)
 
     @show ba.chunkSize

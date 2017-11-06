@@ -2,7 +2,7 @@
 # http://docs.julialang.org/en/release-0.4/manual/arrays/#implementation
 export AbstractBigArray, BigArray 
 
-abstract type AbstractBigArray <: AbstractArray end
+abstract type AbstractBigArray <: AbstractArray{Any,Any} end
 # map datatype of python to Julia 
 const DATATYPE_MAP = Dict{String, String}( 
     "uint8"     => "UInt8", 
