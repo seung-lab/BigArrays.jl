@@ -7,7 +7,6 @@ function Base.ndims(ba::BigArray{D,T,N}) where {D,T,N}
 end
 
 function Base.eltype( ba::BigArray{D,T,N} ) where {D, T, N}
-    # @show T
     return T
 end
 
@@ -45,9 +44,11 @@ function Base.CartesianRange( ba::BigArray{D,T,N} ) where {D,T,N}
 end
 
 function do_work_setindex( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C} ) where {D,T,N,C}
-    for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in channel 
+    chk = zeros(T, ba.chunkSize)
+    ZERO = T(0)
+    for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in channel
+        fill!(chk, ZERO)
         # println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))")
-        chk = zeros(T, ba.chunkSize)
 		# only accept aligned writting
 		@assert all(x->x==1, rangeInChunk.start.I) "the writting buffer should be aligned with bigarray blocks"
         delay = 0.05
@@ -55,8 +56,6 @@ function do_work_setindex( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArra
             try
                 chk = buf[cartesian_range2unit_range(rangeInBuffer)...]
                 ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encoding( chk, C)
-                chk = nothing
-                gc()
                 break
             catch e
                 println("catch an error while saving in BigArray: $e")
@@ -64,7 +63,6 @@ function do_work_setindex( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArra
                 @show stacktrace()
                 if t==4
                     println("rethrow the error: $e")
-                    gc()
                     rethrow()
                 end 
                 sleep(delay*(0.8+(0.4*rand())))
@@ -126,10 +124,9 @@ function do_work_getindex!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D
         delay = 0.05
         for t in 1:4
             try 
-                # println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))") 
+                #println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))") 
                 v = ba.kvStore[cartesian_range2string(chunkGlobalRange)]
-                @assert isa(v, Array)
-                chk = decoding(v, C)
+                chk = Codings.decoding(v, C)
                 chk = reshape(reinterpret(T, chk), ba.chunkSize)
                 buf[cartesian_range2unit_range(rangeInBuffer)...] = 
                     chk[cartesian_range2unit_range(rangeInChunk)...]
@@ -154,6 +151,22 @@ function do_work_getindex!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D
     end
 end
 
+"""
+sequential version for debug
+"""
+function do_work_getindex_V1!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C}) where {D,T,N,C}
+    for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in chan 
+        #chk = zeros(T, ba.chunkSize)
+        # explicit error handling to deal with EOFError
+        println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))") 
+        v = ba.kvStore[cartesian_range2string(chunkGlobalRange)]
+        chk = Codings.decoding(v, C)
+        chk = reshape(reinterpret(T, chk), ba.chunkSize)
+        buf[cartesian_range2unit_range(rangeInBuffer)...] = 
+            chk[cartesian_range2unit_range(rangeInChunk)...]
+    end
+end
+
 function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
     t1 = time()
     sz = map(length, idxes)
@@ -168,7 +181,7 @@ function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}..
             close(channel)
         end
         # control the number of concurrent requests here
-        for i in 1:20
+        for i in 1:1
             @async do_work_getindex!(channel, buf, ba)
         end
     end

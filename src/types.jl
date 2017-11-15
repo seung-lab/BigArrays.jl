@@ -14,6 +14,7 @@ const DATATYPE_MAP = Dict{String, String}(
 )  
 
 const CODING_MAP = Dict{String,Any}(
+    # note that the raw encoding in cloud storage will be automatically encoded using gzip!
     "raw"       => RawCoding,
     "jpeg"      => JPEGCoding,
     "blosclz"   => BlosclzCoding,
@@ -48,11 +49,9 @@ end
 
 function BigArray( d::Associative, configDict::Dict{Symbol, Any} )
     T = eval(parse(configDict[:dataType]))
-    # @show T
     chunkSize = (configDict[:chunkSize]...)
     local coding #<:AbstractBigArrayCoding
     try
-        @show configDict[:coding]
         coding = CODING_MAP[ configDict[:coding] ]
     catch err
         warn("unknown coding: $(configDict[:coding]), will use default coding: $(Codings.DEFAULT_CODING)")
