@@ -88,6 +88,7 @@ save chunk in a hdf5 file
 """
 function save(fname::AbstractString, chk::Chunk)
     if isfile(fname)
+        println("removing existing file: $(fname)")
         rm(fname)
     end
     EMIRT.save(fname, chk.data)

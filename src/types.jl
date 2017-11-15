@@ -13,6 +13,14 @@ const DATATYPE_MAP = Dict{String, String}(
     "float64"   => "Float64" 
 )  
 
+const CODING_MAP = Dict{String,Any}(
+    "raw"       => RawCoding,
+    "jpeg"      => JPEGCoding,
+    "blosclz"   => BlosclzCoding,
+    "gzip"      => GZipCoding 
+)
+
+
 """
     BigArray
 currently, assume that the array dimension (x,y,z,...) is >= 3
@@ -42,19 +50,12 @@ function BigArray( d::Associative, configDict::Dict{Symbol, Any} )
     T = eval(parse(configDict[:dataType]))
     # @show T
     chunkSize = (configDict[:chunkSize]...)
-    if haskey( configDict, :coding )
-        if contains( configDict[:coding], "raw" )
-            coding = RawCoding
-        elseif contains(  configDict[:coding], "jpeg")
-            coding = JPEGCoding
-        elseif contains( configDict[:coding], "blosclz")
-            coding = BlosclzCoding
-        elseif contains( configDict[:coding], "gzip" )
-            coding = GZipCoding
-        else
-            error("unknown coding")
-        end
-    else
+    local coding #<:AbstractBigArrayCoding
+    try
+        @show configDict[:coding]
+        coding = CODING_MAP[ configDict[:coding] ]
+    catch err
+        warn("unknown coding: $(configDict[:coding]), will use default coding: $(Codings.DEFAULT_CODING)")
         coding = Codings.DEFAULT_CODING
     end
 
@@ -65,7 +66,6 @@ function BigArray( d::Associative, configDict::Dict{Symbol, Any} )
         N = length(chunkSize)
         offset = CartesianIndex{N}(Base.fill_to_length((offset.I...), 0, Val{N}))
       end
-
       return BigArray( d, T, chunkSize, coding; offset=offset )
     else
       return BigArray( d, T, chunkSize, coding )
