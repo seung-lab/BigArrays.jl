@@ -5,7 +5,7 @@ using HDF5
 
 abstract type AbstractChunk end
 
-export Chunk, blendchunk, global_range, crop_border, physical_offset
+export Chunk, blendchunk, crop_border, physical_offset
 export save, savechunk, readchunk, downsample, get_offset, get_offset, get_voxel_size, get_data, get_start, get_start
 
 struct Chunk <: AbstractChunk
@@ -39,21 +39,10 @@ end
 blend chunk to BigArray
 """
 function blendchunk(ba::AbstractArray, chunk::Chunk)
-    gr = global_range( chunk )
+    gr = map((x,y)->x:x+y-1, chunk.start, size(chunk))
     @show gr
-    T = eltype(ba)
-    if T == eltype(chunk.data)
-        ba[gr...] = chunk.data
-    else 
-        ba[gr...] = Array{T}(chunk.data)
-    end
-end
-
-"""
-get global index range
-"""
-function global_range( chunk::Chunk )
-    map((x,y)->x:x+y-1, chunk.start, size(chunk))
+    @show size(chunk.data)
+    ba[gr...] = chunk.data
 end
 
 function Base.size( chunk::Chunk )
