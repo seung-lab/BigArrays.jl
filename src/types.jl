@@ -1,16 +1,18 @@
+using JSON
+#import .BackendBase: AbstractBigArrayBackend  
 # Note that DenseArray only works for memory stored Array
 # http://docs.julialang.org/en/release-0.4/manual/arrays/#implementation
 export AbstractBigArray, BigArray 
 
 abstract type AbstractBigArray <: AbstractArray{Any,Any} end
 # map datatype of python to Julia 
-const DATATYPE_MAP = Dict{String, String}( 
-    "uint8"     => "UInt8", 
-    "uint16"    => "UInt16", 
-    "uint32"    => "UInt32", 
-    "uint64"    => "UInt64", 
-    "float32"   => "Float32", 
-    "float64"   => "Float64" 
+const DATATYPE_MAP = Dict{String, DataType}( 
+    "uint8"     => UInt8, 
+    "uint16"    => UInt16, 
+    "uint32"    => UInt32, 
+    "uint64"    => UInt64, 
+    "float32"   => Float32, 
+    "float64"   => Float64 
 )  
 
 const CODING_MAP = Dict{String,Any}(
@@ -27,7 +29,7 @@ const CODING_MAP = Dict{String,Any}(
 currently, assume that the array dimension (x,y,z,...) is >= 3
 all the manipulation effects in the x,y,z dimension
 """
-struct BigArray{D<:Associative, T<:Real, N, C<:AbstractBigArrayCoding} <: AbstractBigArray
+struct BigArray{D<:AbstractBigArrayBackend, T<:Real, N, C<:AbstractBigArrayCoding} <: AbstractBigArray
     kvStore     :: D
     chunkSize   :: NTuple{N}
     offset      :: CartesianIndex{N}
@@ -43,32 +45,43 @@ struct BigArray{D<:Associative, T<:Real, N, C<:AbstractBigArrayCoding} <: Abstra
     end
 end
 
-function BigArray( d::Associative )
-    return BigArray(d, d.configDict)
+function BigArray( d::AbstractBigArrayBackend) 
+    info = get_info(d)
+    return BigArray(d, info)
 end
 
-function BigArray( d::Associative, configDict::Dict{Symbol, Any} )
-    T = eval(parse(configDict[:dataType]))
-    chunkSize = (configDict[:chunkSize]...)
-    local coding #<:AbstractBigArrayCoding
-    try
-        coding = CODING_MAP[ configDict[:coding] ]
-    catch err
-        warn("unknown coding: $(configDict[:coding]), will use default coding: $(Codings.DEFAULT_CODING)")
-        coding = Codings.DEFAULT_CODING
-    end
-
-    if haskey(configDict, :offset)
-      offset = CartesianIndex(configDict[:offset]...)
-
-      if length(offset) < length(chunkSize)
-        N = length(chunkSize)
-        offset = CartesianIndex{N}(Base.fill_to_length((offset.I...), 0, Val{N}))
-      end
-      return BigArray( d, T, chunkSize, coding; offset=offset )
+function BigArray( d::AbstractBigArrayBackend, info::Vector{UInt8} )
+    if ismatch(r"^{", String(info) )
+        info = String(info)
     else
-      return BigArray( d, T, chunkSize, coding )
-    end
+        # gzip compressed
+        info = String(Libz.decompress(info))
+    end 
+   BigArray(d, info)
+end 
+
+function BigArray( d::AbstractBigArrayBackend, info::AbstractString )
+    BigArray(d, JSON.parse( info, dicttype=Dict{Symbol, Any} ))
+end 
+
+function BigArray( d::AbstractBigArrayBackend, infoConfig::Dict{Symbol, Any} )
+    # chunkSize
+    scale_name = get_scale_name(d)
+    T = DATATYPE_MAP[infoConfig[:data_type]]
+    local offset::Tuple, encoding, chunkSize::Tuple 
+    for scale in infoConfig[:scales]
+        if scale[:key] == scale_name 
+            chunkSize = (scale[:chunk_sizes][1]...)
+            offset = (scale[:voxel_offset]...)
+            encoding = CODING_MAP[ scale[:encoding] ]
+            if infoConfig[:num_channels] > 1
+                chunkSize = (chunkSize..., infoConfig[:num_channels])
+                offset = (offset..., 0)
+            end
+            break 
+        end 
+    end 
+    BigArray(d, T, chunkSize, encoding; offset=CartesianIndex(offset)) 
 end
 
 

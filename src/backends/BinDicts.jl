@@ -1,41 +1,26 @@
 module BinDicts
 using Libz
-using JSON
-using BigArrays
-import BigArrays.DATATYPE_MAP
 
-export BinDict 
-
-struct BinDict <: Associative{String,Any} 
-    path::String
-    configDict::Dict{Symbol, Any}
-end 
+import ..BackendBase: AbstractBigArrayBackend, get_info, get_scale_name 
+export BinDict, get_info, get_scale_name  
 
 """
 BinDict should follow the format of neuroglancer precomputed. the dataset structure will be the same with neuroglancer, which means copying dataset directly to the cloud should make it available immediately.
 """
-function BinDict(path::AbstractString)
-    infoPath = joinpath(path, "../info")
-    configDict = JSON.parsefile(infoPath, dicttype=Dict{Symbol, Any})
-    configDict[:dataType] =  DATATYPE_MAP[ configDict[:data_type] ]
-
-    # the name of the mip level
-    mipName = basename(path)
-    for d in configDict[:scales]
-        if d[:key] == mipName
-            if configDict[:num_channels] == 1
-                configDict[:chunkSize] = d[:chunk_sizes][1]
-            else 
-                configDict[:chunkSize] = [d[:chunk_sizes][1]..., configDict[:num_channels]]
-            end
-            configDict[:offset] = d[:voxel_offset]
-        end 
-    end 
-    BinDict(path, configDict)
-end
+struct BinDict <: AbstractBigArrayBackend  
+    path::String
+end 
 
 function get_path(self::BinDict)
     self.path 
+end 
+
+function get_info( self::BinDict )
+    readstring( joinpath( get_path(self), "../info" ) )
+end 
+
+function get_scale_name( self::BinDict ) 
+    basename( strip(get_path(self), '/') )
 end 
 
 function Base.getindex( self::BinDict, key::AbstractString)

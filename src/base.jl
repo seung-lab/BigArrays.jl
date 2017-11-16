@@ -55,7 +55,7 @@ function do_work_setindex( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArra
         for t in 1:4
             try
                 chk = buf[cartesian_range2unit_range(rangeInBuffer)...]
-                ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encoding( chk, C)
+                ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encode( chk, C)
                 break
             catch e
                 println("catch an error while saving in BigArray: $e")
@@ -114,7 +114,7 @@ function setindex_V1!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
         fill!(chk, convert(T, 0))
         chk[cartesian_range2unit_range(rangeInChunk)...] = 
                                         buf[cartesian_range2unit_range(rangeInBuffer)...]
-        ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encoding( chk, C)
+        ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encode( chk, C)
     end
 end 
 
@@ -126,7 +126,7 @@ function do_work_getindex!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D
             try 
                 #println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))") 
                 v = ba.kvStore[cartesian_range2string(chunkGlobalRange)]
-                chk = Codings.decoding(v, C)
+                chk = Codings.decode(v, C)
                 chk = reshape(reinterpret(T, chk), ba.chunkSize)
                 buf[cartesian_range2unit_range(rangeInBuffer)...] = 
                     chk[cartesian_range2unit_range(rangeInChunk)...]
@@ -160,7 +160,7 @@ function do_work_getindex_V1!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArra
         # explicit error handling to deal with EOFError
         println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))") 
         v = ba.kvStore[cartesian_range2string(chunkGlobalRange)]
-        chk = Codings.decoding(v, C)
+        chk = Codings.decode(v, C)
         chk = reshape(reinterpret(T, chk), ba.chunkSize)
         buf[cartesian_range2unit_range(rangeInBuffer)...] = 
             chk[cartesian_range2unit_range(rangeInChunk)...]

@@ -7,7 +7,7 @@ using Libz
 abstract type AbstractBigArrayCoding end
 
 export AbstractBigArrayCoding, JPEGCoding, RawCoding, BlosclzCoding, GZipCoding
-export encoding, decoding
+export encode, decode 
 
 function __init__()
     # use the same number of threads with Julia
@@ -30,34 +30,34 @@ struct GZipCoding    <: AbstractBigArrayCoding end
 
 const DEFAULT_CODING = RawCoding
 
-function encoding(data::Array, coding::Type{RawCoding})
+function encode(data::Array, coding::Type{RawCoding})
     reinterpret(UInt8, data[:])
 end
 
-function decoding(data::Vector{UInt8}, coding::Type{RawCoding})
+function decode(data::Vector{UInt8}, coding::Type{RawCoding})
     return data
 end
 
-function encoding(data::Array, coding::Type{GZipCoding})
+function encode(data::Array, coding::Type{GZipCoding})
     Libz.deflate(reinterpret(UInt8, data[:]))
 end
 
-function decoding(data::Vector{UInt8}, coding::Type{GZipCoding})
+function decode(data::Vector{UInt8}, coding::Type{GZipCoding})
     Libz.inflate(data)
 end
 
-function encoding( data::Array, coding::Type{BlosclzCoding} )
+function encode( data::Array, coding::Type{BlosclzCoding} )
     Blosc.compress( data )
 end
-function decoding( data::Vector{UInt8}, coding::Type{BlosclzCoding} )
+function decode( data::Vector{UInt8}, coding::Type{BlosclzCoding} )
     Blosc.decompress(UInt8, data)
 end
 
-function encoding( data::Array, coding::Type{JPEGCoding} )
+function encode( data::Array, coding::Type{JPEGCoding} )
     error("unimplemented!")
 end
 
-function decoding( data::Vector{UInt8}, coding::Type{JPEGCoding} )
+function decode( data::Vector{UInt8}, coding::Type{JPEGCoding} )
     error("not working correctly with neuroglancer")
 #    return ImageMagick.load_(data)
 end

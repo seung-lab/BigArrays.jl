@@ -1,5 +1,5 @@
 using BigArrays
-using BigArrays.H5sBigArrays
+#using BigArrays.H5sBigArrays
 using BigArrays.Chunks
 using Base.Test
 
