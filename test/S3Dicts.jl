@@ -30,36 +30,21 @@ end
     @test x==y
 end 
 
-@testset "test segmenation" begin 
+@testset "test 3D UInt32 segmentation reading and saving" begin 
     d = S3Dict( "s3://seunglab/jpwu/test/segmentation/4_4_40/" )
     # ba = BigArray( d, configDict )
     ba = BigArray(d)
 
-    @show ba.chunkSize
-    @show ndims(ba)
-    @show size(ba)
-    @show eltype(ba)
-end 
-
-
-@testset "test 3D image reading and saving" begin 
     a = rand(UInt32, 256,256,16)
     @time ba[257:512, 257:512, 17:32] = a
     @time b = ba[257:512, 257:512, 17:32]
     @test all(a.==b)
 end 
 
-@testset "test segmenation with uint64" begin 
+@testset "test UInt64 segmenation with uint64" begin 
     d = S3Dict( "s3://seunglab/jpwu/test/segmentation-uint64/4_4_40/" )
     ba = BigArray(d)
 
-    @show ba.chunkSize
-    @show ndims(ba)
-    @show size(ba)
-    @show eltype(ba)
-end 
-
-@testset "test 3D image reading and saving" begin 
     a = rand(UInt64, 256,256,16)
     @time ba[257:512, 257:512, 17:32] = a
     @time b = ba[257:512, 257:512, 17:32]
