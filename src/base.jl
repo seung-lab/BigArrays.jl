@@ -122,7 +122,7 @@ function do_work_getindex!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D
     for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in chan 
         # explicit error handling to deal with EOFError
         delay = 0.05
-        for t in 1:4
+        for t in 1:3
             try 
                 #println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))") 
                 v = ba.kvStore[cartesian_range2string(chunkGlobalRange)]
@@ -137,7 +137,7 @@ function do_work_getindex!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D
                     break
                 else
                     println("catch an error while getindex in BigArray: $err with type of $(typeof(err))")
-                    if t==4
+                    if t==3
                         rethrow()
                     end
                     sleep(delay*(0.8+(0.4*rand())))
