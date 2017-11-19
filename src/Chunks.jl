@@ -42,7 +42,13 @@ function blendchunk(ba::AbstractArray, chunk::Chunk)
     gr = map((x,y)->x:x+y-1, chunk.start, size(chunk))
     @show gr
     @show size(chunk.data)
-    ba[gr...] = chunk.data
+    if length(gr) == ndims( chunk.data )
+        ba[gr...] = chunk.data
+    elseif length(gr) < ndims( chunk.data )
+        ba[gr..., 1:size(chunk.data,4)] = chunk.data
+    else 
+        error("invalid index and chunk size.")
+    end 
 end
 
 function Base.size( chunk::Chunk )
