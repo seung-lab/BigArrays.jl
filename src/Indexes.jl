@@ -96,9 +96,12 @@ end
 transform string to UnitRange
 the format of string should look like this:
 2968-3480_1776-2288_16912-17424
+-1024--896_-1024--896_1428-1429
 """
 function string2unit_range( str::AbstractString )
-    map(sec -> parse(split(sec,"-")[1])+1 : parse(split(sec,"-")[2]), split(str, "_"))
+    groups = match(r"(-?\d+)-(-?\d+)_(-?\d+)-(-?\d+)_(-?\d+)-(-?\d+)(?:\.gz)?$", str)
+    idxes = map(parse, groups.captures)
+    [idxes[1]+1:idxes[2], idxes[3]+1:idxes[4], idxes[5]+1:idxes[6]]
 end 
 
 """
