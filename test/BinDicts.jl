@@ -27,6 +27,15 @@ end
     @test all(a.==b)
 end # testset 
 
+@testset "test negative coordinate" begin 
+    ba = BigArray( BinDict(datasetDir) )
+    a = rand(UInt8, 200,200,10)
+    ba[-199:0, -99:100, -4:5] = a
+    b = ba[-199:0, -99:100, -4:5] 
+    @test all(a.==b)
+end # end of testset
+
+
 @testset "test IO of BigArray with backend of BinDict" begin
     ba = BigArray( BinDict(datasetDir) )
     a = rand(UInt8, 200,200,10)
@@ -45,6 +54,16 @@ end # end of testset
     b = ba[204:403, 204:403, 103:112] 
     @test all(a.==b)
 end # end of testset
+
+@testset "test dataset not aligned starting from 0 and negative coordinates" begin 
+    datasetDir = joinpath(tempDir, "12_12_30") 
+    ba = BigArray( BinDict(datasetDir) )
+    a = rand(UInt8, 200,200,10)
+    ba[-96:103, -296:-97, -2:7] = a
+    b = ba[-96:103, -296:-97, -2:7] 
+    @test all(a.==b)
+end # end of testset
+
 
 # clean the temporary directory
 rm(tempDir; recursive=true)
