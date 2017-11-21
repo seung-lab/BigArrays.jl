@@ -5,6 +5,8 @@ using JSON
 export AbstractBigArray, BigArray 
 
 abstract type AbstractBigArray <: AbstractArray{Any,Any} end
+
+const THREAD_NUM = 20
 # map datatype of python to Julia 
 const DATATYPE_MAP = Dict{String, DataType}( 
     "uint8"     => UInt8, 
@@ -33,15 +35,17 @@ struct BigArray{D<:AbstractBigArrayBackend, T<:Real, N, C<:AbstractBigArrayCodin
     kvStore     :: D
     chunkSize   :: NTuple{N}
     offset      :: CartesianIndex{N}
+    threadNum   :: Integer
     function BigArray(
-                   kvStore     ::D,
-                   foo         ::Type{T},
-                   chunkSize   ::NTuple{N},
-                   coding      ::Type{C};
-                   offset      ::CartesianIndex{N} = CartesianIndex{N}() - 1 ) where {D,T,N,C}
+                    kvStore     ::D,
+                    foo         ::Type{T},
+                    chunkSize   ::NTuple{N},
+                    coding      ::Type{C};
+                    offset      ::CartesianIndex{N} = CartesianIndex{N}() - 1,
+                    threadNum   ::Integer = THREAD_NUM) where {D,T,N,C}
         # force the offset to be 0s to shutdown the functionality of offset for now
         # because it corrupted all the other bigarrays in aws s3
-        new{D, T, N, C}(kvStore, chunkSize, offset)
+        new{D, T, N, C}(kvStore, chunkSize, offset, threadNum)
     end
 end
 
@@ -84,4 +88,4 @@ function BigArray( d::AbstractBigArrayBackend, infoConfig::Dict{Symbol, Any} )
     BigArray(d, T, chunkSize, encoding; offset=CartesianIndex(offset)) 
 end
 
-
+function get_thread_num(self::BigArray) self.threadNum end 

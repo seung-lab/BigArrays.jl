@@ -79,18 +79,19 @@ this version uses channel to control the number of asynchronized request
 """
 function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
                        idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
+    threadNum = get_thread_num(ba)
     t1 = time() 
     idxes = colon2unit_range(buf, idxes)
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     @sync begin 
-        channel = Channel{Tuple}(20)
+        channel = Channel{Tuple}(threadNum)
         @async begin 
             for iter in baIter
                 put!(channel, iter)
             end
             close(channel)
         end
-        for i in 1:20
+        for i in 1:threadNum 
             @async do_work_setindex(channel, buf, ba)
         end
     end 
@@ -165,12 +166,13 @@ function do_work_getindex_V1!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArra
 end
 
 function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
+    threadNum = get_thread_num(ba)
     t1 = time()
     sz = map(length, idxes)
     buf = zeros(eltype(ba), sz)
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     @sync begin
-        channel = Channel{Tuple}(20)
+        channel = Channel{Tuple}( threadNum )
         @async begin
             for iter in baIter
                 put!(channel, iter)
@@ -178,7 +180,7 @@ function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}..
             close(channel)
         end
         # control the number of concurrent requests here
-        for i in 1:1
+        for i in 1:threadNum 
             @async do_work_getindex!(channel, buf, ba)
         end
     end
