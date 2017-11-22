@@ -2,6 +2,8 @@ module Iterators
 using ..BigArrays
 using ..BigArrays.Indexes
 
+import ..BigArrays: AbstractBigArray
+
 export Iterator
 
 struct Iterator{N}

@@ -54,7 +54,7 @@ end
 """
 replace Colon of indexes by UnitRange
 """
-function colon2unit_range(buf::Union{Array,AbstractBigArray}, indexes::Tuple)
+function colon2unit_range(buf::AbstractArray, indexes::Tuple)
     colon2unit_range(size(buf), indexes)
 end
 
