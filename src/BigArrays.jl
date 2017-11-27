@@ -152,7 +152,6 @@ function do_work_setindex( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArra
         fill!(chk, ZERO)
         # println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))")
 		# only accept aligned writting
-		@assert all(x->x==1, rangeInChunk.start.I) "the writting buffer should be aligned with bigarray blocks"
         delay = 0.05
         for t in 1:4
             try
@@ -181,9 +180,13 @@ this version uses channel to control the number of asynchronized request
 """
 function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
                        idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
+    idxes = colon2unit_range(buf, idxes)
+    @show idxes
+    # check alignment
+    @assert all(map((x,y,z)->mod(x.start - 1 - y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the start of index should align with BigArray chunk size" 
+    @assert all(map((x,y,z)->mod(x.stop-y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the stop of index should align with BigArray chunk size"
     threadNum = get_thread_num(ba)
     t1 = time() 
-    idxes = colon2unit_range(buf, idxes)
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     @sync begin 
         channel = Channel{Tuple}(threadNum)
@@ -303,5 +306,31 @@ function get_chunk_size(ba::AbstractBigArray)
 end
 
 ###################### utils ####################
+"""
+    get_num_chunks(ba::BigArray, idxes::Union{UnitRange,Int}...)
+get number of chunks needed to do cutout from this range 
+"""
+function get_num_chunks(ba::BigArray, idxes::Union{UnitRange, Int}...)
+    chunkNum = 0
+    baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)                          
+	for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
+        chunkNum += 1
+	end                                                                                
+    chunkNum
+end 
+
+function list_missing_chunks(ba::BigArray, idxes::Union{UnitRange, Int}...) 
+    threadNum = get_thread_num(ba)
+    t1 = time()
+    sz = map(length, idxes)
+    missingChunkList = Vector{CartesianRange}()
+    baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
+    for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
+        if !haskey(ba.kvStore, cartesian_range2string(chunkGlobalRange))
+            push!(missingChunkList, chunkGlobalRange)
+        end 
+    end
+    missingChunkList 
+end 
 
 end # module
