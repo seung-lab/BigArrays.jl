@@ -18,7 +18,7 @@ using JSON
 # http://docs.julialang.org/en/release-0.4/manual/arrays/#implementation
 export AbstractBigArray, BigArray 
 
-const THREAD_NUM = 20
+const TASK_NUM = 20
 # map datatype of python to Julia 
 const DATATYPE_MAP = Dict{String, DataType}( 
     "uint8"     => UInt8, 
@@ -47,40 +47,43 @@ struct BigArray{D<:AbstractBigArrayBackend, T<:Real, N, C<:AbstractBigArrayCodin
     kvStore     :: D
     chunkSize   :: NTuple{N}
     offset      :: CartesianIndex{N}
-    threadNum   :: Integer
+    taskNum   :: Integer
     function BigArray(
                     kvStore     ::D,
                     foo         ::Type{T},
                     chunkSize   ::NTuple{N},
                     coding      ::Type{C};
                     offset      ::CartesianIndex{N} = CartesianIndex{N}() - 1,
-                    threadNum   ::Integer = THREAD_NUM) where {D,T,N,C}
+                    taskNum   ::Integer = TASK_NUM) where {D,T,N,C}
         # force the offset to be 0s to shutdown the functionality of offset for now
         # because it corrupted all the other bigarrays in aws s3
-        new{D, T, N, C}(kvStore, chunkSize, offset, threadNum)
+        new{D, T, N, C}(kvStore, chunkSize, offset, taskNum)
     end
 end
 
-function BigArray( d::AbstractBigArrayBackend) 
+function BigArray( d::AbstractBigArrayBackend;
+                    taskNum     ::Integer = TASK_NUM) 
     info = get_info(d)
-    return BigArray(d, info)
+    return BigArray(d, info; taskNum=taskNum)
 end
 
-function BigArray( d::AbstractBigArrayBackend, info::Vector{UInt8} )
+function BigArray( d::AbstractBigArrayBackend, info::Vector{UInt8};
+                                    taskNum     ::Integer = TASK_NUM)
     if ismatch(r"^{", String(info) )
         info = String(info)
     else
         # gzip compressed
         info = String(Libz.decompress(info))
     end 
-   BigArray(d, info)
+   BigArray(d, info; taskNum=taskNum)
 end 
 
-function BigArray( d::AbstractBigArrayBackend, info::AbstractString )
-    BigArray(d, JSON.parse( info, dicttype=Dict{Symbol, Any} ))
+function BigArray( d::AbstractBigArrayBackend, info::AbstractString; taskNum=TASK_NUM )
+    BigArray(d, JSON.parse( info, dicttype=Dict{Symbol, Any} ); taskNum=taskNum)
 end 
 
-function BigArray( d::AbstractBigArrayBackend, infoConfig::Dict{Symbol, Any} )
+function BigArray( d::AbstractBigArrayBackend, infoConfig::Dict{Symbol, Any}; 
+                        taskNum = TASK_NUM)
     # chunkSize
     scale_name = get_scale_name(d)
     T = DATATYPE_MAP[infoConfig[:data_type]]
@@ -97,10 +100,10 @@ function BigArray( d::AbstractBigArrayBackend, infoConfig::Dict{Symbol, Any} )
             break 
         end 
     end 
-    BigArray(d, T, chunkSize, encoding; offset=CartesianIndex(offset)) 
+    BigArray(d, T, chunkSize, encoding; offset=CartesianIndex(offset), taskNum=taskNum) 
 end
 
-function get_thread_num(self::BigArray) self.threadNum end 
+function get_task_num(self::BigArray) self.taskNum end 
 
 ######################### base functions #######################
 
@@ -122,9 +125,7 @@ function Base.size(ba::BigArray, i::Int)
     size(ba)[i]
 end
 
-function Base.show(ba::BigArray)
-    display(ba)
-end
+function Base.show(ba::BigArray) show(ba.chunkSize) end
 
 function Base.display(ba::BigArray)
     for field in fieldnames(ba)
@@ -185,18 +186,18 @@ function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     # check alignment
     @assert all(map((x,y,z)->mod(x.start - 1 - y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the start of index should align with BigArray chunk size" 
     @assert all(map((x,y,z)->mod(x.stop-y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the stop of index should align with BigArray chunk size"
-    threadNum = get_thread_num(ba)
+    taskNum = get_task_num(ba)
     t1 = time() 
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     @sync begin 
-        channel = Channel{Tuple}(threadNum)
+        channel = Channel{Tuple}(taskNum)
         @async begin 
             for iter in baIter
                 put!(channel, iter)
             end
             close(channel)
         end
-        for i in 1:threadNum 
+        for i in 1:taskNum 
             @async do_work_setindex(channel, buf, ba)
         end
     end 
@@ -218,7 +219,7 @@ function setindex_V1!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     chk = Array(T, ba.chunkSize)
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
         fill!(chk, convert(T, 0))
-        chk[cartesian_range2unit_range(rangeInChunk)...] = 
+        @inbounds chk[cartesian_range2unit_range(rangeInChunk)...] = 
                                         buf[cartesian_range2unit_range(rangeInBuffer)...]
         ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encode( chk, C)
     end
@@ -234,8 +235,8 @@ function do_work_getindex!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D
                 v = ba.kvStore[cartesian_range2string(chunkGlobalRange)]
                 chk = Codings.decode(v, C)
                 chk = reshape(reinterpret(T, chk), ba.chunkSize)
-                buf[cartesian_range2unit_range(rangeInBuffer)...] = 
-                    chk[cartesian_range2unit_range(rangeInChunk)...]
+                @inbounds buf[cartesian_range2unit_range(rangeInBuffer)...] = 
+                                        chk[cartesian_range2unit_range(rangeInChunk)...]
                 break 
             catch err 
                 if isa(err, KeyError)
@@ -271,13 +272,13 @@ function do_work_getindex_V1!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArra
 end
 
 function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
-    threadNum = get_thread_num(ba)
+    taskNum = get_task_num(ba)
     t1 = time()
     sz = map(length, idxes)
     buf = zeros(eltype(ba), sz)
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     @sync begin
-        channel = Channel{Tuple}( threadNum )
+        channel = Channel{Tuple}( taskNum )
         @async begin
             for iter in baIter
                 put!(channel, iter)
@@ -285,7 +286,7 @@ function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}..
             close(channel)
         end
         # control the number of concurrent requests here
-        for i in 1:threadNum 
+        for i in 1:taskNum 
             @async do_work_getindex!(channel, buf, ba)
         end
     end
@@ -298,7 +299,8 @@ function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}..
     else 
         # otherwise return array
         return buf
-    end 
+    end
+
 end
 
 function get_chunk_size(ba::AbstractBigArray)
@@ -319,18 +321,41 @@ function get_num_chunks(ba::BigArray, idxes::Union{UnitRange, Int}...)
     chunkNum
 end 
 
+"""
+    list_missing_chunks(ba::BigArray, idxes::Union{UnitRange, Int}...)
+list the non-existing keys in the index range
+if the returned list is empty, then all the chunks exist in the storage backend.
+"""
 function list_missing_chunks(ba::BigArray, idxes::Union{UnitRange, Int}...) 
-    threadNum = get_thread_num(ba)
+    taskNum = get_task_num(ba)
+    t1 = time()
+    sz = map(length, idxes)
+    missingChunkList = Vector{CartesianRange}()
+    baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
+    @sync begin 
+        for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
+            @async begin 
+                if !haskey(ba.kvStore, cartesian_range2string(chunkGlobalRange))
+                    push!(missingChunkList, chunkGlobalRange)
+                end
+            end
+        end
+    end 
+    missingChunkList 
+end
+
+function list_missing_chunks(ba::BigArray, keySet::Set{String}, idxes::Union{UnitRange, Int}...)
+    taskNum = get_task_num(ba)
     t1 = time()
     sz = map(length, idxes)
     missingChunkList = Vector{CartesianRange}()
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
-        if !haskey(ba.kvStore, cartesian_range2string(chunkGlobalRange))
+        if !(cartesian_range2string(chunkGlobalRange) in keySet)
             push!(missingChunkList, chunkGlobalRange)
         end 
     end
-    missingChunkList 
+    missingChunkList
 end 
 
 end # module
