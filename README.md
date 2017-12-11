@@ -35,16 +35,6 @@ ba = BigArray( BinDict("/path/of/dataset") )
 ```
 then use `ba` as normal array
 
-### use the hdf5 files backend
-```julia
-using BigArrays.H5sBigArrays
-ba = H5sBigArray("/directory/of/hdf5/files/");
-# use it as normal array
-
-ba[101:200, 201:300, 1:3] = rand(UInt8, 100,100,3)
-@show ba[101:200, 201:300, 1:3]
-```
-
 ### use backend of AWS S3 
 #### setup info file 
 the info file is a JSON file, which defines all the configuration of the dataset. It was defined in [neuroglancer](https://github.com/seung-lab/neuroglancer/wiki/Precomputed-API#info-json-file-specification) 
