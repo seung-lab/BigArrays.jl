@@ -13,11 +13,11 @@ storing and accessing large julia array using different backends.
 - chunk compression with gzip/blosclz/jpeg
 - highly scalable due to the serverless design
 - arbitrary data type 
+- support negative coordinate
 
 ## supported backends
 - [x] AWS S3 
 - [x] Google Cloud Storage
-- [x] Local HDF5 files
 - [x] Local binary files
 
 ## Installation
@@ -55,6 +55,17 @@ the info file is a JSON file, which defines all the configuration of the dataset
 the [info configuration file](https://github.com/seung-lab/neuroglancer/wiki/Precomputed-API#info-json-file-specification) is the same with S3 backend.
 
 [test example](https://github.com/seung-lab/BigArrays.jl/blob/master/test/backends/gs.jl)
+
+# Benchmark
+
+chunk size: 512x512x512, data is EM image
+chunk size is 256x256x32
+
+![image](https://user-images.githubusercontent.com/7651573/33858595-3b8c1f76-de9e-11e7-9732-e630dbc69e42.png)
+
+task number is 20
+
+![image](https://user-images.githubusercontent.com/7651573/33858599-3f1f5428-de9e-11e7-987e-9ecf3865e289.png)
 
 # Development
 BigArrays is a high-level architecture to transform Key-Value store (backend) to Julia Array (frontend). it provide an interface of AbstractArray, and implement the get_index and set_index functions. 
