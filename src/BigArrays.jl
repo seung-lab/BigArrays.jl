@@ -31,7 +31,7 @@ const DATATYPE_MAP = Dict{String, DataType}(
 
 const CODING_MAP = Dict{String,Any}(
     # note that the raw encoding in cloud storage will be automatically encoded using gzip!
-    "raw"       => RawCoding,
+    "raw"       => GZipCoding,
     "jpeg"      => JPEGCoding,
     "blosclz"   => BlosclzCoding,
     "gzip"      => GZipCoding 

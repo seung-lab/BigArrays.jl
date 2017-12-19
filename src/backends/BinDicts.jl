@@ -1,5 +1,5 @@
 module BinDicts
-using Libz
+#using Libz
 
 import ..BackendBase: AbstractBigArrayBackend, get_info, get_scale_name 
 export BinDict, get_info, get_scale_name  
@@ -24,18 +24,17 @@ function get_scale_name( self::BinDict )
 end 
 
 function Base.getindex( self::BinDict, key::AbstractString)
-    f = open( joinpath( get_path(self), key ))
-    data = read(f)
-    close(f)
-    Libz.inflate(data)
+    open( joinpath( get_path(self), key )) do f
+        return read(f)
+        #Libz.inflate(data)
+    end
 end 
 
 function Base.setindex!( self::BinDict, value::Array, key::AbstractString )
-    data = Libz.deflate(reinterpret(UInt8, value[:]))
+    data = reinterpret(UInt8, value[:])
+    #data = Libz.deflate( data )
     fileName = joinpath( get_path(self), key )
-    f = open(fileName, "w")
-    write(f, data)
-    close(f)
+    write(fileName, data)
 end 
 
 end # module

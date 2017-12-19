@@ -9,6 +9,8 @@ abstract type AbstractBigArrayCoding end
 export AbstractBigArrayCoding, JPEGCoding, RawCoding, BlosclzCoding, GZipCoding
 export encode, decode 
 
+const GZIP_MAGIC_NUMBER = UInt8[0x1f, 0x8b, 0x08]
+
 function __init__()
     # use the same number of threads with Julia
     if haskey(ENV, "BLOSC_NUM_THREADS")
@@ -43,7 +45,11 @@ function encode(data::Array, coding::Type{GZipCoding})
 end
 
 function decode(data::Vector{UInt8}, coding::Type{GZipCoding})
-    Libz.inflate(data)
+    if all(data[1:3] .== GZIP_MAGIC_NUMBER)
+        return Libz.inflate(data)
+    else 
+        return data 
+    end
 end
 
 function encode( data::Array, coding::Type{BlosclzCoding} )
