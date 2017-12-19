@@ -12,14 +12,15 @@ include("Indexes.jl"); using .Indexes;
 include("Iterators.jl"); using .Iterators;
 include("backends/include.jl") 
 
+using OffsetArrays
 using JSON
 #import .BackendBase: AbstractBigArrayBackend  
 # Note that DenseArray only works for memory stored Array
 # http://docs.julialang.org/en/release-0.4/manual/arrays/#implementation
 export AbstractBigArray, BigArray 
 
-const TASK_NUM = 20
-# map datatype of python to Julia 
+const TASK_NUM = 10
+# map datatype of python to Julia
 const DATATYPE_MAP = Dict{String, DataType}( 
     "uint8"     => UInt8, 
     "uint16"    => UInt16, 
@@ -38,12 +39,17 @@ const CODING_MAP = Dict{String,Any}(
 )
 
 
+function __init__()
+#    addprocs(Sys.CPU_CORES - nworkers())
+end 
+
 """
     BigArray
 currently, assume that the array dimension (x,y,z,...) is >= 3
 all the manipulation effects in the x,y,z dimension
 """
-struct BigArray{D<:AbstractBigArrayBackend, T<:Real, N, C<:AbstractBigArrayCoding} <: AbstractBigArray
+@everywhere struct BigArray{D<:AbstractBigArrayBackend, T<:Real, 
+                            N<:Integer, C<:AbstractBigArrayCoding} <: AbstractBigArray
     kvStore     :: D
     chunkSize   :: NTuple{N}
     offset      :: CartesianIndex{N}
@@ -107,13 +113,9 @@ function get_task_num(self::BigArray) self.taskNum end
 
 ######################### base functions #######################
 
-function Base.ndims(ba::BigArray{D,T,N}) where {D,T,N}
-    N
-end
+function Base.ndims(ba::BigArray{D,T,N}) where {D,T,N} N end
 
-function Base.eltype( ba::BigArray{D,T,N} ) where {D, T, N}
-    return T
-end
+function Base.eltype( ba::BigArray{D,T,N} ) where {D, T, N} T end
 
 function Base.size( ba::BigArray{D,T,N} ) where {D,T,N}
     # get size according to the keys
@@ -121,9 +123,7 @@ function Base.size( ba::BigArray{D,T,N} ) where {D,T,N}
     return ret
 end
 
-function Base.size(ba::BigArray, i::Int)
-    size(ba)[i]
-end
+function Base.size(ba::BigArray, i::Int)  size(ba)[i] end
 
 function Base.show(ba::BigArray) show(ba.chunkSize) end
 
@@ -224,20 +224,36 @@ function setindex_V1!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
         ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encode( chk, C)
     end
 end 
-
-function do_work_getindex!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C}) where {D,T,N,C}
+"""
+sequential version for debug
+"""
+function do_work_getindex_V1!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C}) where {D,T,N,C}
     for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in chan 
+        #chk = zeros(T, ba.chunkSize)
+        # explicit error handling to deal with EOFError
+        println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))") 
+        v = ba.kvStore[cartesian_range2string(chunkGlobalRange)]
+        chk = Codings.decode(v, C)
+        chk = reshape(reinterpret(T, chk), ba.chunkSize)
+        buf[cartesian_range2unit_range(rangeInBuffer)...] = 
+            chk[cartesian_range2unit_range(rangeInChunk)...]
+    end
+end
+
+@everywhere function do_work_getindex( ba::BigArray{D,T,N,C}, jobs::RemoteChannel, 
+                                                results::RemoteChannel) where {D,T,N,C}
+    for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in jobs 
         # explicit error handling to deal with EOFError
         delay = 0.05
         for t in 1:3
             try 
-                #println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))") 
-                v = ba.kvStore[cartesian_range2string(chunkGlobalRange)]
-                chk = Codings.decode(v, C)
-                chk = reshape(reinterpret(T, chk), ba.chunkSize)
-                @inbounds buf[cartesian_range2unit_range(rangeInBuffer)...] = 
-                                        chk[cartesian_range2unit_range(rangeInChunk)...]
-                break 
+                data = ba.kvStore[cartesian_range2string(chunkGlobalRange)]
+                data = Codings.decode(data, C)
+                data = reshape(reinterpret(T, data), ba.chunkSize)
+                data = data[cartesian_range2unit_range(rangeInChunk)...]
+                block = OffsetArray(data, cartesian_range2unit_range(globalRange))
+                put!(results, block)
+                break  
             catch err 
                 if isa(err, KeyError)
                     println("no suck key in kvstore: $(err), will fill this block as zeros")
@@ -255,52 +271,40 @@ function do_work_getindex!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D
     end
 end
 
-"""
-sequential version for debug
-"""
-function do_work_getindex_V1!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C}) where {D,T,N,C}
-    for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in chan 
-        #chk = zeros(T, ba.chunkSize)
-        # explicit error handling to deal with EOFError
-        println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))") 
-        v = ba.kvStore[cartesian_range2string(chunkGlobalRange)]
-        chk = Codings.decode(v, C)
-        chk = reshape(reinterpret(T, chk), ba.chunkSize)
-        buf[cartesian_range2unit_range(rangeInBuffer)...] = 
-            chk[cartesian_range2unit_range(rangeInChunk)...]
-    end
-end
-
 function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
     taskNum = get_task_num(ba)
     t1 = time()
     sz = map(length, idxes)
-    buf = zeros(eltype(ba), sz)
+    ret = OffsetArray(zeros(eltype(ba), sz), idxes...)
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
+    workerPool = WorkerPool(workers())
+    const jobs = RemoteChannel(()->Channel{Tuple}( nworkers() ))
+    const resutls = RemoteChannel(()->Channel{OffsetArray}( nworkers() ))
+
     @sync begin
-        channel = Channel{Tuple}( taskNum )
-        @async begin
+            @async begin
             for iter in baIter
-                put!(channel, iter)
+                put!(jobs, iter)
             end
-            close(channel)
+            close(jobs)
         end
-        # control the number of concurrent requests here
-        for i in 1:taskNum 
-            @async do_work_getindex!(channel, buf, ba)
+        # start remote workers
+        for pid in workers()
+            remote_do(do_work_getindex, pid, ba, jobs, results) 
         end
+        
+        # collecting results
+        for block in resutls 
+            offsets = block.offsets 
+            blockSize = size(block.parent)
+            range = map((o,s)->o+1:o+s, offsets, blockSize)
+            ret[range...] = block.parent
+        end 
     end
-    totalSize = length(buf) * sizeof(eltype(buf)) / 1024/1024 # mega bytes
+    totalSize = prod(sz) * sizeof(eltype(ba)) / 1024/1024 # mega bytes
     elapsed = time() - t1 # seconds 
     println("cutout speed: $(totalSize/elapsed) MB/s")
-    # handle single element indexing, return the single value
-    if length(buf) == 1
-        return buf[1]
-    else 
-        # otherwise return array
-        return buf
-    end
-
+    return ret
 end
 
 function get_chunk_size(ba::AbstractBigArray)
