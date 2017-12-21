@@ -146,18 +146,15 @@ function Base.CartesianRange( ba::BigArray{D,T,N} ) where {D,T,N}
     return ret
 end
 
-function do_work_setindex( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C} ) where {D,T,N,C}
-    chk = zeros(T, ba.chunkSize)
-    ZERO = T(0)
+function do_work_setindex( block::Array{T,N}, ba::BigArray{D,T,N,C}, chunkGlobalRange ) 
+                                                                            where {D,T,N,C}
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in channel
-        fill!(chk, ZERO)
         # println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))")
 		# only accept aligned writting
         delay = 0.05
         for t in 1:4
             try
-                chk = buf[cartesian_range2unit_range(rangeInBuffer)...]
-                ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encode( chk, C)
+                ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encode(block, C)
                 break
             catch e
                 println("catch an error while saving in BigArray: $e")
@@ -182,24 +179,24 @@ this version uses channel to control the number of asynchronized request
 function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
                        idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
     idxes = colon2unit_range(buf, idxes)
-    @show idxes
+    
+
     # check alignment
     @assert all(map((x,y,z)->mod(x.start - 1 - y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the start of index should align with BigArray chunk size" 
     @assert all(map((x,y,z)->mod(x.stop-y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the stop of index should align with BigArray chunk size"
+
     taskNum = get_task_num(ba)
     t1 = time() 
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
-    @sync begin 
-        channel = Channel{Tuple}(taskNum)
-        @async begin 
-            for iter in baIter
-                put!(channel, iter)
-            end
-            close(channel)
-        end
-        for i in 1:taskNum 
-            @async do_work_setindex(channel, buf, ba)
-        end
+    workerPool = WorkerPool(workers())       
+    const jobs = RemoteChannel(()->Channel{Tuple}( nworkers() ))         
+    const resutls = RemoteChannel(()->Channel{OffsetArray}( nworkers() ))
+
+    @sync begiin
+        for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
+            block = buf[cartesian_range2unit_range(rangeInBuffer)...]
+            @async remote_do(do_work_setindex, workerPool, block, chunkGlobalRange)
+        end 
     end 
     totalSize = length(buf) * sizeof(eltype(buf)) / 1024/1024 # MB
     elapsed = time() - t1 # sec
@@ -227,8 +224,13 @@ end
 """
 sequential version for debug
 """
-function do_work_getindex_V1!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C}) where {D,T,N,C}
-    for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in chan 
+function Base.getindex_V2( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
+    t1 = time()
+    sz = map(length, idxes)
+    ret = OffsetArray(zeros(eltype(ba), sz), idxes...)
+    baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
+
+    for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter 
         #chk = zeros(T, ba.chunkSize)
         # explicit error handling to deal with EOFError
         println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))") 
@@ -271,7 +273,7 @@ end
     end
 end
 
-function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
+function Base.getindex_V2( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
     taskNum = get_task_num(ba)
     t1 = time()
     sz = map(length, idxes)
