@@ -1,12 +1,13 @@
 __precompile__()
 
-module BigArrays
+@everywhere module BigArrays
 
 abstract type AbstractBigArray <: AbstractArray{Any,Any} end
 
 # basic functions
 include("BackendBase.jl"); using .BackendBase
-include("Codings.jl"); using .Codings;
+include("Codings.jl"); 
+using .Codings;
 include("Chunks.jl"); using .Chunks;
 include("Indexes.jl"); using .Indexes;
 include("Iterators.jl"); using .Iterators;
@@ -179,7 +180,7 @@ end
     put array in RAM to a BigArray
 this version uses channel to control the number of asynchronized request
 """
-function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
+function setindex_V2!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
                        idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
     idxes = colon2unit_range(buf, idxes)
     @show idxes
@@ -205,6 +206,55 @@ function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     elapsed = time() - t1 # sec
     println("saving speed: $(totalSize/elapsed) MB/s")
 end 
+
+@everywhere function setindex_remote_worker(block::Array{T,N}, ba::BigArray{D,T,N,C}, 
+                                        chunkGlobalRange::CartesianRange) where {D,T,N,C}
+    delay = 0.05
+	for t in 1:4
+		try
+			ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encode( block, C)
+			break
+		catch e
+			println("catch an error while saving in BigArray: $e")
+			@show typeof(e)
+			@show stacktrace()
+			if t==4
+				println("rethrow the error: $e")
+				rethrow()
+			end 
+			sleep(delay*(0.8+(0.4*rand())))
+			delay *= 10
+			println("retry for the $(t)'s time: $(string(chunkGlobalRange))")
+		end
+	end
+end
+
+"""
+    put array in RAM to a BigArray
+this version uses channel to control the number of asynchronized request
+"""
+function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
+                       idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
+    idxes = colon2unit_range(buf, idxes)
+    # check alignment
+    @assert all(map((x,y,z)->mod(x.start - 1 - y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the start of index should align with BigArray chunk size" 
+    @assert all(map((x,y,z)->mod(x.stop-y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the stop of index should align with BigArray chunk size"
+    workerPool = WorkerPool(workers())
+
+    t1 = time() 
+    baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
+    @sync begin  
+        for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in batIter
+            block = buf[cartesian_range2unit_range(rangeInBuffer)...]
+            @async remote_do(setindex_remote_worker, workerPool, block, ba, 
+                                                            chunkGlobalRange)
+        end 
+    end 
+    totalSize = length(buf) * sizeof(eltype(buf)) / 1024/1024 # MB
+    elapsed = time() - t1 # sec
+    println("saving speed: $(totalSize/elapsed) MB/s")
+end 
+
 
 """
 sequential function, good for debuging
