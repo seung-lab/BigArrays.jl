@@ -1,6 +1,6 @@
 __precompile__()
 
-@everywhere module BigArrays
+module BigArrays
 
 abstract type AbstractBigArray <: AbstractArray{Any,Any} end
 
@@ -207,7 +207,7 @@ function setindex_V2!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     println("saving speed: $(totalSize/elapsed) MB/s")
 end 
 
-@everywhere function setindex_remote_worker(block::Array{T,N}, ba::BigArray{D,T,N,C}, 
+function setindex_remote_worker(block::Array{T,N}, ba::BigArray{D,T,N,C}, 
                                         chunkGlobalRange::CartesianRange) where {D,T,N,C}
     delay = 0.05
 	for t in 1:4
@@ -244,7 +244,7 @@ function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     t1 = time() 
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     @sync begin  
-        for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in batIter
+        for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
             block = buf[cartesian_range2unit_range(rangeInBuffer)...]
             @async remote_do(setindex_remote_worker, workerPool, block, ba, 
                                                             chunkGlobalRange)
