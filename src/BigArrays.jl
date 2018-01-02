@@ -13,6 +13,7 @@ include("Indexes.jl"); using .Indexes;
 include("Iterators.jl"); using .Iterators;
 include("backends/include.jl") 
 
+using OffsetArrays 
 using JSON
 #import .BackendBase: AbstractBigArrayBackend  
 # Note that DenseArray only works for memory stored Array
@@ -321,7 +322,7 @@ function do_work_getindex_V1!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArra
     end
 end
 
-function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
+function getindex_V2( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
     taskNum = get_task_num(ba)
     t1 = time()
     sz = map(length, idxes)
@@ -352,6 +353,51 @@ function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}..
     end
 
 end
+
+function remote_getindex_worker(ba::BigArray{D,T,N,C}, jobs::RemoteChannel, results::RemoteChannel) where {D,T,N,C}
+    for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in jobs 
+        data = ba.kvStore[ cartesian_range2string(chunkGlobalRange) ]
+        chk = Codings.decode(data, C)
+        chk = reshape(reinterpret(T, chk), ba.chunkSize)
+        chk = chk[cartesian_range2unit_range(rangeInChunk)...]
+        arr = OffsetArray(chk, cartesian_range2unit_range(globalRange)...) 
+        put!(results, arr)
+    end 
+end 
+
+function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
+    t1 = time()
+    sz = map(length, idxes)
+    ret = OffsetArray(zeros(eltype(ba), sz), idxes...)
+    const jobs    = RemoteChannel(()->Channel{Tuple}(nworkers()));
+    const results = RemoteChannel(()->Channel{OffsetArray}(nworkers()));
+    baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
+    @sync begin
+        @async begin
+            numJobs = 0
+            for iter in baIter
+                numJobs +=1
+                put!(jobs, iter)
+            end
+            close(jobs)
+            for n in 1:numJobs 
+                block = take!(results)
+                ret[indices(block)...] = parent(block)
+            end
+            close(results)
+        end
+        # control the number of concurrent requests here
+        for i in workers() 
+            @async remotecall_fetch!(remote_getindex_worker, WORKER_POOL, ba, jobs, results)
+        end
+    end
+    totalSize = length(parent(ret)) * sizeof(eltype(parent(ret))) / 1024/1024 # mega bytes
+    elapsed = time() - t1 # seconds 
+    println("cutout speed: $(totalSize/elapsed) MB/s")
+    # handle single element indexing, return the single value
+    ret 
+end
+
 
 function get_chunk_size(ba::AbstractBigArray)
     ba.chunkSize
