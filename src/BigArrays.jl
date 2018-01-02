@@ -19,6 +19,7 @@ using JSON
 # http://docs.julialang.org/en/release-0.4/manual/arrays/#implementation
 export AbstractBigArray, BigArray 
 
+const WORKER_POOL = WorkerPool(workers())
 const TASK_NUM = 20
 # map datatype of python to Julia 
 const DATATYPE_MAP = Dict{String, DataType}( 
@@ -239,14 +240,13 @@ function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     # check alignment
     @assert all(map((x,y,z)->mod(x.start - 1 - y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the start of index should align with BigArray chunk size" 
     @assert all(map((x,y,z)->mod(x.stop-y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the stop of index should align with BigArray chunk size"
-    workerPool = WorkerPool(workers())
 
     t1 = time() 
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     @sync begin  
         for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
             block = buf[cartesian_range2unit_range(rangeInBuffer)...]
-            @async remote_do(setindex_remote_worker, workerPool, block, ba, 
+            @async remotecall_fetch(setindex_remote_worker, WORKER_POOL, block, ba, 
                                                             chunkGlobalRange)
         end 
     end 
