@@ -1,6 +1,7 @@
-using Base.Test 
-using BigArrays
-using GSDicts
+@everywhere using Base.Test 
+@everywhere using BigArrays
+@everywhere using GSDicts
+@everywhere using OffsetArrays
 
 d = GSDict( "gs://seunglab/jpwu/test/image/4_4_40/" );
 ba = BigArray(d)
@@ -16,13 +17,13 @@ a = rand(UInt8, 256,256,16)
     @time ba[257:512, 257:512, 17:32] = a
     # BigArrays.mysetindex!(ba, a, (201:400, 201:400, 161:116))
     @time b = ba[257:512, 257:512, 17:32]
-    @test all(a.==b)
+    @test all(a.==b |> parent)
 end
 
 @testset "test single voxel indexing" begin 
     x = a[1,1,1]
-    y = ba[257,257,17]
-    @test x==y
+    y = ba[257,257,17] |>parent 
+    @test x==y[1]
 end 
 
 @testset "test UInt32 segmentation" begin 
@@ -32,7 +33,7 @@ end
     a = rand(UInt32, 256,256,16)
     @time ba[257:512, 257:512, 17:32] = a
     @time b = ba[257:512, 257:512, 17:32]
-    @test all(a.==b)
+    @test all(a.==b |> parent)
 end 
 
 
@@ -42,7 +43,7 @@ end
     a = rand(UInt64, 256,256,16)
     @time ba[257:512, 257:512, 17:32] = a
     @time b = ba[257:512, 257:512, 17:32]
-    @test all(a.==b)
+    @test all(a.==b |> parent)
 end 
 
 
@@ -56,7 +57,7 @@ end
 
     @show size(a)
     @show size(b)
-    @test all(a.==b)
+    @test all(a.==b |> parent)
 end 
 
 @testset "test semantic map" begin 
@@ -69,5 +70,5 @@ end
 
     @show size(a)
     @show size(b)
-    @test all(a.==b)
+    @test all(a.==b |> parent)
 end 

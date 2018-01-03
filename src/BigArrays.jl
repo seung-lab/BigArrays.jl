@@ -20,7 +20,12 @@ using JSON
 # http://docs.julialang.org/en/release-0.4/manual/arrays/#implementation
 export AbstractBigArray, BigArray 
 
-const WORKER_POOL = WorkerPool(workers())
+function __init__()
+    @show workers()
+    global const WORKER_POOL = WorkerPool( workers() )
+    @show WORKER_POOL 
+end 
+
 const TASK_NUM = 20
 # map datatype of python to Julia 
 const DATATYPE_MAP = Dict{String, DataType}( 
@@ -50,43 +55,38 @@ struct BigArray{D<:AbstractBigArrayBackend, T<:Real, N, C<:AbstractBigArrayCodin
     kvStore     :: D
     chunkSize   :: NTuple{N}
     offset      :: CartesianIndex{N}
-    taskNum   :: Integer
     function BigArray(
                     kvStore     ::D,
                     foo         ::Type{T},
                     chunkSize   ::NTuple{N},
                     coding      ::Type{C};
-                    offset      ::CartesianIndex{N} = CartesianIndex{N}() - 1,
-                    taskNum   ::Integer = TASK_NUM) where {D,T,N,C}
+                    offset      ::CartesianIndex{N} = CartesianIndex{N}() - 1) where {D,T,N,C}
         # force the offset to be 0s to shutdown the functionality of offset for now
         # because it corrupted all the other bigarrays in aws s3
-        new{D, T, N, C}(kvStore, chunkSize, offset, taskNum)
+        new{D, T, N, C}(kvStore, chunkSize, offset)
     end
 end
 
-function BigArray( d::AbstractBigArrayBackend;
-                    taskNum     ::Integer = TASK_NUM) 
+function BigArray( d::AbstractBigArrayBackend)
     info = get_info(d)
-    return BigArray(d, info; taskNum=taskNum)
+    return BigArray(d, info)
 end
 
-function BigArray( d::AbstractBigArrayBackend, info::Vector{UInt8};
-                                    taskNum     ::Integer = TASK_NUM)
+function BigArray( d::AbstractBigArrayBackend, info::Vector{UInt8})
     if ismatch(r"^{", String(info) )
         info = String(info)
     else
         # gzip compressed
         info = String(Libz.decompress(info))
     end 
-   BigArray(d, info; taskNum=taskNum)
+   BigArray(d, info)
 end 
 
-function BigArray( d::AbstractBigArrayBackend, info::AbstractString; taskNum=TASK_NUM )
-    BigArray(d, JSON.parse( info, dicttype=Dict{Symbol, Any} ); taskNum=taskNum)
+function BigArray( d::AbstractBigArrayBackend, info::AbstractString )
+    BigArray(d, JSON.parse( info, dicttype=Dict{Symbol, Any} ))
 end 
 
-function BigArray( d::AbstractBigArrayBackend, infoConfig::Dict{Symbol, Any}; 
-                        taskNum = TASK_NUM)
+function BigArray( d::AbstractBigArrayBackend, infoConfig::Dict{Symbol, Any}) 
     # chunkSize
     scale_name = get_scale_name(d)
     T = DATATYPE_MAP[infoConfig[:data_type]]
@@ -103,10 +103,8 @@ function BigArray( d::AbstractBigArrayBackend, infoConfig::Dict{Symbol, Any};
             break 
         end 
     end 
-    BigArray(d, T, chunkSize, encoding; offset=CartesianIndex(offset), taskNum=taskNum) 
+    BigArray(d, T, chunkSize, encoding; offset=CartesianIndex(offset)) 
 end
-
-function get_task_num(self::BigArray) self.taskNum end 
 
 ######################### base functions #######################
 
@@ -356,7 +354,7 @@ end
 
 function remote_getindex_worker(ba::BigArray{D,T,N,C}, jobs::RemoteChannel, results::RemoteChannel) where {D,T,N,C}
     blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = take!(jobs) 
-    println("worker id: $(myid()) to process block in global range: $(cartesian_range2string(globalRange))")
+    println("From worker $(myid()): processing block in global range: $(cartesian_range2string(globalRange))")
     data = ba.kvStore[ cartesian_range2string(chunkGlobalRange) ]
     chk = Codings.decode(data, C)
     chk = reshape(reinterpret(T, chk), ba.chunkSize)
@@ -434,7 +432,6 @@ list the non-existing keys in the index range
 if the returned list is empty, then all the chunks exist in the storage backend.
 """
 function list_missing_chunks(ba::BigArray, idxes::Union{UnitRange, Int}...) 
-    taskNum = get_task_num(ba)
     t1 = time()
     sz = map(length, idxes)
     missingChunkList = Vector{CartesianRange}()
@@ -452,7 +449,6 @@ function list_missing_chunks(ba::BigArray, idxes::Union{UnitRange, Int}...)
 end
 
 function list_missing_chunks(ba::BigArray, keySet::Set{String}, idxes::Union{UnitRange, Int}...)
-    taskNum = get_task_num(ba)
     t1 = time()
     sz = map(length, idxes)
     missingChunkList = Vector{CartesianRange}()
