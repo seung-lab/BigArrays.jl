@@ -32,7 +32,7 @@ end # testset
     a = rand(UInt8, 200,200,10)
     ba[-199:0, -99:100, -4:5] = a
     b = ba[-199:0, -99:100, -4:5] 
-    @test all(a.==b)
+    @test all(a.==parent(b))
 end # end of testset
 
 
@@ -41,7 +41,7 @@ end # end of testset
     a = rand(UInt8, 200,200,10)
     ba[201:400, 201:400, 101:110] = a
     b = ba[201:400, 201:400, 101:110]
-    @test all(a.==b)
+    @test all(a.==parent(b))
 end # end of testset
 
 
@@ -52,7 +52,7 @@ end # end of testset
     a = rand(UInt8, 200,200,10)
     ba[204:403, 204:403, 103:112] = a
     b = ba[204:403, 204:403, 103:112] 
-    @test all(a.==b)
+    @test all(a.==parent(b))
 end # end of testset
 
 @testset "test dataset not aligned starting from 0 and negative coordinates" begin 
@@ -61,7 +61,7 @@ end # end of testset
     a = rand(UInt8, 200,200,10)
     ba[-96:103, -296:-97, -2:7] = a
     b = ba[-96:103, -296:-97, -2:7] 
-    @test all(a.==b)
+    @test all(a.==parent(b))
 end # end of testset
 
 

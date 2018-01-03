@@ -355,14 +355,14 @@ function getindex_V2( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...)
 end
 
 function remote_getindex_worker(ba::BigArray{D,T,N,C}, jobs::RemoteChannel, results::RemoteChannel) where {D,T,N,C}
-    for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in jobs 
-        data = ba.kvStore[ cartesian_range2string(chunkGlobalRange) ]
-        chk = Codings.decode(data, C)
-        chk = reshape(reinterpret(T, chk), ba.chunkSize)
-        chk = chk[cartesian_range2unit_range(rangeInChunk)...]
-        arr = OffsetArray(chk, cartesian_range2unit_range(globalRange)...) 
-        put!(results, arr)
-    end 
+    blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = take!(jobs) 
+    println("worker id: $(myid()) to process block in global range: $(cartesian_range2string(globalRange))")
+    data = ba.kvStore[ cartesian_range2string(chunkGlobalRange) ]
+    chk = Codings.decode(data, C)
+    chk = reshape(reinterpret(T, chk), ba.chunkSize)
+    chk = chk[cartesian_range2unit_range(rangeInChunk)...]
+    arr = OffsetArray(chk, cartesian_range2unit_range(globalRange)...) 
+    put!(results, arr)
 end 
 
 function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
@@ -372,25 +372,36 @@ function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}..
     const jobs    = RemoteChannel(()->Channel{Tuple}(nworkers()));
     const results = RemoteChannel(()->Channel{OffsetArray}(nworkers()));
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
+    
+    numJobs = 0
+    for iter in baIter
+        numJobs +=1
+    end
+
     @sync begin
         @async begin
-            numJobs = 0
+            n = 0
             for iter in baIter
-                numJobs +=1
+                n+=1
                 put!(jobs, iter)
             end
-            close(jobs)
-            for n in 1:numJobs 
+            #close(jobs)
+        end
+        # control the number of concurrent requests here
+        for w in 1:numJobs
+            @async remote_do(remote_getindex_worker, WORKER_POOL, ba, jobs, results)
+        end
+
+        @async begin 
+            for n in 1:numJobs
                 block = take!(results)
                 ret[indices(block)...] = parent(block)
             end
-            close(results)
-        end
-        # control the number of concurrent requests here
-        for i in workers() 
-            @async remotecall_fetch!(remote_getindex_worker, WORKER_POOL, ba, jobs, results)
+            #close(results)
         end
     end
+    close(jobs)
+    close(results)
     totalSize = length(parent(ret)) * sizeof(eltype(parent(ret))) / 1024/1024 # mega bytes
     elapsed = time() - t1 # seconds 
     println("cutout speed: $(totalSize/elapsed) MB/s")
