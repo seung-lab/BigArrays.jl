@@ -20,12 +20,6 @@ a = rand(UInt8, 256,256,16)
     @test all(a.==b |> parent)
 end
 
-@testset "test single voxel indexing" begin 
-    x = a[1,1,1]
-    y = ba[257,257,17] |>parent 
-    @test x==y[1]
-end 
-
 @testset "test UInt32 segmentation" begin 
     d = GSDict( "gs://seunglab/jpwu/test/segmentation/4_4_40/" )
     # ba = BigArray( d, configDict )
@@ -53,11 +47,10 @@ end
 
     a = rand(Float32, 256,256,16,3)
     @time ba[257:512, 257:512, 17:32, 1:3] = a
-    @time b = ba[257:512, 257:512, 17:32, 1:3]
+    @time b = ba[257:512, 257:512, 17:32, 1:3] |> parent 
 
     @show size(a)
-    @show size(b)
-    @test all(a.==b |> parent)
+    @test all(a.==b)
 end 
 
 @testset "test semantic map" begin 
@@ -66,9 +59,9 @@ end
     ba = BigArray(d)
 
     @time ba[257:512, 257:512, 17:32, 1:4] = a
-    @time b = ba[257:512, 257:512, 17:32, 1:4]
+    @time b = ba[257:512, 257:512, 17:32, 1:4] |> parent 
 
     @show size(a)
     @show size(b)
-    @test all(a.==b |> parent)
+    @test all(a.==b)
 end 

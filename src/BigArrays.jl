@@ -21,7 +21,6 @@ using JSON
 export AbstractBigArray, BigArray 
 
 function __init__()
-    @show workers()
     global const WORKER_POOL = WorkerPool( workers() )
     @show WORKER_POOL 
 end 
