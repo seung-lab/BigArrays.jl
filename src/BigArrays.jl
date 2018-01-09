@@ -353,7 +353,7 @@ end
 
 function remote_getindex_worker(ba::BigArray{D,T,N,C}, jobs::RemoteChannel, results::RemoteChannel) where {D,T,N,C}
     blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = take!(jobs) 
-    println("From worker $(myid()): processing block in global range: $(cartesian_range2string(globalRange))")
+    println("processing block in global range: $(cartesian_range2string(globalRange))")
     data = ba.kvStore[ cartesian_range2string(chunkGlobalRange) ]
     chk = Codings.decode(data, C)
     chk = reshape(reinterpret(T, chk), ba.chunkSize)
@@ -370,27 +370,20 @@ function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}..
     const results = RemoteChannel(()->Channel{OffsetArray}(nworkers()));
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     
-    numJobs = 0
-    for iter in baIter
-        numJobs +=1
-    end
-
     @sync begin
         @async begin
-            n = 0
             for iter in baIter
-                n+=1
                 put!(jobs, iter)
             end
             #close(jobs)
         end
         # control the number of concurrent requests here
-        for w in 1:numJobs
+        for iter in baIter
             @async remote_do(remote_getindex_worker, WORKER_POOL, ba, jobs, results)
         end
 
         @async begin 
-            for n in 1:numJobs
+            for iter in baIter
                 block = take!(results)
                 ret[indices(block)...] = parent(block)
             end
