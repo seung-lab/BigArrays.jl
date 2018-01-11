@@ -353,7 +353,7 @@ end
 
 function remote_getindex_worker(ba::BigArray{D,T,N,C}, jobs::RemoteChannel, results::RemoteChannel) where {D,T,N,C}
     blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = take!(jobs) 
-    println("processing block in global range: $(cartesian_range2string(globalRange))")
+    #println("processing block in global range: $(cartesian_range2string(globalRange))")
     data = ba.kvStore[ cartesian_range2string(chunkGlobalRange) ]
     chk = Codings.decode(data, C)
     chk = reshape(reinterpret(T, chk), ba.chunkSize)
