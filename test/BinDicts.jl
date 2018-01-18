@@ -36,7 +36,7 @@ end # testset
 end # end of testset
 
 
-@testset "test IO of BigArray with backend of BinDict" begin
+@testset "test UInt8 image IO of BigArray" begin
     ba = BigArray( BinDict(datasetDir) )
     a = rand(UInt8, 200,200,10)
     ba[201:400, 201:400, 101:110] = a

@@ -100,7 +100,7 @@ function BigArray( d::AbstractBigArrayBackend, infoConfig::Dict{Symbol, Any})
             break 
         end 
     end 
-    BigArray(d, T, chunkSize, encoding) 
+    BigArray(d, T, chunkSize, encoding; offset=CartesianIndex(offset)) 
 end
 
 ######################### base functions #######################
@@ -263,7 +263,7 @@ function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
         else 
             warn("the range in buffer is (0:0, 0:0, 0:0)!")
         end 
-    end 
+    end
     @assert length(compressedBlockList) == length(taskList)
     Threads.@threads for i in 1:length(taskList)
         _compression_worker(compressedBlockList, i, buf, taskList[i][5], C)
