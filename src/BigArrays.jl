@@ -39,6 +39,9 @@ const CODING_MAP = Dict{String,Any}(
     "gzip"      => GZipCoding 
 )
 
+function __init__()                                   
+    global const WORKER_POOL = WorkerPool( workers() )
+end                                                   
 
 """
     BigArray
@@ -97,7 +100,7 @@ function BigArray( d::AbstractBigArrayBackend, infoConfig::Dict{Symbol, Any})
             break 
         end 
     end 
-    BigArray(d, T, chunkSize, encoding; offset=CartesianIndex(offset)) 
+    BigArray(d, T, chunkSize, encoding) 
 end
 
 ######################### base functions #######################
@@ -273,26 +276,6 @@ function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     totalSize = length(buf) * sizeof(eltype(buf)) / 1024/1024 # MB
     elapsed = time() - t1 # sec
     println("saving speed: $(totalSize/elapsed) MB/s")
-end 
-
-
-"""
-sequential function, good for debuging
-"""
-# function Base.setindex!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
-function setindex_V1!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
-                       idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
-    @assert eltype(ba) == T
-    @assert ndims(ba) == N
-    idxes = colon2unit_range(buf, idxes)
-    baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
-    chk = Array(T, ba.chunkSize)
-    for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
-        fill!(chk, convert(T, 0))
-        @inbounds chk[cartesian_range2unit_range(rangeInChunk)...] = 
-                                        buf[cartesian_range2unit_range(rangeInBuffer)...]
-        ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encode( chk, C)
-    end
 end 
 
 function remote_getindex_worker(ba::BigArray{D,T,N,C}, jobs::RemoteChannel, results::RemoteChannel) where {D,T,N,C}
