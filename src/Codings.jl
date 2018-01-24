@@ -2,7 +2,8 @@ module Codings
 
 #using ImageMagick
 using Blosc
-using Libz
+using Libz 
+@everywhere using Libz
 
 abstract type AbstractBigArrayCoding end
 
@@ -19,10 +20,13 @@ function __init__()
         Blosc.set_num_threads( parse(ENV["JULIA_NUM_THREADS"]) )
     else
         Blosc.set_num_threads( cld(Sys.CPU_CORES, 2) )
-    end
+    end 
     # use the default compression method, 
     # the default compressor is blosclz.
     # Blosc.set_compressor("blosclz")
+
+    global const WORKER_POOL = WorkerPool( workers() )
+    println("worker pool in Coding module: ", WORKER_POOL) 
 end
 
 struct JPEGCoding    <: AbstractBigArrayCoding end
@@ -41,12 +45,12 @@ function decode(data::Vector{UInt8}, coding::Type{RawCoding})
 end
 
 function encode(data::Array, coding::Type{GZipCoding})
-    Libz.deflate(reinterpret(UInt8, data[:]))
+    remotecall_fetch(Libz.deflate, WORKER_POOL, reinterpret(UInt8, data[:]))
 end
 
 function decode(data::Vector{UInt8}, coding::Type{GZipCoding})
     if all(data[1:3] .== GZIP_MAGIC_NUMBER)
-        return Libz.inflate(data)
+        return remotecall_fetch(Libz.inflate, WORKER_POOL, data)
     else 
         return data 
     end

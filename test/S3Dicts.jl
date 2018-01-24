@@ -1,7 +1,7 @@
 using Base.Test 
-@everywhere using BigArrays
-@everywhere using S3Dicts
-@everywhere using OffsetArrays
+using BigArrays
+using S3Dicts
+using OffsetArrays
 
 d = S3Dict( "s3://seunglab/jpwu/test/image/4_4_40/" )
 ba = BigArray(d)

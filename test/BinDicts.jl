@@ -1,6 +1,6 @@
-@everywhere using BigArrays
-@everywhere using BigArrays.BinDicts
-@everywhere using Base.Test
+using BigArrays
+using BigArrays.BinDicts
+using Base.Test
 
 # prepare directory
 tempDir = tempname()

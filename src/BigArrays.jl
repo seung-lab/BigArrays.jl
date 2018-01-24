@@ -21,8 +21,8 @@ using JSON
 export AbstractBigArray, BigArray 
 
 function __init__()
-    global const WORKER_POOL = WorkerPool( workers() )
-    @show WORKER_POOL 
+    #global const WORKER_POOL = WorkerPool( workers() )
+    #@show WORKER_POOL 
 end 
 
 const TASK_NUM = 20
@@ -179,14 +179,14 @@ end
     put array in RAM to a BigArray
 this version uses channel to control the number of asynchronized request
 """
-function setindex_V2!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
+function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
                        idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
     idxes = colon2unit_range(buf, idxes)
     @show idxes
     # check alignment
     @assert all(map((x,y,z)->mod(x.start - 1 - y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the start of index should align with BigArray chunk size" 
     @assert all(map((x,y,z)->mod(x.stop-y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the stop of index should align with BigArray chunk size"
-    taskNum = get_task_num(ba)
+    taskNum = TASK_NUM
     t1 = time() 
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     @sync begin 
@@ -232,7 +232,7 @@ end
     put array in RAM to a BigArray
 this version uses channel to control the number of asynchronized request
 """
-function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
+function setindex_V3!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
                        idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
     idxes = colon2unit_range(buf, idxes)
     # check alignment
@@ -319,8 +319,8 @@ function do_work_getindex_V1!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArra
     end
 end
 
-function getindex_V2( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
-    taskNum = get_task_num(ba)
+function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
+    taskNum = TASK_NUM
     t1 = time()
     sz = map(length, idxes)
     buf = zeros(eltype(ba), sz)
@@ -362,7 +362,7 @@ function remote_getindex_worker(ba::BigArray{D,T,N,C}, jobs::RemoteChannel, resu
     put!(results, arr)
 end 
 
-function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
+function getindex_V3( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
     t1 = time()
     sz = map(length, idxes)
     ret = OffsetArray(zeros(eltype(ba), sz), idxes...)
