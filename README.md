@@ -6,6 +6,7 @@ storing and accessing large julia array using different backends.
 
 ## Features
 - serverless, clients do IO directly
+- multiple processes to fully use all the CPU cores
 - arbitrary subset cutout (saving should be chunk size aligned)
 - extensible with multiple backends
 - arbitrary shape, the dataset boundary can be curve-like
@@ -33,7 +34,7 @@ using BigArrays
 using BigArrays.BinDicts
 ba = BigArray( BinDict("/path/of/dataset") )
 ```
-then use `ba` as normal array
+then use `ba` as normal array, the returned cutout result will be an OffsetArray, if you need normal Julia Array, use `parent` function to get it. 
 
 ### use backend of AWS S3 
 #### setup info file 
@@ -48,14 +49,8 @@ the [info configuration file](https://github.com/seung-lab/neuroglancer/wiki/Pre
 
 # Benchmark
 
-chunk size: 512x512x512, data is EM image
+image size: 512x512x512, data is EM image
 chunk size is 256x256x32
-
-![image](https://user-images.githubusercontent.com/7651573/33858595-3b8c1f76-de9e-11e7-9732-e630dbc69e42.png)
-
-task number is 20
-
-![image](https://user-images.githubusercontent.com/7651573/33858599-3f1f5428-de9e-11e7-987e-9ecf3865e289.png)
 
 # Development
 BigArrays is a high-level architecture to transform Key-Value store (backend) to Julia Array (frontend). it provide an interface of AbstractArray, and implement the get_index and set_index functions. 
