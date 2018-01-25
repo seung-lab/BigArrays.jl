@@ -1,6 +1,7 @@
-@everywhere using BigArrays
-@everywhere using BigArrays.BinDicts
-@everywhere using Base.Test
+using BigArrays
+using BigArrays.BinDicts
+using Base.Test
+using OffsetArrays 
 
 # prepare directory
 tempDir = tempname()
@@ -42,6 +43,14 @@ end # end of testset
     ba[201:400, 201:400, 101:110] = a
     b = ba[201:400, 201:400, 101:110]
     @test all(a.==parent(b))
+end # end of testset
+
+@testset "test merge function with backend of BinDict" begin
+    ba = BigArray( BinDict(datasetDir) )
+    a = rand(UInt8, 200,200,10)
+    @unsafe merge(ba, OffsetArray(a, 201:400, 201:400, 101:110))
+    @unsafe b = ba[201:400, 201:400, 101:110]
+    @test all(parent(a).==parent(b))
 end # end of testset
 
 

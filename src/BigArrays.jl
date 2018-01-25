@@ -206,6 +206,10 @@ function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     println("saving speed: $(totalSize/elapsed) MB/s")
 end 
 
+function Base.merge(ba::BigArray{D,T,N,C}, arr::OffsetArray{T,N, Array{T,N}}) where {D,T,N,C}
+    @unsafe ba[indices(arr)...] = arr |> parent
+end 
+
 function do_work_getindex!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C}) where {D,T,N,C}
     for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in chan 
         # explicit error handling to deal with EOFError
@@ -258,14 +262,7 @@ function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}..
     totalSize = length(buf) * sizeof(eltype(buf)) / 1024/1024 # mega bytes
     elapsed = time() - t1 # seconds 
     println("cutout speed: $(totalSize/elapsed) MB/s")
-    # handle single element indexing, return the single value
-    if length(buf) == 1
-        return buf[1]
-    else 
-        # otherwise return array
-        return buf
-    end
-
+    OffsetArray(buf, idxes...)
 end
 
 function get_chunk_size(ba::AbstractBigArray)
