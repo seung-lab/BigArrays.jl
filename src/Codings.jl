@@ -1,6 +1,6 @@
 module Codings
 
-#using ImageMagick
+using ImageMagick
 using Blosc
 using Libz
 
@@ -64,8 +64,13 @@ function encode( data::Array, coding::Type{JPEGCoding} )
 end
 
 function decode( data::Vector{UInt8}, coding::Type{JPEGCoding} )
-    error("not working correctly with neuroglancer")
-#    return ImageMagick.load_(data)
+    image = ImageMagick.load_(data)
+    @assert size(image,2) * size(image,2) == size(image,1)
+    blockSize = (size(image,2), size(image,2), size(image,2))
+    image = reshape(image, blockSize)
+    image = permutedims(image, [3,1,2])
+    image = reinterpret(UInt8, vec(image))
+    return image
 end
 
 end # end of module
