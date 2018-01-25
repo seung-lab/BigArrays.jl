@@ -186,7 +186,7 @@ function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     # check alignment
     @assert all(map((x,y,z)->mod(x.start - 1 - y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the start of index should align with BigArray chunk size" 
     @assert all(map((x,y,z)->mod(x.stop-y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the stop of index should align with BigArray chunk size"
-    taskNum = get_task_num(ba)
+    taskNum = TASK_NUM 
     t1 = time() 
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     @sync begin 
@@ -237,7 +237,7 @@ function do_work_getindex!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D
 end
 
 function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
-    taskNum = get_task_num(ba)
+    taskNum = TASK_NUM
     t1 = time()
     sz = map(length, idxes)
     buf = zeros(eltype(ba), sz)
