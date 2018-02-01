@@ -157,7 +157,9 @@ function do_work_setindex( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArra
         for t in 1:4
             try
                 chk = buf[cartesian_range2unit_range(rangeInBuffer)...]
-                ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encode( chk, C)
+                key = cartesian_range2string( chunkGlobalRange )
+                ba.kvStore[ key ] = encode( chk, C)
+                @assert haskey(ba.kvStore, key)
                 break
             catch e
                 println("catch an error while saving in BigArray: $e")

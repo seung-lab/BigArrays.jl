@@ -23,6 +23,8 @@ end
     a = rand(UInt8, 20)
     h["test"] = a
     b = h["test"]
+    @assert haskey(h, "test")
+    @assert !haskey(h, "notexist")
     @show a
     @show b
     @test all(a.==b)
