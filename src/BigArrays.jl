@@ -29,6 +29,8 @@ end
 
 const GZIP_MAGIC_NUMBER = UInt8[0x1f, 0x8b, 0x08]  
 const TASK_NUM = 16
+const CHUNK_CHANNEL_SIZE = 2
+
 # map datatype of python to Julia 
 const DATATYPE_MAP = Dict{String, DataType}( 
     "uint8"     => UInt8, 
@@ -192,7 +194,7 @@ function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     t1 = time() 
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     @sync begin 
-        channel = Channel{Tuple}(taskNum)
+        channel = Channel{Tuple}( CHUNK_CHANNEL_SIZE )
         @async begin 
             for iter in baIter
                 put!(channel, iter)
@@ -249,7 +251,7 @@ function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}..
     buf = zeros(eltype(ba), sz)
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     @sync begin
-        channel = Channel{Tuple}( taskNum )
+        channel = Channel{Tuple}( CHUNK_CHANNEL_SIZE )
         @async begin
             for iter in baIter
                 put!(channel, iter)
