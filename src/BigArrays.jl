@@ -15,6 +15,8 @@ include("backends/include.jl")
 
 using OffsetArrays 
 using JSON
+using Libz
+
 #import .BackendBase: AbstractBigArrayBackend  
 # Note that DenseArray only works for memory stored Array
 # http://docs.julialang.org/en/release-0.4/manual/arrays/#implementation
@@ -25,6 +27,7 @@ function __init__()
     @show WORKER_POOL 
 end 
 
+const GZIP_MAGIC_NUMBER = UInt8[0x1f, 0x8b, 0x08]  
 const TASK_NUM = 16
 # map datatype of python to Julia 
 const DATATYPE_MAP = Dict{String, DataType}( 
@@ -72,13 +75,10 @@ function BigArray( d::AbstractBigArrayBackend)
 end
 
 function BigArray( d::AbstractBigArrayBackend, info::Vector{UInt8})
-    if ismatch(r"^{", String(info) )
-        info = String(info)
-    else
-        # gzip compressed
-        info = String(Libz.decompress(info))
+    if all(info[1:3] .== GZIP_MAGIC_NUMBER)
+        info = Libz.decompress(info)
     end 
-   BigArray(d, info)
+    BigArray(d, String(info))
 end 
 
 function BigArray( d::AbstractBigArrayBackend, info::AbstractString )
