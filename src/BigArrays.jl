@@ -45,28 +45,17 @@ const CODING_MAP = Dict{String,Any}(
 )
 
 
-function __init__()
-#    addprocs(Sys.CPU_CORES - nworkers())
-end 
-
-"""
-    BigArray
-currently, assume that the array dimension (x,y,z,...) is >= 3
-all the manipulation effects in the x,y,z dimension
-"""
-@everywhere struct BigArray{D<:AbstractBigArrayBackend, T<:Real, 
-                            N<:Integer, C<:AbstractBigArrayCoding} <: AbstractBigArray
+struct BigArray{D<:AbstractBigArrayBackend, T<:Real, 
+                            N, C<:AbstractBigArrayCoding} <: AbstractBigArray
     kvStore     :: D
     chunkSize   :: NTuple{N}
     offset      :: CartesianIndex{N}
     function BigArray(
-                    kvStore     ::D,
-                    foo         ::Type{T},
-                    chunkSize   ::NTuple{N},
-                    coding      ::Type{C};
-                    offset      ::CartesianIndex{N} = CartesianIndex{N}() - 1) where {D,T,N,C}
-        # force the offset to be 0s to shutdown the functionality of offset for now
-        # because it corrupted all the other bigarrays in aws s3
+                kvStore     ::D,
+                foo         ::Type{T},
+                chunkSize   ::NTuple{N},
+                coding      ::Type{C};
+                offset      ::CartesianIndex{N} = CartesianIndex{N}() - 1) where {D,T,N,C}
         new{D, T, N, C}(kvStore, chunkSize, offset)
     end
 end
@@ -145,8 +134,8 @@ function Base.CartesianRange( ba::BigArray{D,T,N} ) where {D,T,N}
     return ret
 end
 
-function do_work_setindex( block::Array{T,N}, ba::BigArray{D,T,N,C}, chunkGlobalRange ) 
-                                                                            where {D,T,N,C}
+function do_work_setindex( block::Array{T,N}, ba::BigArray{D,T,N,C}, 
+                                                chunkGlobalRange ) where {D,T,N,C}
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in channel
         # println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))")
 		# only accept aligned writting
@@ -168,38 +157,8 @@ function do_work_setindex( block::Array{T,N}, ba::BigArray{D,T,N,C}, chunkGlobal
                 println("retry for the $(t)'s time: $(string(chunkGlobalRange))")
             end
         end
+        gc()
     end 
-end 
-
-"""
-    put array in RAM to a BigArray
-this version uses channel to control the number of asynchronized request
-"""
-function setindex_V2!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
-                       idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
-    idxes = colon2unit_range(buf, idxes)
-    
-
-    # check alignment
-    @assert all(map((x,y,z)->mod(x.start - 1 - y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the start of index should align with BigArray chunk size" 
-    @assert all(map((x,y,z)->mod(x.stop-y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the stop of index should align with BigArray chunk size"
-
-    taskNum = get_task_num(ba)
-    t1 = time() 
-    baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
-    workerPool = WorkerPool(workers())       
-    const jobs = RemoteChannel(()->Channel{Tuple}( nworkers() ))         
-    const resutls = RemoteChannel(()->Channel{OffsetArray}( nworkers() ))
-
-    @sync begiin
-        for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
-            block = buf[cartesian_range2unit_range(rangeInBuffer)...]
-            @async remote_do(do_work_setindex, workerPool, block, chunkGlobalRange)
-        end 
-    end 
-    totalSize = length(buf) * sizeof(eltype(buf)) / 1024/1024 # MB
-    elapsed = time() - t1 # sec
-    println("saving speed: $(totalSize/elapsed) MB/s")
 end 
 
 function setindex_remote_worker(block::Array{T,N}, ba::BigArray{D,T,N,C}, 
@@ -250,46 +209,7 @@ function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
 end 
 
 
-"""
-sequential function, good for debuging
-"""
-# function Base.setindex!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
-function setindex_V1!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
-                       idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
-    @assert eltype(ba) == T
-    @assert ndims(ba) == N
-    idxes = colon2unit_range(buf, idxes)
-    baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
-    chk = Array(T, ba.chunkSize)
-    for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
-        fill!(chk, convert(T, 0))
-        @inbounds chk[cartesian_range2unit_range(rangeInChunk)...] = 
-                                        buf[cartesian_range2unit_range(rangeInBuffer)...]
-        ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encode( chk, C)
-    end
-end 
-"""
-sequential version for debug
-"""
-function Base.getindex_V2( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
-    t1 = time()
-    sz = map(length, idxes)
-    ret = OffsetArray(zeros(eltype(ba), sz), idxes...)
-    baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
-
-    for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter 
-        #chk = zeros(T, ba.chunkSize)
-        # explicit error handling to deal with EOFError
-        println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))") 
-        v = ba.kvStore[cartesian_range2string(chunkGlobalRange)]
-        chk = Codings.decode(v, C)
-        chk = reshape(reinterpret(T, chk), ba.chunkSize)
-        buf[cartesian_range2unit_range(rangeInBuffer)...] = 
-            chk[cartesian_range2unit_range(rangeInChunk)...]
-    end
-end
-
-@everywhere function do_work_getindex( ba::BigArray{D,T,N,C}, jobs::RemoteChannel, 
+function do_work_getindex( ba::BigArray{D,T,N,C}, jobs::RemoteChannel, 
                                                 results::RemoteChannel) where {D,T,N,C}
     for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in jobs 
         # explicit error handling to deal with EOFError
@@ -318,58 +238,6 @@ end
             end 
         end
     end
-end
-
-"""
-sequential version for debug
-"""
-function do_work_getindex_V1!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C}) where {D,T,N,C}
-    for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in chan 
-        #chk = zeros(T, ba.chunkSize)
-        # explicit error handling to deal with EOFError
-        println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))") 
-        v = ba.kvStore[cartesian_range2string(chunkGlobalRange)]
-        chk = Codings.decode(v, C)
-        chk = reshape(reinterpret(T, chk), ba.chunkSize)
-        buf[cartesian_range2unit_range(rangeInBuffer)...] = 
-            chk[cartesian_range2unit_range(rangeInChunk)...]
-    end
-end
-
-function getindex_V2( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
-    taskNum = get_task_num(ba)
-    t1 = time()
-    sz = map(length, idxes)
-    ret = OffsetArray(zeros(eltype(ba), sz), idxes...)
-    baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
-    workerPool = WorkerPool(workers())
-    const jobs = RemoteChannel(()->Channel{Tuple}( nworkers() ))
-    const resutls = RemoteChannel(()->Channel{OffsetArray}( nworkers() ))
-
-    @sync begin
-            @async begin
-            for iter in baIter
-                put!(jobs, iter)
-            end
-            close(jobs)
-        end
-        # start remote workers
-        for pid in workers()
-            remote_do(do_work_getindex, pid, ba, jobs, results) 
-        end
-        
-        # collecting results
-        for block in resutls 
-            offsets = block.offsets 
-            blockSize = size(block.parent)
-            range = map((o,s)->o+1:o+s, offsets, blockSize)
-            ret[range...] = block.parent
-        end 
-    end
-    totalSize = prod(sz) * sizeof(eltype(ba)) / 1024/1024 # mega bytes
-    elapsed = time() - t1 # seconds 
-    println("cutout speed: $(totalSize/elapsed) MB/s")
-    return ret
 end
 
 function remote_getindex_worker(ba::BigArray{D,T,N,C}, jobs::RemoteChannel, results::RemoteChannel) where {D,T,N,C}
