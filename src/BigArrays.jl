@@ -134,33 +134,6 @@ function Base.CartesianRange( ba::BigArray{D,T,N} ) where {D,T,N}
     return ret
 end
 
-function do_work_setindex( block::Array{T,N}, ba::BigArray{D,T,N,C}, 
-                                                chunkGlobalRange ) where {D,T,N,C}
-    for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in channel
-        # println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))")
-		# only accept aligned writting
-        delay = 0.05
-        for t in 1:4
-            try
-                ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encode(block, C)
-                break
-            catch e
-                println("catch an error while saving in BigArray: $e")
-                @show typeof(e)
-                @show stacktrace()
-                if t==4
-                    println("rethrow the error: $e")
-                    rethrow()
-                end 
-                sleep(delay*(0.8+(0.4*rand())))
-                delay *= 10
-                println("retry for the $(t)'s time: $(string(chunkGlobalRange))")
-            end
-        end
-        gc()
-    end 
-end 
-
 function setindex_remote_worker(block::Array{T,N}, ba::BigArray{D,T,N,C}, 
                                         chunkGlobalRange::CartesianRange) where {D,T,N,C}
     delay = 0.05
@@ -199,7 +172,7 @@ function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     @sync begin  
         for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
             block = buf[cartesian_range2unit_range(rangeInBuffer)...]
-            @async remotecall_fetch(setindex_remote_worker, WORKER_POOL, block, ba, 
+            @schedule remotecall_fetch(setindex_remote_worker, WORKER_POOL, block, ba, 
                                                             chunkGlobalRange)
         end 
     end 
@@ -208,40 +181,12 @@ function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     println("saving speed: $(totalSize/elapsed) MB/s")
 end 
 
-
-function do_work_getindex( ba::BigArray{D,T,N,C}, jobs::RemoteChannel, 
-                                                results::RemoteChannel) where {D,T,N,C}
-    for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in jobs 
-        # explicit error handling to deal with EOFError
-        delay = 0.05
-        for t in 1:3
-            try 
-                data = ba.kvStore[cartesian_range2string(chunkGlobalRange)]
-                data = Codings.decode(data, C)
-                data = reshape(reinterpret(T, data), ba.chunkSize)
-                data = data[cartesian_range2unit_range(rangeInChunk)...]
-                block = OffsetArray(data, cartesian_range2unit_range(globalRange))
-                put!(results, block)
-                break  
-            catch err 
-                if isa(err, KeyError)
-                    println("no suck key in kvstore: $(err), will fill this block as zeros")
-                    break
-                else
-                    println("catch an error while getindex in BigArray: $err with type of $(typeof(err))")
-                    if t==3
-                        rethrow()
-                    end
-                    sleep(delay*(0.8+(0.4*rand())))
-                    delay *= 10
-                end
-            end 
-        end
-    end
-end
-
 function remote_getindex_worker(ba::BigArray{D,T,N,C}, jobs::RemoteChannel, results::RemoteChannel) where {D,T,N,C}
-    blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = take!(jobs) 
+    blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = take!(jobs)
+    # finalize to avoid memory leak, see
+    # https://discourse.julialang.org/t/understanding-distributed-memory-garbage-collection/8726/2
+    #finalize(jobs)
+
     #println("processing block in global range: $(cartesian_range2string(globalRange))")
     data = ba.kvStore[ cartesian_range2string(chunkGlobalRange) ]
     chk = Codings.decode(data, C)
@@ -255,8 +200,11 @@ function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}..
     t1 = time()
     sz = map(length, idxes)
     ret = OffsetArray(zeros(eltype(ba), sz), idxes...)
-    const jobs    = RemoteChannel(()->Channel{Tuple}(nworkers()));
-    const results = RemoteChannel(()->Channel{OffsetArray}(nworkers()));
+
+    const channelSize = cld( nworkers(), 2 )
+    const jobs    = RemoteChannel(()->Channel{Tuple}( channelSize ));
+    const results = RemoteChannel(()->Channel{OffsetArray}( channelSize ));
+    
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     
     @sync begin
@@ -264,7 +212,7 @@ function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}..
             for iter in baIter
                 put!(jobs, iter)
             end
-            #close(jobs)
+            close(jobs)
         end
         # control the number of concurrent requests here
         for iter in baIter
@@ -276,11 +224,9 @@ function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}..
                 block = take!(results)
                 ret[indices(block)...] = parent(block)
             end
-            #close(results)
+            close(results)
         end
     end
-    close(jobs)
-    close(results)
     totalSize = length(parent(ret)) * sizeof(eltype(parent(ret))) / 1024/1024 # mega bytes
     elapsed = time() - t1 # seconds 
     println("cutout speed: $(totalSize/elapsed) MB/s")
