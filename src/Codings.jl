@@ -2,15 +2,15 @@ module Codings
 
 using ImageMagick
 using Blosc
-using Libz
+using TranscodingStreams, CodecZlib, CodecZstd
 
 abstract type AbstractBigArrayCoding end
 
-export AbstractBigArrayCoding, JPEGCoding, RawCoding, BlosclzCoding, GZipCoding
+export AbstractBigArrayCoding, JPEGCoding, RawCoding, BlosclzCoding, GzipCoding, ZstdCoding
 export encode, decode 
 
 const GZIP_MAGIC_NUMBER = UInt8[0x1f, 0x8b, 0x08]
-
+const ZSTD_MAGIC_NUMBER = reinterpret(UInt8,[0xFD2FB528])
 function __init__()
     # use the same number of threads with Julia
     if haskey(ENV, "BLOSC_NUM_THREADS")
@@ -28,7 +28,8 @@ end
 struct JPEGCoding    <: AbstractBigArrayCoding end
 struct RawCoding     <: AbstractBigArrayCoding end
 struct BlosclzCoding <: AbstractBigArrayCoding end
-struct GZipCoding    <: AbstractBigArrayCoding end
+struct GzipCoding    <: AbstractBigArrayCoding end
+struct ZstdCoding    <: AbstractBigArrayCoding end 
 
 const DEFAULT_CODING = RawCoding
 
@@ -40,13 +41,29 @@ function decode(data::Vector{UInt8}, coding::Type{RawCoding})
     return data
 end
 
-function encode(data::Array, coding::Type{GZipCoding})
-    Libz.deflate(reinterpret(UInt8, data[:]))
+function encode(data::Array, coding::Type{ZstdCoding})
+    #Libz.deflate(reinterpret(UInt8, data[:]))
+    transcode(ZstdCompressor, reinterpret(UInt8, vec(data)))
 end
 
-function decode(data::Vector{UInt8}, coding::Type{GZipCoding})
+function decode(data::Vector{UInt8}, coding::Type{ZstdCoding}) 
+    if all(data[1:4] .== ZSTD_MAGIC_NUMBER)
+        return transcode(ZstdDecompressor, data)
+    else 
+        return data 
+    end
+end
+
+
+function encode(data::Array, coding::Type{GzipCoding})
+    #Libz.deflate(reinterpret(UInt8, data[:]))
+    transcode(GzipCompressor, reinterpret(UInt8, vec(data)))
+end
+
+function decode(data::Vector{UInt8}, coding::Type{GzipCoding})
     if all(data[1:3] .== GZIP_MAGIC_NUMBER)
-        return Libz.inflate(data)
+        #return Libz.inflate(data)
+        return transcode(GzipDecompressor, data)
     else 
         return data 
     end

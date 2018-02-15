@@ -4,6 +4,8 @@ JSON
 Memoize
 ImageMagick
 Blosc
-Libz
+TranscodingStreams
+CodecZlib
+CodecZstd
 EMIRT
 OffsetArrays

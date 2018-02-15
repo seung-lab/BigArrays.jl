@@ -23,31 +23,30 @@ using Libz
 export AbstractBigArray, BigArray 
 
 function __init__()
-    global const WORKER_POOL = WorkerPool( workers() )
-    @show WORKER_POOL 
+    #global const WORKER_POOL = WorkerPool( workers() )
+    #@show WORKER_POOL 
+    global const GZIP_MAGIC_NUMBER = UInt8[0x1f, 0x8b, 0x08]  
+    global const TASK_NUM = 16
+    global const CHUNK_CHANNEL_SIZE = 2
+    # map datatype of python to Julia 
+    global const DATATYPE_MAP = Dict{String, DataType}( 
+        "uint8"     => UInt8, 
+        "uint16"    => UInt16, 
+        "uint32"    => UInt32, 
+        "uint64"    => UInt64, 
+        "float32"   => Float32, 
+        "float64"   => Float64 
+    )  
+
+    global const CODING_MAP = Dict{String,Any}(
+        # note that the raw encoding in cloud storage will be automatically gzip encoded!
+        "raw"       => GzipCoding,
+        "jpeg"      => JPEGCoding,
+        "blosclz"   => BlosclzCoding,
+        "gzip"      => GzipCoding, 
+        "zstd"      => ZstdCoding 
+    )
 end 
-
-const GZIP_MAGIC_NUMBER = UInt8[0x1f, 0x8b, 0x08]  
-const TASK_NUM = 16
-const CHUNK_CHANNEL_SIZE = 2
-
-# map datatype of python to Julia 
-const DATATYPE_MAP = Dict{String, DataType}( 
-    "uint8"     => UInt8, 
-    "uint16"    => UInt16, 
-    "uint32"    => UInt32, 
-    "uint64"    => UInt64, 
-    "float32"   => Float32, 
-    "float64"   => Float64 
-)  
-
-const CODING_MAP = Dict{String,Any}(
-    # note that the raw encoding in cloud storage will be automatically encoded using gzip!
-    "raw"       => GZipCoding,
-    "jpeg"      => JPEGCoding,
-    "blosclz"   => BlosclzCoding,
-    "gzip"      => GZipCoding 
-)
 
 
 """
@@ -149,10 +148,7 @@ function Base.CartesianRange( ba::BigArray{D,T,N} ) where {D,T,N}
 end
 
 function do_work_setindex( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C} ) where {D,T,N,C}
-    chk = zeros(T, ba.chunkSize)
-    ZERO = T(0)
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in channel
-        fill!(chk, ZERO)
         # println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))")
 		# only accept aligned writting
         delay = 0.05
