@@ -1,6 +1,5 @@
 julia 0.6
 JSON
-#HDF5
 Memoize
 ImageMagick
 Blosc
@@ -9,3 +8,8 @@ CodecZlib
 CodecZstd
 EMIRT
 OffsetArrays
+AWSCore
+AWSS3
+JSON
+Retry
+GoogleCloud
