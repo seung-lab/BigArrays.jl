@@ -8,7 +8,6 @@ abstract type AbstractBigArray <: AbstractArray{Any,Any} end
 include("BackendBase.jl"); using .BackendBase
 include("Codings.jl"); 
 using .Codings;
-include("Chunks.jl"); using .Chunks;
 include("Indexes.jl"); using .Indexes;
 include("Iterators.jl"); using .Iterators;
 include("backends/include.jl") 
@@ -29,7 +28,8 @@ function __init__()
     global const TASK_NUM = 16
     global const CHUNK_CHANNEL_SIZE = 2
     # map datatype of python to Julia 
-    global const DATATYPE_MAP = Dict{String, DataType}( 
+    global const DATATYPE_MAP = Dict{String, DataType}(
+        "bool"      => Bool,
         "uint8"     => UInt8, 
         "uint16"    => UInt16, 
         "uint32"    => UInt32, 
