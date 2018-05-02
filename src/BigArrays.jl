@@ -8,13 +8,14 @@ abstract type AbstractBigArray <: AbstractArray{Any,Any} end
 include("BackendBase.jl"); using .BackendBase
 include("Codings.jl"); 
 using .Codings;
-include("Chunks.jl"); using .Chunks;
 include("Indexes.jl"); using .Indexes;
 include("Iterators.jl"); using .Iterators;
 include("backends/include.jl") 
 
 using OffsetArrays 
 using JSON
+using Libz
+
 #import .BackendBase: AbstractBigArrayBackend  
 # Note that DenseArray only works for memory stored Array
 # http://docs.julialang.org/en/release-0.4/manual/arrays/#implementation
@@ -23,26 +24,29 @@ export AbstractBigArray, BigArray
 function __init__()
     #global const WORKER_POOL = WorkerPool( workers() )
     #@show WORKER_POOL 
+    global const GZIP_MAGIC_NUMBER = UInt8[0x1f, 0x8b, 0x08]  
+    global const TASK_NUM = 16
+    global const CHUNK_CHANNEL_SIZE = 2
+    # map datatype of python to Julia 
+    global const DATATYPE_MAP = Dict{String, DataType}(
+        "bool"      => Bool,
+        "uint8"     => UInt8, 
+        "uint16"    => UInt16, 
+        "uint32"    => UInt32, 
+        "uint64"    => UInt64, 
+        "float32"   => Float32, 
+        "float64"   => Float64 
+    )  
+
+    global const CODING_MAP = Dict{String,Any}(
+        # note that the raw encoding in cloud storage will be automatically gzip encoded!
+        "raw"       => GzipCoding,
+        "jpeg"      => JPEGCoding,
+        "blosclz"   => BlosclzCoding,
+        "gzip"      => GzipCoding, 
+        "zstd"      => ZstdCoding 
+    )
 end 
-
-const TASK_NUM = 20
-# map datatype of python to Julia 
-const DATATYPE_MAP = Dict{String, DataType}( 
-    "uint8"     => UInt8, 
-    "uint16"    => UInt16, 
-    "uint32"    => UInt32, 
-    "uint64"    => UInt64, 
-    "float32"   => Float32, 
-    "float64"   => Float64 
-)  
-
-const CODING_MAP = Dict{String,Any}(
-    # note that the raw encoding in cloud storage will be automatically encoded using gzip!
-    "raw"       => GZipCoding,
-    "jpeg"      => JPEGCoding,
-    "blosclz"   => BlosclzCoding,
-    "gzip"      => GZipCoding 
-)
 
 
 """
@@ -72,13 +76,10 @@ function BigArray( d::AbstractBigArrayBackend)
 end
 
 function BigArray( d::AbstractBigArrayBackend, info::Vector{UInt8})
-    if ismatch(r"^{", String(info) )
-        info = String(info)
-    else
-        # gzip compressed
-        info = String(Libz.decompress(info))
+    if all(info[1:3] .== GZIP_MAGIC_NUMBER)
+        info = Libz.decompress(info)
     end 
-   BigArray(d, info)
+    BigArray(d, String(info))
 end 
 
 function BigArray( d::AbstractBigArrayBackend, info::AbstractString )
@@ -147,17 +148,16 @@ function Base.CartesianRange( ba::BigArray{D,T,N} ) where {D,T,N}
 end
 
 function do_work_setindex( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C} ) where {D,T,N,C}
-    chk = zeros(T, ba.chunkSize)
-    ZERO = T(0)
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in channel
-        fill!(chk, ZERO)
         # println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))")
 		# only accept aligned writting
         delay = 0.05
         for t in 1:4
             try
                 chk = buf[cartesian_range2unit_range(rangeInBuffer)...]
-                ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encode( chk, C)
+                key = cartesian_range2string( chunkGlobalRange )
+                ba.kvStore[ key ] = encode( chk, C)
+                @assert haskey(ba.kvStore, key)
                 break
             catch e
                 println("catch an error while saving in BigArray: $e")
@@ -186,11 +186,11 @@ function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     # check alignment
     @assert all(map((x,y,z)->mod(x.start - 1 - y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the start of index should align with BigArray chunk size" 
     @assert all(map((x,y,z)->mod(x.stop-y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the stop of index should align with BigArray chunk size"
-    taskNum = TASK_NUM
+    taskNum = TASK_NUM 
     t1 = time() 
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     @sync begin 
-        channel = Channel{Tuple}(taskNum)
+        channel = Channel{Tuple}( CHUNK_CHANNEL_SIZE )
         @async begin 
             for iter in baIter
                 put!(channel, iter)
@@ -206,71 +206,8 @@ function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     println("saving speed: $(totalSize/elapsed) MB/s")
 end 
 
-function setindex_remote_worker(block::Array{T,N}, ba::BigArray{D,T,N,C}, 
-                                        chunkGlobalRange::CartesianRange) where {D,T,N,C}
-    delay = 0.05
-	for t in 1:4
-		try
-			ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encode( block, C)
-			break
-		catch e
-			println("catch an error while saving in BigArray: $e")
-			@show typeof(e)
-			@show stacktrace()
-			if t==4
-				println("rethrow the error: $e")
-				rethrow()
-			end 
-			sleep(delay*(0.8+(0.4*rand())))
-			delay *= 10
-			println("retry for the $(t)'s time: $(string(chunkGlobalRange))")
-		end
-	end
-end
-
-"""
-    put array in RAM to a BigArray
-this version uses channel to control the number of asynchronized request
-"""
-function setindex_V3!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
-                       idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
-    idxes = colon2unit_range(buf, idxes)
-    # check alignment
-    @assert all(map((x,y,z)->mod(x.start - 1 - y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the start of index should align with BigArray chunk size" 
-    @assert all(map((x,y,z)->mod(x.stop-y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the stop of index should align with BigArray chunk size"
-
-    t1 = time() 
-    baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
-    @sync begin  
-        for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
-            block = buf[cartesian_range2unit_range(rangeInBuffer)...]
-            @async remotecall_fetch(setindex_remote_worker, WORKER_POOL, block, ba, 
-                                                            chunkGlobalRange)
-        end 
-    end 
-    totalSize = length(buf) * sizeof(eltype(buf)) / 1024/1024 # MB
-    elapsed = time() - t1 # sec
-    println("saving speed: $(totalSize/elapsed) MB/s")
-end 
-
-
-"""
-sequential function, good for debuging
-"""
-# function Base.setindex!{D,T,N,C}( ba::BigArray{D,T,N,C}, buf::Array{T,N},
-function setindex_V1!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
-                       idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
-    @assert eltype(ba) == T
-    @assert ndims(ba) == N
-    idxes = colon2unit_range(buf, idxes)
-    baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
-    chk = Array(T, ba.chunkSize)
-    for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
-        fill!(chk, convert(T, 0))
-        @inbounds chk[cartesian_range2unit_range(rangeInChunk)...] = 
-                                        buf[cartesian_range2unit_range(rangeInBuffer)...]
-        ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encode( chk, C)
-    end
+function Base.merge(ba::BigArray{D,T,N,C}, arr::OffsetArray{T,N, Array{T,N}}) where {D,T,N,C}
+    @unsafe ba[indices(arr)...] = arr |> parent
 end 
 
 function do_work_getindex!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C}) where {D,T,N,C}
@@ -303,22 +240,6 @@ function do_work_getindex!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D
     end
 end
 
-"""
-sequential version for debug
-"""
-function do_work_getindex_V1!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C}) where {D,T,N,C}
-    for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in chan 
-        #chk = zeros(T, ba.chunkSize)
-        # explicit error handling to deal with EOFError
-        println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))") 
-        v = ba.kvStore[cartesian_range2string(chunkGlobalRange)]
-        chk = Codings.decode(v, C)
-        chk = reshape(reinterpret(T, chk), ba.chunkSize)
-        buf[cartesian_range2unit_range(rangeInBuffer)...] = 
-            chk[cartesian_range2unit_range(rangeInChunk)...]
-    end
-end
-
 function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
     taskNum = TASK_NUM
     t1 = time()
@@ -326,7 +247,7 @@ function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}..
     buf = zeros(eltype(ba), sz)
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     @sync begin
-        channel = Channel{Tuple}( taskNum )
+        channel = Channel{Tuple}( CHUNK_CHANNEL_SIZE )
         @async begin
             for iter in baIter
                 put!(channel, iter)
@@ -341,64 +262,8 @@ function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}..
     totalSize = length(buf) * sizeof(eltype(buf)) / 1024/1024 # mega bytes
     elapsed = time() - t1 # seconds 
     println("cutout speed: $(totalSize/elapsed) MB/s")
-    # handle single element indexing, return the single value
-    if length(buf) == 1
-        return buf[1]
-    else 
-        # otherwise return array
-        return buf
-    end
-
+    OffsetArray(buf, idxes...)
 end
-
-function remote_getindex_worker(ba::BigArray{D,T,N,C}, jobs::RemoteChannel, results::RemoteChannel) where {D,T,N,C}
-    blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = take!(jobs) 
-    #println("processing block in global range: $(cartesian_range2string(globalRange))")
-    data = ba.kvStore[ cartesian_range2string(chunkGlobalRange) ]
-    chk = Codings.decode(data, C)
-    chk = reshape(reinterpret(T, chk), ba.chunkSize)
-    chk = chk[cartesian_range2unit_range(rangeInChunk)...]
-    arr = OffsetArray(chk, cartesian_range2unit_range(globalRange)...) 
-    put!(results, arr)
-end 
-
-function getindex_V3( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
-    t1 = time()
-    sz = map(length, idxes)
-    ret = OffsetArray(zeros(eltype(ba), sz), idxes...)
-    const jobs    = RemoteChannel(()->Channel{Tuple}(nworkers()));
-    const results = RemoteChannel(()->Channel{OffsetArray}(nworkers()));
-    baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
-    
-    @sync begin
-        @async begin
-            for iter in baIter
-                put!(jobs, iter)
-            end
-            #close(jobs)
-        end
-        # control the number of concurrent requests here
-        for iter in baIter
-            @async remote_do(remote_getindex_worker, WORKER_POOL, ba, jobs, results)
-        end
-
-        @async begin 
-            for iter in baIter
-                block = take!(results)
-                ret[indices(block)...] = parent(block)
-            end
-            #close(results)
-        end
-    end
-    close(jobs)
-    close(results)
-    totalSize = length(parent(ret)) * sizeof(eltype(parent(ret))) / 1024/1024 # mega bytes
-    elapsed = time() - t1 # seconds 
-    println("cutout speed: $(totalSize/elapsed) MB/s")
-    # handle single element indexing, return the single value
-    ret 
-end
-
 
 function get_chunk_size(ba::AbstractBigArray)
     ba.chunkSize
