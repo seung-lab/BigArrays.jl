@@ -37,4 +37,9 @@ function Base.setindex!( self::BinDict, value::Array, key::AbstractString )
     write(fileName, data)
 end 
 
+function Base.haskey( self::BinDict, key::AbstractString )
+    joinpath( get_path(self), key ) |> isfile 
+end
+
+
 end # module

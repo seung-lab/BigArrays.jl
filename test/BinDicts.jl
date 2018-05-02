@@ -1,6 +1,7 @@
-@everywhere using BigArrays
-@everywhere using BigArrays.BinDicts
-@everywhere using Base.Test
+using BigArrays
+using BigArrays.BinDicts
+using Base.Test
+using OffsetArrays 
 
 # prepare directory
 tempDir = tempname()
@@ -13,15 +14,16 @@ infoString = """
 {"encoding": "gzip", "chunk_sizes": [[100, 100, 5]], "key": "12_12_30", "resolution": [12, 12, 30], "voxel_offset": [103, 103, 7], "size": [12286, 11262, 2046]} 
 ]} 
 """
-open( joinpath(tempDir, "info"), "w" ) do f
-    write(f, infoString)
-end 
+
+write( joinpath(tempDir, "info"), infoString )
 
 @testset "test BinDict" begin 
     h = BinDict(datasetDir)
     a = rand(UInt8, 20)
     h["test"] = a
     b = h["test"]
+    @assert haskey(h, "test")
+    @assert !haskey(h, "notexist")
     @show a
     @show b
     @test all(a.==b)
@@ -35,8 +37,10 @@ end # testset
     @test all(a.==parent(b))
 end # end of testset
 
+infoString = replace(infoString, "gzip", "zstd")
+write( joinpath(tempDir, "info"), infoString )
 
-@testset "test UInt8 image IO of BigArray" begin
+@testset "test IO of BigArray with backend of BinDict with zstd compression" begin
     ba = BigArray( BinDict(datasetDir) )
     a = rand(UInt8, 200,200,10)
     ba[201:400, 201:400, 101:110] = a
@@ -44,6 +48,20 @@ end # end of testset
     @test all(a.==parent(b))
 end # end of testset
 
+infoString = replace(infoString, "zstd", "blosclz")
+write( joinpath(tempDir, "info"), infoString )
+
+
+@testset "test merge function with backend of BinDict with blosclz compression" begin
+    ba = BigArray( BinDict(datasetDir) )
+    a = rand(UInt8, 200,200,10)
+    @unsafe merge(ba, OffsetArray(a, 201:400, 201:400, 101:110))
+    @unsafe b = ba[201:400, 201:400, 101:110]
+    @test all(parent(a).==parent(b))
+end # end of testset
+
+infoString = replace(infoString, "blosclz", "zstd")
+write( joinpath(tempDir, "info"), infoString )
 
 @testset "test dataset not aligned starting from 0" begin 
     datasetDir = joinpath(tempDir, "12_12_30") 

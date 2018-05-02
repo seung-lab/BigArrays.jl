@@ -76,7 +76,7 @@ end
 #     return ret[1:end-1]
 # end
 
-function unit_range2string(idxes::Vector)
+function unit_range2string(idxes::Union{Tuple,Vector})
     ret = ""
     for idx in idxes
         ret *= "$(start(idx)-1)-$(idx[end])_"
