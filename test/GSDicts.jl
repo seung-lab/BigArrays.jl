@@ -1,6 +1,6 @@
 using Base.Test 
 using BigArrays
-using GSDicts
+using BigArrays.GSDicts
 using OffsetArrays
 
 d = GSDict( "gs://seunglab/jpwu/test/image/4_4_40/" );

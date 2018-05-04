@@ -57,16 +57,16 @@ all the manipulation effects in the x,y,z dimension
 struct BigArray{D<:AbstractBigArrayBackend, T<:Real, N, C<:AbstractBigArrayCoding} <: AbstractBigArray
     kvStore     :: D
     chunkSize   :: NTuple{N}
+    volumeSize  :: NTuple{N}
     offset      :: CartesianIndex{N}
     function BigArray(
                     kvStore     ::D,
                     foo         ::Type{T},
                     chunkSize   ::NTuple{N},
+                    volumeSize  ::NTuple{N},
                     coding      ::Type{C};
                     offset      ::CartesianIndex{N} = CartesianIndex{N}() - 1) where {D,T,N,C}
-        # force the offset to be 0s to shutdown the functionality of offset for now
-        # because it corrupted all the other bigarrays in aws s3
-        new{D, T, N, C}(kvStore, chunkSize, offset)
+        new{D, T, N, C}(kvStore, chunkSize, volumeSize, offset)
     end
 end
 
@@ -90,20 +90,22 @@ function BigArray( d::AbstractBigArrayBackend, infoConfig::Dict{Symbol, Any})
     # chunkSize
     scale_name = get_scale_name(d)
     T = DATATYPE_MAP[infoConfig[:data_type]]
-    local offset::Tuple, encoding, chunkSize::Tuple 
+    local offset::Tuple, encoding, chunkSize::Tuple, volumeSize::Tuple 
     for scale in infoConfig[:scales]
         if scale[:key] == scale_name 
             chunkSize = (scale[:chunk_sizes][1]...)
             offset = (scale[:voxel_offset]...)
+            volumeSize = (scale[:size]...)
             encoding = CODING_MAP[ scale[:encoding] ]
             if infoConfig[:num_channels] > 1
                 chunkSize = (chunkSize..., infoConfig[:num_channels])
+                volumeSize = (volumeSize..., infoConfig[:num_channels])
                 offset = (offset..., 0)
             end
             break 
         end 
     end 
-    BigArray(d, T, chunkSize, encoding; offset=CartesianIndex(offset)) 
+    BigArray(d, T, chunkSize, volumeSize, encoding; offset=CartesianIndex(offset)) 
 end
 
 ######################### base functions #######################
@@ -151,6 +153,7 @@ function do_work_setindex( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArra
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in channel
         # println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))")
 		# only accept aligned writting
+        adjust_volume_boundary!(ba, chunkGlobalRange, rangeInBuffer)
         delay = 0.05
         for t in 1:4
             try
@@ -176,7 +179,7 @@ function do_work_setindex( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArra
 end 
 
 """
-    put array in RAM to a BigArray
+    put array in RAM to a BigArray backend
 this version uses channel to control the number of asynchronized request
 """
 function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
@@ -210,13 +213,30 @@ function Base.merge(ba::BigArray{D,T,N,C}, arr::OffsetArray{T,N, Array{T,N}}) wh
     @unsafe ba[indices(arr)...] = arr |> parent
 end 
 
+"""
+adjust the global and buffer range according to total volume size.
+shrink the range stop if the ranges passes the volume boundary.
+"""
+function adjust_volume_boundary!(ba::BigArray, chunkGlobalRange, rangeInBuffer)
+    volumeStop = map(+, ba.offset.I, ba.volumeSize)
+    for (i,s) in enumerate(volumeStop)
+        distanceOverBorder = chunkGlobalRange.stop.I[i] - s
+        if distanceOverBorder > 0
+            chunkGlobalRange.stop.I[i] -= distanceOverBorder
+            rangeInBuffer.stop.I[i] -= distanceOverBorder
+            @assert chunkGlobalRange.stop.I[i] == s
+        end
+    end
+end 
+
 function do_work_getindex!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C}) where {D,T,N,C}
     for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in chan 
         # explicit error handling to deal with EOFError
+        adjust_volume_boundary!(ba, chunkGlobalRange, rangeInBuffer)
         delay = 0.05
         for t in 1:3
             try 
-                #println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))") 
+                #println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))")
                 v = ba.kvStore[cartesian_range2string(chunkGlobalRange)]
                 chk = Codings.decode(v, C)
                 chk = reshape(reinterpret(T, chk), ba.chunkSize)

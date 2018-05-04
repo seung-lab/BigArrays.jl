@@ -1,6 +1,6 @@
 using Base.Test 
 using BigArrays
-using S3Dicts
+using BigArrays.S3Dicts
 using OffsetArrays
 
 d = S3Dict( "s3://seunglab/jpwu/test/image/4_4_40/" )
