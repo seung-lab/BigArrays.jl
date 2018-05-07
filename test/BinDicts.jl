@@ -38,14 +38,16 @@ end # testset
     @test all(a.==parent(b))
 end # end of testset
 
-@testset "test nonaligned IO close to boundary" begin 
+@testset "test aligned IO crossing the volume boundary" begin 
     ba = BigArray( BinDict(datasetDir) )
-    a = rand(UInt8, 110,110,7)
-    ba[101:210, 101:210, 6:12] = a
-    b = ba[101:210, 101:210, 6:12] 
-    @test all(a.==parent(b))
+    a = rand(UInt8, 200,200,10)
+    # respect the volume size, the chunk range over volume size will not be written
+    ba[101:300, 101:300, 6:15] = a
+    b = ba[101:300, 101:300, 6:15]
+    c = zeros(a)
+    c[1:110, 1:110, 1:7] = a[1:110, 1:110, 1:7]
+    @test all(c.==parent(b))
 end # end of testset
-
 
 infoString = replace(infoString, "gzip", "zstd")
 write( joinpath(tempDir, "info"), infoString )
@@ -64,9 +66,9 @@ write( joinpath(tempDir, "info"), infoString )
 
 @testset "test merge function with backend of BinDict with blosclz compression" begin
     ba = BigArray( BinDict(datasetDir) )
-    a = rand(UInt8, 210,210,12)
-    @unsafe merge(ba, OffsetArray(a, 1:210, 1:210, 1:12))
-    @unsafe b = ba[1:210, 1:210, 1:12]
+    a = rand(UInt8, 200,200,10)
+    @unsafe merge(ba, OffsetArray(a, 1:200, 1:200, 1:10))
+    @unsafe b = ba[1:200, 1:200, 1:10]
     @test all(parent(a).==parent(b))
 end # end of testset
 

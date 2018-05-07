@@ -72,14 +72,14 @@ function Base.next(  iter    ::Iterator{N},
                             iter.chunkSize, iter.globalRange.stop.I,
                             iter.offset.I ))
     # the global range of the cutout in this chunk
-    globalRange = CartesianRange(start, stop)
+    cutoutGlobalRange = CartesianRange(start, stop)
     # the range inside this chunk
-    rangeInChunk  = global_range2chunk_range( globalRange, iter.chunkSize; offset=iter.offset)
+    rangeInChunk  = global_range2chunk_range( cutoutGlobalRange, iter.chunkSize; offset=iter.offset)
     # the range inside the buffer
-    rangeInBuffer = global_range2buffer_range(globalRange, iter.globalRange)
+    rangeInBuffer = global_range2buffer_range(cutoutGlobalRange, iter.globalRange)
     # the global range of this chunk
     chunkGlobalRange = chunkid2global_range( chunkID, iter.chunkSize; offset=iter.offset )
-    return (chunkID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer), state
+    return (chunkID, chunkGlobalRange, cutoutGlobalRange, rangeInChunk, rangeInBuffer), state
 end
 
 """
