@@ -152,8 +152,7 @@ end
 function do_work_setindex( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C} ) where {D,T,N,C}
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in channel
         # println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))")
-		# only accept aligned writting
-        adjust_volume_boundary!(ba, chunkGlobalRange, rangeInBuffer)
+        chunkGlobalRange = adjust_volume_boundary(ba, chunkGlobalRange)
         delay = 0.05
         for t in 1:4
             try
@@ -188,7 +187,6 @@ function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     @show idxes
     # check alignment
     @assert all(map((x,y,z)->mod(x.start - 1 - y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the start of index should align with BigArray chunk size" 
-    @assert all(map((x,y,z)->mod(x.stop-y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the stop of index should align with BigArray chunk size"
     taskNum = TASK_NUM 
     t1 = time() 
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
@@ -217,29 +215,37 @@ end
 adjust the global and buffer range according to total volume size.
 shrink the range stop if the ranges passes the volume boundary.
 """
-function adjust_volume_boundary!(ba::BigArray, chunkGlobalRange, rangeInBuffer)
+function adjust_volume_boundary(ba::BigArray, chunkGlobalRange)
     volumeStop = map(+, ba.offset.I, ba.volumeSize)
+    chunkGlobalRangeStop = [chunkGlobalRange.stop.I ...]
+
     for (i,s) in enumerate(volumeStop)
-        distanceOverBorder = chunkGlobalRange.stop.I[i] - s
+        distanceOverBorder = chunkGlobalRangeStop[i] - s
         if distanceOverBorder > 0
-            chunkGlobalRange.stop.I[i] -= distanceOverBorder
-            rangeInBuffer.stop.I[i] -= distanceOverBorder
-            @assert chunkGlobalRange.stop.I[i] == s
+            chunkGlobalRangeStop[i] -= distanceOverBorder
+            @assert chunkGlobalRangeStop[i] == s
         end
     end
+    chunkGlobalRange = CartesianRange(chunkGlobalRange.start, 
+                                      CartesianIndex((chunkGlobalRangeStop...)))
+    return chunkGlobalRange
 end 
 
 function do_work_getindex!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C}) where {D,T,N,C}
     for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in chan 
         # explicit error handling to deal with EOFError
-        adjust_volume_boundary!(ba, chunkGlobalRange, rangeInBuffer)
+        chunkGlobalRange = adjust_volume_boundary(ba, chunkGlobalRange)
+        chunkSize = (chunkGlobalRange.stop - chunkGlobalRange.start + 1).I
+
         delay = 0.05
         for t in 1:3
             try 
                 #println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))")
+                key = cartesian_range2string(chunkGlobalRange)
                 v = ba.kvStore[cartesian_range2string(chunkGlobalRange)]
-                chk = Codings.decode(v, C)
-                chk = reshape(reinterpret(T, chk), ba.chunkSize)
+                v = Codings.decode(v, C)
+                chk = reinterpret(T, v)
+                chk = reshape(chk, chunkSize)
                 @inbounds buf[cartesian_range2unit_range(rangeInBuffer)...] = 
                                         chk[cartesian_range2unit_range(rangeInChunk)...]
                 break 

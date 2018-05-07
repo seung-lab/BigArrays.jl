@@ -5,12 +5,13 @@ using OffsetArrays
 
 # prepare directory
 tempDir = tempname()
+@show tempDir
 datasetDir = joinpath(tempDir, "6_6_30")
 mkdir(tempDir)
 mkdir(datasetDir)
 infoString = """
 {"num_channels": 1, "type": "image", "data_type": "uint8", "scales": [
-{"encoding": "gzip", "chunk_sizes": [[100, 100, 5]], "key": "6_6_30", "resolution": [6, 6, 30], "voxel_offset": [0, 0, 0], "size": [12286, 11262, 2046]}, 
+{"encoding": "gzip", "chunk_sizes": [[100, 100, 5]], "key": "6_6_30", "resolution": [6, 6, 30], "voxel_offset": [0, 0, 0], "size": [210, 210, 12]}, 
 {"encoding": "gzip", "chunk_sizes": [[100, 100, 5]], "key": "12_12_30", "resolution": [12, 12, 30], "voxel_offset": [103, 103, 7], "size": [12286, 11262, 2046]} 
 ]} 
 """
@@ -37,14 +38,23 @@ end # testset
     @test all(a.==parent(b))
 end # end of testset
 
+@testset "test nonaligned IO close to boundary" begin 
+    ba = BigArray( BinDict(datasetDir) )
+    a = rand(UInt8, 110,110,7)
+    ba[101:210, 101:210, 6:12] = a
+    b = ba[101:210, 101:210, 6:12] 
+    @test all(a.==parent(b))
+end # end of testset
+
+
 infoString = replace(infoString, "gzip", "zstd")
 write( joinpath(tempDir, "info"), infoString )
 
 @testset "test IO of BigArray with backend of BinDict with zstd compression" begin
     ba = BigArray( BinDict(datasetDir) )
     a = rand(UInt8, 200,200,10)
-    ba[201:400, 201:400, 101:110] = a
-    b = ba[201:400, 201:400, 101:110]
+    ba[1:200, 1:200, 1:10] = a
+    b = ba[1:200, 1:200, 1:10]
     @test all(a.==parent(b))
 end # end of testset
 
@@ -54,9 +64,9 @@ write( joinpath(tempDir, "info"), infoString )
 
 @testset "test merge function with backend of BinDict with blosclz compression" begin
     ba = BigArray( BinDict(datasetDir) )
-    a = rand(UInt8, 200,200,10)
-    @unsafe merge(ba, OffsetArray(a, 201:400, 201:400, 101:110))
-    @unsafe b = ba[201:400, 201:400, 101:110]
+    a = rand(UInt8, 210,210,12)
+    @unsafe merge(ba, OffsetArray(a, 1:210, 1:210, 1:12))
+    @unsafe b = ba[1:210, 1:210, 1:12]
     @test all(parent(a).==parent(b))
 end # end of testset
 
