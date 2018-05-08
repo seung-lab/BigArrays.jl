@@ -194,7 +194,7 @@ function Base.CartesianRange(ba::BigArray)
 end 
 
 function remote_getindex_worker(ba::BigArray{D,T,N,C}, jobs::RemoteChannel, 
-                                results::RemoteChannel) where {D,T,N,C}
+                                sharedBuffer::OffsetArray{T,N,SharedArray{T,N}}) where {D,T,N,C}
     baRange = CartesianRange(ba)
     blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = take!(jobs)
     if any(map((x,y)->x>y, globalRange.start.I, baRange.stop.I)) || any(map((x,y)->x<y, globalRange.stop.I, baRange.start.I))
@@ -211,18 +211,19 @@ function remote_getindex_worker(ba::BigArray{D,T,N,C}, jobs::RemoteChannel,
     chk = Codings.decode(data, C)
     chk = reshape(reinterpret(T, chk), chunkSize)
     chk = chk[cartesian_range2unit_range(rangeInChunk)...]
-    arr = OffsetArray(chk, cartesian_range2unit_range(globalRange)...) 
-    put!(results, arr)
+    sharedBuffer[cartesian_range2unit_range(globalRange)...] = chk[cartesian_range2unit_range(rangeInChunk)...]
 end 
 
 function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
     t1 = time()
     sz = map(length, idxes)
-    ret = OffsetArray(zeros(eltype(ba), sz), idxes...)
+    # it seems that the default value is automatically set to zero
+    sharedBuffer = OffsetArray(SharedArray{eltype(ba)}(sz; pids=workers(WORKER_POOL)),
+                               idxes...)
 
     const channelSize = cld( nworkers(), 2 )
     const jobs    = RemoteChannel(()->Channel{Tuple}( channelSize ));
-    const results = RemoteChannel(()->Channel{OffsetArray}( channelSize ));
+
     
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     
@@ -235,17 +236,10 @@ function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}..
         end
         # control the number of concurrent requests here
         for iter in baIter
-            @async remote_do(remote_getindex_worker, WORKER_POOL, ba, jobs, results)
-        end
-
-        @async begin 
-            for iter in baIter
-                block = take!(results)
-                ret[indices(block)...] = parent(block)
-            end
-            close(results)
+            @async remote_do(remote_getindex_worker, WORKER_POOL, ba, jobs, sharedBuffer)
         end
     end
+    ret = OffsetArray(Array(sharedBuffer |> parent), indices(sharedBuffer))
     totalSize = length(parent(ret)) * sizeof(eltype(parent(ret))) / 1024/1024 # mega bytes
     elapsed = time() - t1 # seconds 
     println("cutout speed: $(totalSize/elapsed) MB/s")
