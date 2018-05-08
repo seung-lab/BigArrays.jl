@@ -11,8 +11,8 @@ mkdir(tempDir)
 mkdir(datasetDir)
 infoString = """
 {"num_channels": 1, "type": "image", "data_type": "uint8", "scales": [
-{"encoding": "gzip", "chunk_sizes": [[100, 100, 5]], "key": "6_6_30", "resolution": [6, 6, 30], "voxel_offset": [0, 0, 0], "size": [210, 210, 12]}, 
-{"encoding": "gzip", "chunk_sizes": [[100, 100, 5]], "key": "12_12_30", "resolution": [12, 12, 30], "voxel_offset": [103, 103, 7], "size": [12286, 11262, 2046]} 
+{"encoding": "gzip", "chunk_sizes": [[100, 100, 5]], "key": "6_6_30", "resolution": [6, 6, 30], "voxel_offset": [-300, -300, -10], "size": [510, 510, 22]}, 
+{"encoding": "gzip", "chunk_sizes": [[100, 100, 5]], "key": "12_12_30", "resolution": [12, 12, 30], "voxel_offset": [-597, -597, -103], "size": [12286, 11262, 2046]} 
 ]} 
 """
 
@@ -32,6 +32,7 @@ end # testset
 
 @testset "test negative coordinate" begin 
     ba = BigArray( BinDict(datasetDir) )
+    @show CartesianRange(ba)
     a = rand(UInt8, 200,200,10)
     ba[-199:0, -99:100, -4:5] = a
     b = ba[-199:0, -99:100, -4:5] 
@@ -48,6 +49,18 @@ end # end of testset
     c[1:110, 1:110, 1:7] = a[1:110, 1:110, 1:7]
     @test all(c.==parent(b))
 end # end of testset
+
+@testset "test nonaligned IO crossing the volume boundary" begin 
+    ba = BigArray( BinDict(datasetDir) )
+    a = rand(UInt8, 190,190,9)
+    # respect the volume size, the chunk range over volume size will not be written
+    ba[101:290, 101:290, 6:14] = a
+    b = ba[101:290, 101:290, 6:14]
+    c = zeros(a)
+    c[1:110, 1:110, 1:7] = a[1:110, 1:110, 1:7]
+    @test all(c.==parent(b))
+end # end of testset
+
 
 infoString = replace(infoString, "gzip", "zstd")
 write( joinpath(tempDir, "info"), infoString )
