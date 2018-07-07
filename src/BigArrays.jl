@@ -25,7 +25,7 @@ function __init__()
     #global const WORKER_POOL = WorkerPool( workers() )
     #@show WORKER_POOL 
     global const GZIP_MAGIC_NUMBER = UInt8[0x1f, 0x8b, 0x08]  
-    global const TASK_NUM = 16
+    global const TASK_NUM = 2
     global const CHUNK_CHANNEL_SIZE = 2
     # map datatype of python to Julia 
     global const DATATYPE_MAP = Dict{String, DataType}(
