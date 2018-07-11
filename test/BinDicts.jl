@@ -11,7 +11,7 @@ mkdir(tempDir)
 mkdir(datasetDir)
 infoString = """
 {"num_channels": 1, "type": "image", "data_type": "uint8", "scales": [
-{"encoding": "gzip", "chunk_sizes": [[100, 100, 5]], "key": "6_6_30", "resolution": [6, 6, 30], "voxel_offset": [-300, -300, -10], "size": [510, 510, 22]}, 
+{"encoding": "gzip", "chunk_sizes": [[100, 100, 5]], "key": "6_6_30", "resolution": [6, 6, 30], "voxel_offset": [-300, -300, -10], "size": [510, 510, 2022]}, 
 {"encoding": "gzip", "chunk_sizes": [[100, 100, 5]], "key": "12_12_30", "resolution": [12, 12, 30], "voxel_offset": [-597, -597, -103], "size": [12286, 11262, 2046]} 
 ]} 
 """
@@ -33,9 +33,9 @@ end # testset
 @testset "test negative coordinate" begin 
     ba = BigArray( BinDict(datasetDir) )
     @show CartesianRange(ba)
-    a = rand(UInt8, 200,200,10)
-    ba[-199:0, -99:100, -4:5] = a
-    b = ba[-199:0, -99:100, -4:5] 
+    a = rand(UInt8, 200,200,2000)
+    ba[-199:0, -99:100, -4:1995] = a
+    b = ba[-199:0, -99:100, -4:1995] 
     @test all(a.==parent(b))
 end # end of testset
 
@@ -43,8 +43,8 @@ end # end of testset
     ba = BigArray( BinDict(datasetDir) )
     a = rand(UInt8, 200,200,10)
     # respect the volume size, the chunk range over volume size will not be written
-    ba[101:300, 101:300, 6:15] = a
-    b = ba[101:300, 101:300, 6:15]
+    ba[101:300, 101:300, 2006:2015] = a
+    b = ba[101:300, 101:300, 2006:2015]
     c = zeros(a)
     c[1:110, 1:110, 1:7] = a[1:110, 1:110, 1:7]
     @test all(c.==parent(b))
@@ -54,8 +54,8 @@ end # end of testset
     ba = BigArray( BinDict(datasetDir) )
     a = rand(UInt8, 190,190,9)
     # respect the volume size, the chunk range over volume size will not be written
-    ba[101:290, 101:290, 6:14] = a
-    b = ba[101:290, 101:290, 6:14]
+    ba[101:290, 101:290, 2006:2014] = a
+    b = ba[101:290, 101:290, 2006:2014]
     c = zeros(a)
     c[1:110, 1:110, 1:7] = a[1:110, 1:110, 1:7]
     @test all(c.==parent(b))
