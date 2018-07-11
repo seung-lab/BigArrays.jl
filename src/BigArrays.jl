@@ -156,6 +156,8 @@ function do_work_setindex( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArra
                 if t==4
                     println("rethrow the error: $e")
                     rethrow()
+                else 
+                    warn("retry for the $(t)'s time.")
                 end 
                 sleep(delay*(0.8+(0.4*rand())))
                 delay *= 10
@@ -197,24 +199,7 @@ end
 
 function setindex_remote_worker(block::Array{T,N}, ba::BigArray{D,T,N,C}, 
                                         chunkGlobalRange::CartesianRange) where {D,T,N,C}
-    delay = 0.05
-	for t in 1:4
-		try
-			ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encode( block, C)
-			break
-		catch e
-			println("catch an error while saving in BigArray: $e")
-			@show typeof(e)
-			@show stacktrace()
-			if t==4
-				println("rethrow the error: $e")
-				rethrow()
-			end 
-			sleep(delay*(0.8+(0.4*rand())))
-			delay *= 10
-			println("retry for the $(t)'s time: $(string(chunkGlobalRange))")
-		end
-	end
+    ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encode( block, C)
 end
 
 """
@@ -325,6 +310,8 @@ function do_work_getindex!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D
                     println("catch an error while getindex in BigArray: $err with type of $(typeof(err))")
                     if t==3
                         rethrow()
+                    else 
+                        warn("retry for the $(t)'s time.")
                     end
                     sleep(delay*(0.8+(0.4*rand())))
                     delay *= 10
@@ -373,12 +360,36 @@ function remote_getindex_worker(ba::BigArray{D,T,N,C}, jobs::RemoteChannel,
     #finalize(jobs)
     chunkSize = (chunkGlobalRange.stop - chunkGlobalRange.start + 1).I
     #println("processing block in global range: $(cartesian_range2string(globalRange))")
-    data = ba.kvStore[ cartesian_range2string(chunkGlobalRange) ]
-    chk = Codings.decode(data, C)
-    chk = reshape(reinterpret(T, chk), chunkSize)
-    chk = chk[cartesian_range2unit_range(rangeInChunk)...]
-    arr = OffsetArray(chk, cartesian_range2unit_range(globalRange)...) 
-    put!(results, arr)
+    delay = 0.05
+    for t in 1:4
+        try 
+            data = ba.kvStore[ cartesian_range2string(chunkGlobalRange) ]
+            chk = Codings.decode(data, C)
+            chk = reshape(reinterpret(T, chk), chunkSize)
+            chk = chk[cartesian_range2unit_range(rangeInChunk)...]
+            arr = OffsetArray(chk, cartesian_range2unit_range(globalRange)...) 
+            put!(results, arr)
+            break 
+        catch err
+            if isa(err, KeyError)
+                println("no such key: $(err), will fill with zeros.")
+                break 
+            end 
+
+            println("catch an error while get index in remote worker: $e")
+            @show typeof(e)
+            @show stacktrace()
+            if t == 4 
+                println("rethrow the error: $e")
+                rethrow()
+            else 
+                warn("retry for the $(t)'s time")
+            end 
+            sleep(delay*(0.8+(0.4*rand())))
+            delay *= 10 
+            println("retry for the $(t)'s time: $(string(chunkGlobalRange))'")
+        end 
+    end 
 end 
 
 function getindex_multiprocesses( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}

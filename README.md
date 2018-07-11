@@ -40,17 +40,12 @@ then use `ba` as normal array, the returned cutout result will be an OffsetArray
 #### setup info file 
 the info file is a JSON file, which defines all the configuration of the dataset. It was defined in [neuroglancer](https://github.com/seung-lab/neuroglancer/wiki/Precomputed-API#info-json-file-specification) 
 
-[test example](https://github.com/seung-lab/BigArrays.jl/blob/master/test/backends/s3.jl)
+[test example](https://github.com/seung-lab/BigArrays.jl/blob/master/test/S3Dicts.jl)
 
 ### use backend of Google Cloud Storage
 the [info configuration file](https://github.com/seung-lab/neuroglancer/wiki/Precomputed-API#info-json-file-specification) is the same with S3 backend.
 
-[test example](https://github.com/seung-lab/BigArrays.jl/blob/master/test/backends/gs.jl)
-
-# Benchmark
-
-image size: 512x512x512, data is EM image
-chunk size is 256x256x32
+[test example](https://github.com/seung-lab/BigArrays.jl/blob/master/test/GSDicts.jl)
 
 # Development
 BigArrays is a high-level architecture to transform Key-Value store (backend) to Julia Array (frontend). it provide an interface of AbstractArray, and implement the get_index and set_index functions. 

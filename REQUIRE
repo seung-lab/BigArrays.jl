@@ -9,7 +9,6 @@ CodecZstd
 EMIRT
 OffsetArrays
 AWSCore
-AWSS3
+AWSSDK
 JSON
-Retry
 GoogleCloud

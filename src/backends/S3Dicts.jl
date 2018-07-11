@@ -3,8 +3,8 @@ module S3Dicts
 
 using JSON
 using AWSCore
-using AWSS3
-using Retry
+using AWSSDK.S3
+#using Retry
 #using Libz 
 using Memoize
 import HTTP
@@ -47,8 +47,9 @@ end
 
 
 function get_info(self::S3Dict)
-    s3_get(AWS_CREDENTIAL, self.bkt, joinpath(dirname(self.keyPrefix), "info"); 
-           retry=true)
+    data = S3.get_object(AWS_CREDENTIAL; Bucket=self.bkt, 
+                  Key=joinpath(dirname(self.keyPrefix), "info"))
+    return String(data)
 end 
 
 function get_scale_name(self::S3Dict)  basename( self.keyPrefix ) end 
@@ -64,27 +65,23 @@ function Base.setindex!(h::S3Dict, v::Array, key::AbstractString)
     else 
         contentEncoding = ""
     end 
-    @repeat 4 try 
-        resp = s3_put(AWS_CREDENTIAL, h.bkt, joinpath(h.keyPrefix, key), 
-                      data,
-                      METADATA["Content-Type"],
-                      contentEncoding)
-    catch err 
-        println("catch error while saving: $err")
-        @show typeof(err)
-        @show err 
-        @delay_retry if true end
-    end
+    arguments = Dict(:Bucket   => h.bkt,
+                 :Key      => joinpath(h.keyPrefix, key),
+                 :Body     => data, 
+                 Symbol("Content-Type")  => METADATA["Content-Type"],
+                 Symbol("Content-Encoding") => contentEncoding )
+
+    resp = S3.put_object(AWS_CREDENTIAL, arguments) 
 end
 
 function Base.getindex(h::S3Dict, key::AbstractString)
     try 
-        data = AWSS3.s3_get(AWS_CREDENTIAL, h.bkt, joinpath(h.keyPrefix, key); 
-                        raw=true, retry =false)
+        data = S3.get_object(AWS_CREDENTIAL; Bucket=h.bkt, Key=joinpath(h.keyPrefix, key))
         return data
     catch err
+        @show err 
         if isa(err, AWSCore.AWSException) && err.code == "NoSuchKey"
-            throw(KeyError("NoSuchKey: $key"))
+            throw(KeyError("NoSuchKey in AWS S3: $key"))
         elseif isa(err, HTTP.ClosedError)
             display(err.e)
             rethrow()
@@ -95,11 +92,11 @@ function Base.getindex(h::S3Dict, key::AbstractString)
 end
 
 function Base.delete!( h::S3Dict, key::AbstractString)
-    s3_delete(AWS_CREDENTIAL, h.bkt, joinpath(h.keyPrefix, key))
+    S3.delete_object(AWS_CREDENTIAL; Bucket=h.bkt, Key=joinpath(h.keyPrefix, key))
 end
 
 function Base.keys( h::S3Dict )
-    s3_list_objects(AWS_CREDENTIAL, h.bkt, h.keyPrefix)
+    S3.list_objects_v2(AWS_CREDENTIAL; Bucket=h.bkt, prefix=h.keyPrefix)
 end
 
 function Base.values(h::S3Dict)
@@ -107,7 +104,8 @@ function Base.values(h::S3Dict)
 end
 
 function Base.haskey(h::S3Dict, key::String)
-    s3_exists(AWS_CREDENTIAL, h.bkt, joinpath(h.keyPrefix, key))
+    resp = S3.list_objects_v2(AWS_CREDENTIAL; Bucket=h.bkt, prefix=joinpath(h.keyPrefix, key))
+    return parse( resp["KeyCount"] ) > 0
 end 
 
 end # end of module S3Dicts

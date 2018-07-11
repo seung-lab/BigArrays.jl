@@ -10,8 +10,6 @@ notifications:
 git:
   depth: 999999
 
-before_install:
-    - sudo apt-get install hdf5-tools
 script:
     - julia -e 'Pkg.clone(pwd()); Pkg.test("BigArrays")'
 
