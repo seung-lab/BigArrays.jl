@@ -149,12 +149,12 @@ function do_work_setindex( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArra
                 ba.kvStore[ key ] = encode( chk, C)
                 @assert haskey(ba.kvStore, key)
                 break
-            catch e
-                println("catch an error while saving in BigArray: $e")
-                @show typeof(e)
+            catch err 
+                println("catch an error while saving in BigArray: $err")
+                @show typeof(err)
                 @show stacktrace()
                 if t==4
-                    println("rethrow the error: $e")
+                    println("rethrow the error: $err")
                     rethrow()
                 else 
                     warn("retry for the $(t)'s time.")
@@ -228,7 +228,8 @@ end
 
 function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
             idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
-    setindex_multiprocesses!(ba, buf, idxes...)
+    #setindex_multiprocesses!(ba, buf, idxes...)
+    setindex_multithreads(ba, buf, idxes...)
 end 
 
 function Base.merge(ba::BigArray{D,T,N,C}, arr::OffsetArray{T,N, Array{T,N}}) where {D,T,N,C}
@@ -376,11 +377,11 @@ function remote_getindex_worker(ba::BigArray{D,T,N,C}, jobs::RemoteChannel,
                 break 
             end 
 
-            println("catch an error while get index in remote worker: $e")
-            @show typeof(e)
+            println("catch an error while get index in remote worker: $err")
+            @show typeof(err)
             @show stacktrace()
             if t == 4 
-                println("rethrow the error: $e")
+                println("rethrow the error: $err")
                 rethrow()
             else 
                 warn("retry for the $(t)'s time")
@@ -431,7 +432,8 @@ function getindex_multiprocesses( ba::BigArray{D, T, N, C}, idxes::Union{UnitRan
 end 
 
 function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
-    getindex_multiprocesses(ba, idxes...)
+    #getindex_multiprocesses(ba, idxes...)
+    getindex_multithreads(ba, idxes...)
 end
 
 function get_chunk_size(ba::AbstractBigArray)
