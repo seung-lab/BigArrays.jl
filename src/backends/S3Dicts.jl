@@ -9,25 +9,24 @@ using Retry
 using Memoize
 import HTTP
 import BigArrays.BackendBase: AbstractBigArrayBackend, get_info, get_scale_name 
+export S3Dict
 
-const NEUROGLANCER_CONFIG_FILENAME = "info"
-try 
-    #AWSCore.set_debug_level(2)
-    global const AWS_CREDENTIAL = AWSCore.aws_config()
-catch err
-    if isfile("/secrets/aws-secret.json")
+function __init__()
+    global const NEUROGLANCER_CONFIG_FILENAME = "info"
+
+    if haskey(ENV, "AWS_ACCESS_KEY_ID")
+        global const AWS_CREDENTIAL = AWSCore.aws_config()
+    elseif isfile("/secrets/aws-secret.json")
         d = JSON.parsefile("/secrets/aws-secret.json")
         global const AWS_CREDENTIAL = AWSCore.aws_config(creds=AWSCredentials(d["AWS_ACCESS_KEY_ID"], d["AWS_SECRET_ACCESS_KEY"]))
     else 
         warn("did not find AWS credential! set it in environment variables.")
     end 
+
+    global const METADATA = Dict{String, String}(
+                "Content-Type"      => "binary/octet-stream") 
+    global const GZIP_MAGIC_NUMBER = UInt8[0x1f, 0x8b, 0x08]
 end 
-
-const METADATA = Dict{String, String}(
-            "Content-Type"      => "binary/octet-stream") 
-const GZIP_MAGIC_NUMBER = UInt8[0x1f, 0x8b, 0x08]
-
-export S3Dict
 
 struct S3Dict <: AbstractBigArrayBackend
     bkt         ::String
