@@ -229,7 +229,7 @@ end
 function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
             idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
     #setindex_multiprocesses!(ba, buf, idxes...)
-    setindex_multithreads(ba, buf, idxes...)
+    setindex_multithreads!(ba, buf, idxes...)
 end 
 
 function Base.merge(ba::BigArray{D,T,N,C}, arr::OffsetArray{T,N, Array{T,N}}) where {D,T,N,C}
