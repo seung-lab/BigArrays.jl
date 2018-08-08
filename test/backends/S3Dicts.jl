@@ -1,5 +1,5 @@
 using BigArrays.S3Dicts
-using Base.Test
+using Test
 using Libz
 
 @testset "test s3 IO" begin 
@@ -12,7 +12,7 @@ using Libz
     @test all(a.==b)
     @test haskey(as3, "test") == true
     @test haskey(as3, "test2") == false
-    info("delete the file in s3")
+    @info("delete the file in s3")
     delete!(as3, "test")
     
     println("test no such key error...")

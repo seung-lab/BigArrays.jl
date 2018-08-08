@@ -10,7 +10,7 @@ ba = BigArray(d)
 @show size(ba)
 @show eltype(ba)
 
-info("\n test 3D image reading and saving...")
+@info("\n test 3D image reading and saving...")
 # ba = BigArray(d, UInt8, (128,128,8))
 while true
     a = rand(UInt8, 1024,1024,1024)
@@ -20,7 +20,7 @@ end
 @time b = ba[501:700, 501:700, 121:130]
 @assert all(a.==b)
 
-info("\n test single voxel indexing ...")
+@info("\n test single voxel indexing ...")
 x = a[100,100,5]
 y = ba[600,600,125]
 @show x
@@ -38,7 +38,7 @@ ba = BigArray(d)
 @show size(ba)
 @show eltype(ba)
 
-info("\n test 3D image reading and saving...")
+@info("\n test 3D image reading and saving...")
 a = rand(UInt32, 200,200,10)
 @time ba[501:700, 501:700, 121:130] = a
 @time b = ba[501:700, 501:700, 121:130]
@@ -54,7 +54,7 @@ ba = BigArray(d)
 @show size(ba)
 @show eltype(ba)
 
-info("\n test 3D image reading and saving...")
+@info("\n test 3D image reading and saving...")
 a = rand(UInt64, 200,200,10)
 @time ba[501:700, 501:700, 121:130] = a
 @time b = ba[501:700, 501:700, 121:130]
@@ -63,7 +63,7 @@ a = rand(UInt64, 200,200,10)
 
 
 # test affinity map
-info("\n\n test affinity map reading and saving...")
+@info("\n\n test affinity map reading and saving...")
 d = GSDict( "gs://seunglab/jpwu/test/affinitymap/4_4_40/" )
 ba = BigArray(d)
 
@@ -77,7 +77,7 @@ a = rand(Float32, 200,200,10,3)
 
 
 # test semantic map
-info("\n\n test semantic map reading and saving...")
+@info("\n\n test semantic map reading and saving...")
 d = GSDict( "gs://seunglab/jpwu/test/semanticmap/4_4_40/" )
 a = rand(Float32, 200,200,10,4)
 ba = BigArray(d)

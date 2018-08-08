@@ -16,7 +16,7 @@ function get_path(self::BinDict)
 end 
 
 function get_info( self::BinDict )
-    readstring( joinpath( get_path(self), "../info" ) )
+    read( joinpath( get_path(self), "../info" ) , String)
 end 
 
 function get_scale_name( self::BinDict ) 

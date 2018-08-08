@@ -1,6 +1,6 @@
 using BigArrays.Indexes
 
-using Base.Test
+using Test
 
 @testset "test index transformation" begin
     str = "2968-3480_1776-2288_16912-17424"

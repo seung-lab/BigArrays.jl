@@ -1,14 +1,14 @@
 using BigArrays
 using BigArrays.H5sBigArrays
 
-info("\n test 3D image reading and saving...")
+@info("\n test 3D image reading and saving...")
 H5sDir = "/tmp/test.h5sbigarray.img"
 a = rand(UInt8, 200,200,10)
 ba = H5sBigArray(H5sDir; blockSize=(256,256,32))
 while true 
     @time ba[201:400, 201:400, 101:110] = a
     @show Sys.maxrss()             
-    ccall(:malloc_stats, Void, ()) 
+    ccall(:malloc_stats, Cvoid, ()) 
     sleep(1)
 end 
 
@@ -18,7 +18,7 @@ rm(H5sDir; recursive=true)
 
 
 # test affinity map
-info("\n\n test affinity map reading and saving...")
+@info("\n\n test affinity map reading and saving...")
 H5sDir = "/tmp/test.h5sbigarray.aff"
 a = rand(Float32, 200,200,10,3)
 
