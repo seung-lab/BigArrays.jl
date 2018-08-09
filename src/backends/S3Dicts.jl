@@ -5,7 +5,6 @@ using JSON
 using AWSCore
 using AWSSDK.S3
 #using Retry
-#using Libz 
 using Memoize
 import HTTP
 import BigArrays.BackendBase: AbstractBigArrayBackend, get_info, get_scale_name 

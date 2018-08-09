@@ -7,18 +7,18 @@ import ..BigArrays: AbstractBigArray
 export Iterator
 
 struct Iterator{N}
-    globalRange     ::CartesianIndices{CartesianIndex{N}}
+    globalRange     ::CartesianIndices{N}
     chunkSize       ::NTuple{N}
-    chunkIDRange    ::CartesianIndices{CartesianIndex{N}}
+    chunkIDRange    ::CartesianIndices{N}
     # this offset really means the starting coordinate of the real data
     offset          ::CartesianIndex{N} 
 end
 
-function Iterator( globalRange::CartesianIndices{CartesianIndex{N}},
+function Iterator( globalRange::CartesianIndices{N},
                            chunkSize::NTuple{N};
                            offset::CartesianIndex{N} = CartesianIndex{N}() - 1 ) where N
-    chunkIDStart = CartesianIndex(index2chunkid( globalRange.start, chunkSize; offset=offset ))
-    chunkIDStop  = CartesianIndex(index2chunkid( globalRange.stop,  chunkSize; offset=offset ))
+    chunkIDStart = CartesianIndex(index2chunkid( first(globalRange), chunkSize; offset=offset ))
+    chunkIDStop  = CartesianIndex(index2chunkid( last(globalRange),  chunkSize; offset=offset ))
     chunkIDRange = CartesianIndices(chunkIDStart, chunkIDStop)
     Iterator( globalRange, chunkSize, chunkIDRange, offset )
 end
@@ -51,7 +51,7 @@ end
 the state is a tuple {chunkID, and the dimension that is increasing}
 """
 function Base.start( iter::Iterator )
-    iter.chunkIDRange.start
+    first(iter.chunkIDRange)
 end
 
 """
@@ -66,10 +66,10 @@ function Base.next(  iter    ::Iterator{N},
 
     # get current global range in this chunk
     start = CartesianIndex( map((x,y,z,o)->max((x-1)*y+1+o, z), chunkID,
-                            iter.chunkSize, iter.globalRange.start.I,
+                                iter.chunkSize, first(iter.globalRange).I,
                             iter.offset.I ))
     stop  = CartesianIndex( map((x,y,z,o)->min(x*y+o, z),       chunkID,
-                            iter.chunkSize, iter.globalRange.stop.I,
+                                iter.chunkSize, last(iter.globalRange).I,
                             iter.offset.I ))
     # the global range of the cutout in this chunk
     cutoutGlobalRange = CartesianIndices(start, stop)

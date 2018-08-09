@@ -12,7 +12,6 @@ include("backends/include.jl")
 
 using OffsetArrays 
 using JSON
-using Libz
 
 #import .BackendBase: AbstractBigArrayBackend  
 # Note that DenseArray only works for memory stored Array
@@ -75,9 +74,12 @@ end
 
 function BigArray( d::AbstractBigArrayBackend, info::Vector{UInt8})
     if all(info[1:3] .== GZIP_MAGIC_NUMBER)
-        info = Libz.decompress(info)
-    end 
-    BigArray(d, String(info))
+        #return Libz.inflate(data)
+        return transcode(GzipDecompressor, info)
+    else 
+        return data 
+    end
+    BigArray(d, string(info))
 end 
 
 function BigArray( d::AbstractBigArrayBackend, info::AbstractString )

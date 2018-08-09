@@ -6,8 +6,8 @@ export global_range2buffer_range, global_range2chunk_range
 export cartesian_range2unit_range, unit_range2string, cartesian_range2string 
 
 # make Array accept cartetian range as index
-function cartesian_range2unit_range(r::CartesianIndices{CartesianIndex{N}}) where N
-    map((x,y)->x:y, r.start.I, r.stop.I)
+function cartesian_range2unit_range(r::CartesianIndices)
+    map((x,y)->x:y, fist(r).I, last(r).I)
 end
 
 """
@@ -15,10 +15,10 @@ end
 
 Transform a global range to a range inside buffer.
 """
-function global_range2buffer_range(globalRange::CartesianIndices{CartesianIndex{N}},
-                                 bufferGlobalRange::CartesianIndices{CartesianIndex{N}}) where N
-    start = globalRange.start - bufferGlobalRange.start + 1
-    stop  = globalRange.stop  - bufferGlobalRange.start + 1
+function global_range2buffer_range(globalRange::CartesianIndices,
+                                 bufferGlobalRange::CartesianIndices) 
+    start = first(globalRange) - first(bufferGlobalRange) + 1
+    stop  = last(globalRange)  - first(bufferGlobalRange) + 1
     return CartesianIndices( start, stop )
 end
 
@@ -27,13 +27,13 @@ end
 
 Transform a global range to a range inside chunk.
 """
-function global_range2chunk_range(globalRange::CartesianIndices{CartesianIndex{N}},
+function global_range2chunk_range(globalRange::CartesianIndices,
                                  chunkSize::NTuple{N};
                                  offset::CartesianIndex{N} = CartesianIndex{N}()-1) where N
-    chunkID = index2chunkid(globalRange.start, chunkSize; offset=offset)
-    start = index2cartesian_index( map((s,i,sz,o)->s-(i-1)*sz-o, globalRange.start.I,
+    chunkID = index2chunkid(first(globalRange), chunkSize; offset=offset)
+    start = index2cartesian_index( map((s,i,sz,o)->s-(i-1)*sz-o, first(globalRange).I,
                                                             chunkID, chunkSize, offset.I))
-    stop  = index2cartesian_index( map((s,i,sz,o)->s-(i-1)*sz-o, globalRange.stop.I,
+    stop  = index2cartesian_index( map((s,i,sz,o)->s-(i-1)*sz-o, last(globalRange).I,
                                                             chunkID, chunkSize, offset.I))
     return CartesianIndices(start, stop)
 end
@@ -84,10 +84,10 @@ function unit_range2string(idxes::Union{Tuple,Vector})
     return ret[1:end-1]
 end
 
-function cartesian_range2string(r::CartesianIndices{CartesianIndex{N}}) where N
+function cartesian_range2string(r::CartesianIndices)
     ret = ""
     for i in 1:3
-        ret *= "$(r.start[i]-1)-$(r.stop[i])_"
+        ret *= "$(first(r)[i]-1)-$(last(r)[i])_"
     end
     return ret[1:end-1]
 end
@@ -108,8 +108,8 @@ end
     adjust bounding box range when fitting in new subarray
 """
 function union(globalRange::CartesianIndices, idxes::CartesianIndices)
-    start = map(min, globalRange.start.I, idxes.start.I)
-    stop  = map(max, globalRange.stop.I,  idxes.stop.I)
+    start = map(min, first(globalRange).I, first(idxes).I)
+    stop  = map(max, last(globalRange).I,  last(idxes).I)
     return CartesianIndices(start, stop)
 end
 function union!(r1::CartesianIndices, r2::CartesianIndices)
