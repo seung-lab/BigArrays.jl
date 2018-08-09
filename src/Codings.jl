@@ -14,9 +14,9 @@ const ZSTD_MAGIC_NUMBER = reinterpret(UInt8,[0xFD2FB528])
 function __init__()
     # use the same number of threads with Julia
     if haskey(ENV, "BLOSC_NUM_THREADS")
-        Blosc.set_num_threads( parse(ENV["BLOSC_NUM_THREADS"]) )
+        Blosc.set_num_threads( Meta.parse(ENV["BLOSC_NUM_THREADS"]) )
     elseif haskey(ENV, "JULIA_NUM_THREADS")
-        Blosc.set_num_threads( parse(ENV["JULIA_NUM_THREADS"]) )
+        Blosc.set_num_threads( Meta.parse(ENV["JULIA_NUM_THREADS"]) )
     else
         Blosc.set_num_threads( cld(Sys.CPU_CORES, 2) )
     end

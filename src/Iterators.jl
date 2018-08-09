@@ -7,19 +7,19 @@ import ..BigArrays: AbstractBigArray
 export Iterator
 
 struct Iterator{N}
-    globalRange     ::CartesianRange{CartesianIndex{N}}
+    globalRange     ::CartesianIndices{CartesianIndex{N}}
     chunkSize       ::NTuple{N}
-    chunkIDRange    ::CartesianRange{CartesianIndex{N}}
+    chunkIDRange    ::CartesianIndices{CartesianIndex{N}}
     # this offset really means the starting coordinate of the real data
     offset          ::CartesianIndex{N} 
 end
 
-function Iterator( globalRange::CartesianRange{CartesianIndex{N}},
+function Iterator( globalRange::CartesianIndices{CartesianIndex{N}},
                            chunkSize::NTuple{N};
                            offset::CartesianIndex{N} = CartesianIndex{N}() - 1 ) where N
     chunkIDStart = CartesianIndex(index2chunkid( globalRange.start, chunkSize; offset=offset ))
     chunkIDStop  = CartesianIndex(index2chunkid( globalRange.stop,  chunkSize; offset=offset ))
-    chunkIDRange = CartesianRange(chunkIDStart, chunkIDStop)
+    chunkIDRange = CartesianIndices(chunkIDStart, chunkIDStop)
     Iterator( globalRange, chunkSize, chunkIDRange, offset )
 end
 
@@ -31,7 +31,7 @@ function Iterator(   idxes::Tuple,
     # so we only use the mod to make offset
     offset = CartesianIndex( map((o,c) -> mod(o,c), offset.I, chunkSize) ) 
     idxes = map(index2unit_range, idxes)
-    globalRange = CartesianRange(idxes)
+    globalRange = CartesianIndices(idxes)
     Iterator( globalRange, chunkSize; offset=offset )
 end
 
@@ -72,7 +72,7 @@ function Base.next(  iter    ::Iterator{N},
                             iter.chunkSize, iter.globalRange.stop.I,
                             iter.offset.I ))
     # the global range of the cutout in this chunk
-    cutoutGlobalRange = CartesianRange(start, stop)
+    cutoutGlobalRange = CartesianIndices(start, stop)
     # the range inside this chunk
     rangeInChunk  = global_range2chunk_range( cutoutGlobalRange, iter.chunkSize; offset=iter.offset)
     # the range inside the buffer

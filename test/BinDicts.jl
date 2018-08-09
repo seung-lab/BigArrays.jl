@@ -1,6 +1,6 @@
 using BigArrays
 using BigArrays.BinDicts
-using Base.Test
+using Test
 using OffsetArrays 
 
 # prepare directory

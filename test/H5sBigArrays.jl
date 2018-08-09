@@ -1,6 +1,6 @@
 using BigArrays
 using BigArrays.H5sBigArrays
-using Base.Test
+using Test
 
 @testset "test 3D image reading and saving" begin
     H5sDir = "/tmp/test.h5sbigarray.img"

@@ -20,7 +20,7 @@ const H5_DATASET_NAME = "img"
 const DEFAULT_BLOCK_SIZE = (1024, 1024, 128)
 const DEFAULT_CHUNK_SIZE = (32,32,4)
 const DEFAULT_GLOBAL_OFFSET = (0,0,0)
-const DEFAULT_RANGE         = CartesianRange(
+const DEFAULT_RANGE         = CartesianIndices(
         CartesianIndex((typemax(Int), typemax(Int), typemax(Int))),
         CartesianIndex((0,0,0)))
 
@@ -52,13 +52,13 @@ construct a H5sBigArray from a dict
 """
 function H5sBigArray( configDict::Dict{Symbol, Any} )
     if isa(configDict[:globalOffset], Vector)
-        configDict[:globalOffset] = (configDict[:globalOffset]...)
+        configDict[:globalOffset] = (configDict[:globalOffset]...,)
     end
     if isa(configDict[:blockSize], Vector)
-        configDict[:blockSize] = (configDict[:blockSize]...)
+        configDict[:blockSize] = (configDict[:blockSize]...,)
     end
     if isa(configDict[:chunkSize], Vector)
-        configDict[:chunkSize] = (configDict[:chunkSize]...)
+        configDict[:chunkSize] = (configDict[:chunkSize]...,)
     end
     if isa(configDict[:dataType], AbstractString)
         configDict[:dataType] = eval(Symbol(configDict[:dataType]))
@@ -183,8 +183,8 @@ bounding box of the whole volume
 """
 function boundingbox(ba::H5sBigArray)
     D = ndims(ba)
-    ret_start = ([div(typemax(Int),2) for i = 1:D]...)
-    ret_stop  = ([div(typemin(Int),2) for i = 1:D]...)
+    ret_start = ([div(typemax(Int),2) for i = 1:D]...,)
+    ret_stop  = ([div(typemin(Int),2) for i = 1:D]...,)
 
     # @show H5SBIGARRAY_DIRECTORY
     for file in readdir(H5SBIGARRAY_DIRECTORY)
@@ -196,7 +196,7 @@ function boundingbox(ba::H5sBigArray)
             ret_stop  = map(max, ret_stop,  blockStop)
         end
     end
-    return CartesianRange(CartesianIndex(ret_start...), CartesianIndex(ret_stop...))
+    return CartesianIndices(CartesianIndex(ret_start...), CartesianIndex(ret_stop...))
 end
 
 """
@@ -207,7 +207,7 @@ function Base.size(ba::H5sBigArray)
     # @show boundingbox(ba)
     # @show sz
     if any(x->x<=0, sz)
-        return ([0 for i = 1:ndims(ba)]...)
+        return ([0 for i = 1:ndims(ba)]...,)
     else
         return sz
     end
@@ -263,7 +263,7 @@ read h5 file using CartesianRange.
 """
 function HDF5.h5read(chunkFileName::AbstractString,
                  H5_DATASET_NAME::AbstractString,
-                 rangeInChunk::CartesianRange{CartesianIndex{N}}) where N
+                 rangeInChunk::CartesianIndices{CartesianIndex{N}}) where N
     blockIndexes = cartesian_range2unit_range( rangeInChunk )
     h5read(chunkFileName, H5_DATASET_NAME, blockIndexes)
 end
@@ -281,7 +281,7 @@ function Base.getindex(ba::H5sBigArray, idxes::Union{UnitRange, Int, Colon}...)
 
     # transform to originate from (0,0,0)
     idxes = map((x,y)-> x-y, idxes, ba.globalOffset)
-    bufferGlobalRange = CartesianRange(idxes)
+    bufferGlobalRange = CartesianIndices(idxes)
 
     baIter = Iterator(bufferGlobalRange, ba.blockSize)
     @sync begin
@@ -338,7 +338,7 @@ function Base.setindex!(ba::H5sBigArray, buf::Array{T,N},
     @show idxes
     @show ba.globalOffset
     idxes = map((x,y)-> x-y, idxes, ba.globalOffset)
-    bufferGlobalRange = CartesianRange(idxes)
+    bufferGlobalRange = CartesianIndices(idxes)
 
     baIter = Iterator(bufferGlobalRange, ba.blockSize)
 
@@ -353,8 +353,8 @@ save part of or whole buffer to one hdf5 file
 """
 function save_buffer(  buf::Array{T,N}, chunkFileName::AbstractString,
                        ba::AbstractBigArray,
-                       rangeInChunk ::CartesianRange{CartesianIndex{N}},
-                       rangeInBuffer::CartesianRange{CartesianIndex{N}}) where {T,N}
+                       rangeInChunk ::CartesianIndices{CartesianIndex{N}},
+                       rangeInBuffer::CartesianIndices{CartesianIndex{N}}) where {T,N}
     if isfile(chunkFileName) && ishdf5(chunkFileName)
         f = h5open(chunkFileName, "r+")
         dataSet = f[H5_DATASET_NAME]
@@ -373,7 +373,7 @@ end
 
 
 function Base.setindex!(dataSet::HDF5.HDF5Dataset, buf::Array{T,N},
-                           rangeInChunk::CartesianRange{CartesianIndex{N}}) where {T,N}
+                           rangeInChunk::CartesianIndices{CartesianIndex{N}}) where {T,N}
     ur = cartesian_range2unit_range(rangeInChunk)
     # @show ur
     dataSet[ur...] = buf
@@ -393,7 +393,7 @@ function fileName2origin( fileName::AbstractString; prefix = "block_" )
     secs = split(fileName, "_")
     origin = zeros(Int, length(secs))
     for i in 1:length(origin)
-        origin[i] = parse( split(secs[i],":")[1] )
+        origin[i] = Meta.parse( split(secs[i],":")[1] )
     end
     return origin
 end

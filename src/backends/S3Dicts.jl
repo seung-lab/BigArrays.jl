@@ -23,7 +23,7 @@ function __init__()
         d = JSON.parsefile("/secrets/aws-secret.json")
         global const AWS_CREDENTIAL = AWSCore.aws_config(creds=AWSCredentials(d["AWS_ACCESS_KEY_ID"], d["AWS_SECRET_ACCESS_KEY"]))
     else 
-        warn("did not find AWS credential! set it in environment variables.")
+        @warn("did not find AWS credential! set it in environment variables.")
     end 
 end 
 
@@ -105,7 +105,7 @@ end
 
 function Base.haskey(h::S3Dict, key::String)
     resp = S3.list_objects_v2(AWS_CREDENTIAL; Bucket=h.bkt, prefix=joinpath(h.keyPrefix, key))
-    return parse( resp["KeyCount"] ) > 0
+    return Meta.parse( resp["KeyCount"] ) > 0
 end 
 
 end # end of module S3Dicts

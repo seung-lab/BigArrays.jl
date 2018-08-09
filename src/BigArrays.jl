@@ -91,9 +91,9 @@ function BigArray( d::AbstractBigArrayBackend, infoConfig::Dict{Symbol, Any})
     local offset::Tuple, encoding, chunkSize::Tuple, volumeSize::Tuple 
     for scale in infoConfig[:scales]
         if scale[:key] == scale_name 
-            chunkSize = (scale[:chunk_sizes][1]...)
-            offset = (scale[:voxel_offset]...)
-            volumeSize = (scale[:size]...)
+            chunkSize = (scale[:chunk_sizes][1]...,)
+            offset = (scale[:voxel_offset]...,)
+            volumeSize = (scale[:size]...,)
             encoding = CODING_MAP[ scale[:encoding] ]
             if infoConfig[:num_channels] > 1
                 chunkSize = (chunkSize..., infoConfig[:num_channels])
@@ -134,7 +134,7 @@ function Base.display(ba::BigArray)
 end
 
 function Base.reshape(ba::BigArray{D,T,N}, newShape) where {D,T,N}
-    warn("reshape failed, the shape of bigarray is immutable!")
+    @warn("reshape failed, the shape of bigarray is immutable!")
 end
 
 function do_work_setindex( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C} ) where {D,T,N,C}
@@ -197,7 +197,7 @@ function setindex_multithreads!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
 end 
 
 function setindex_remote_worker(block::Array{T,N}, ba::BigArray{D,T,N,C}, 
-                                        chunkGlobalRange::CartesianRange) where {D,T,N,C}
+                                        chunkGlobalRange::CartesianIndices) where {D,T,N,C}
     ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encode( block, C)
 end
 
@@ -238,17 +238,17 @@ end
 @inline function Base.CartesianRange(ba::BigArray)
     start = ba.offset + 1
     stop = ba.offset + CartesianIndex(ba.volumeSize)
-    return CartesianRange( start, stop )
+    return CartesianIndices( start, stop )
 end 
 
 """
 adjust the global and buffer range according to total volume size.
 shrink the range stop if the ranges passes the volume boundary.
 """
-function adjust_volume_boundary(ba::BigArray, chunkGlobalRange::CartesianRange,
-                                globalRange::CartesianRange,
-                                rangeInChunk::CartesianRange, 
-                                rangeInBuffer::CartesianRange)
+function adjust_volume_boundary(ba::BigArray, chunkGlobalRange::CartesianIndices,
+                                globalRange::CartesianIndices,
+                                rangeInChunk::CartesianIndices, 
+                                rangeInBuffer::CartesianIndices)
     volumeStop = map(+, ba.offset.I, ba.volumeSize)
     chunkGlobalRangeStop = [chunkGlobalRange.stop.I ...]
     globalRangeStop = [globalRange.stop.I ...]
@@ -268,24 +268,24 @@ function adjust_volume_boundary(ba::BigArray, chunkGlobalRange::CartesianRange,
             rangeInChunkStop[i] -= distanceOverBorder
         end
     end
-    chunkGlobalRange = CartesianRange(chunkGlobalRange.start, 
-                                      CartesianIndex((chunkGlobalRangeStop...)))
-    globalRange = CartesianRange(globalRange.start, 
-                                 CartesianIndex((globalRangeStop...)))
+    chunkGlobalRange = CartesianIndices(chunkGlobalRange.start, 
+                                      CartesianIndex((chunkGlobalRangeStop...,)))
+    globalRange = CartesianIndices(globalRange.start, 
+                                 CartesianIndex((globalRangeStop...,)))
 
-    rangeInBuffer = CartesianRange(rangeInBuffer.start, 
-                                   CartesianIndex((rangeInBufferStop...)))
-    rangeInChunk = CartesianRange(rangeInChunk.start, 
-                                  CartesianIndex((rangeInChunkStop...)))
+    rangeInBuffer = CartesianIndices(rangeInBuffer.start, 
+                                   CartesianIndex((rangeInBufferStop...,)))
+    rangeInChunk = CartesianIndices(rangeInChunk.start, 
+                                  CartesianIndex((rangeInChunkStop...,)))
     return chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer
 end 
 
 function do_work_getindex!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C}) where {D,T,N,C}
-    baRange = CartesianRange(ba)
+    baRange = CartesianIndices(ba)
     for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in chan
         if any(map((x,y)->x>y, globalRange.start.I, baRange.stop.I)) ||
             any(map((x,y)->x<y, globalRange.stop.I, baRange.start.I))
-            warn("out of volume range, keep it as zeros")
+            @warn("out of volume range, keep it as zeros")
             continue
         end
         chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = adjust_volume_boundary(ba, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer)
@@ -338,10 +338,10 @@ end
 
 function remote_getindex_worker(ba::BigArray{D,T,N,C}, jobs::RemoteChannel, 
                                 results::RemoteChannel) where {D,T,N,C}
-    baRange = CartesianRange(ba)
+    baRange = CartesianIndices(ba)
     blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = take!(jobs)
     if any(map((x,y)->x>y, globalRange.start.I, baRange.stop.I)) || any(map((x,y)->x<y, globalRange.stop.I, baRange.start.I))
-        warn("out of volume range, keep it as zeros")
+        @warn("out of volume range, keep it as zeros")
         return
     end
     chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = adjust_volume_boundary(ba, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer)
@@ -387,9 +387,9 @@ function getindex_multiprocesses( ba::BigArray{D, T, N, C}, idxes::Union{UnitRan
     sz = map(length, idxes)
     ret = OffsetArray(zeros(eltype(ba), sz), idxes...)
 
-    const channelSize = cld( nworkers(), 2 )
-    const jobs    = RemoteChannel(()->Channel{Tuple}( channelSize ));
-    const results = RemoteChannel(()->Channel{OffsetArray}( channelSize ));
+    channelSize = cld( nworkers(), 2 )
+    jobs    = RemoteChannel(()->Channel{Tuple}( channelSize ));
+    results = RemoteChannel(()->Channel{OffsetArray}( channelSize ));
     
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     
@@ -451,7 +451,7 @@ if the returned list is empty, then all the chunks exist in the storage backend.
 function list_missing_chunks(ba::BigArray, idxes::Union{UnitRange, Int}...) 
     t1 = time()
     sz = map(length, idxes)
-    missingChunkList = Vector{CartesianRange}()
+    missingChunkList = Vector{CartesianIndices}()
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     @sync begin 
         for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
@@ -468,7 +468,7 @@ end
 function list_missing_chunks(ba::BigArray, keySet::Set{String}, idxes::Union{UnitRange, Int}...)
     t1 = time()
     sz = map(length, idxes)
-    missingChunkList = Vector{CartesianRange}()
+    missingChunkList = Vector{CartesianIndices}()
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
         if !(cartesian_range2string(chunkGlobalRange) in keySet)

@@ -1,5 +1,5 @@
 using BigArrays.GSDicts
-using Base.Test
+using Test
 
 # test storage utility first
 #include(joinpath(dirname(@__FILE__), "google_cloud/storage_util.jl"))
@@ -27,7 +27,7 @@ using Base.Test
     println("make sure that the value saved in the cloud is the same with local")
     @test all(a .== b)
     @test true == haskey(kv, "test")
-    info("delete the file in google cloud storage")
+    @info("delete the file in google cloud storage")
     delete!(kv, "test")
     
     println("test no such key error...")

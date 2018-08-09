@@ -1,4 +1,3 @@
-__precompile__(true)
 module GSDicts
 
 using GoogleCloud
@@ -107,7 +106,7 @@ function get_credential_filename()
         return "/secrets/google-secret.json"
     else
         # to enable building of this package 
-        warn("google credential file is not in default place!")
+        @warn("google credential file is not in default place!")
         return nothing
     end
 end

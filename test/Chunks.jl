@@ -1,7 +1,7 @@
 using BigArrays
 #using BigArrays.H5sBigArrays
 using BigArrays.Chunks
-using Base.Test
+using Test
 
 @testset "test chunks" begin 
     chk = Chunk(rand(Float32, 200,200,20,3), [101,201, 31,1], [4,4,40])
