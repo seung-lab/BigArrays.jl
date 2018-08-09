@@ -177,7 +177,6 @@ function setindex_multithreads!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     @show idxes
     # check alignment
     @assert all(map((x,y,z)->mod(x.start - 1 - y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the start of index should align with BigArray chunk size"
-    taskNum = TASK_NUM 
     t1 = time() 
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
     @sync begin 
@@ -188,7 +187,7 @@ function setindex_multithreads!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
             end
             close(channel)
         end
-        for i in 1:taskNum 
+        for i in 1:TASK_NUM  
             @async do_work_setindex(channel, buf, ba)
         end
     end 
@@ -236,7 +235,7 @@ function Base.merge(ba::BigArray{D,T,N,C}, arr::OffsetArray{T,N, Array{T,N}}) wh
     @unsafe ba[indices(arr)...] = arr |> parent
 end 
 
-function Base.CartesianRange(ba::BigArray)
+@inline function Base.CartesianRange(ba::BigArray)
     start = ba.offset + 1
     stop = ba.offset + CartesianIndex(ba.volumeSize)
     return CartesianRange( start, stop )
@@ -291,39 +290,29 @@ function do_work_getindex!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D
         end
         chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = adjust_volume_boundary(ba, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer)
         chunkSize = (chunkGlobalRange.stop - chunkGlobalRange.start + 1).I
-        delay = 0.05
-        for t in 1:3
-            try 
-                #println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))")
-                key = cartesian_range2string(chunkGlobalRange)
-                v = ba.kvStore[cartesian_range2string(chunkGlobalRange)]
-                v = Codings.decode(v, C)
-                chk = reinterpret(T, v)
-                chk = reshape(chk, chunkSize)
-                @inbounds buf[cartesian_range2unit_range(rangeInBuffer)...] = 
-                                        chk[cartesian_range2unit_range(rangeInChunk)...]
-                break 
-            catch err 
-                if isa(err, KeyError)
-                    println("no suck key in kvstore: $(err), will fill this block as zeros")
-                    break
-                else
-                    println("catch an error while getindex in BigArray: $err with type of $(typeof(err))")
-                    if t==3
-                        rethrow()
-                    else 
-                        warn("retry for the $(t)'s time.")
-                    end
-                    sleep(delay*(0.8+(0.4*rand())))
-                    delay *= 10
-                end
-            end 
-        end
+        try 
+            #println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))")
+            key = cartesian_range2string(chunkGlobalRange)
+            v = ba.kvStore[cartesian_range2string(chunkGlobalRange)]
+            v = Codings.decode(v, C)
+            chk = reinterpret(T, v)
+            chk = reshape(chk, chunkSize)
+            @inbounds buf[cartesian_range2unit_range(rangeInBuffer)...] = 
+                                    chk[cartesian_range2unit_range(rangeInChunk)...]
+            break 
+        catch err 
+            if isa(err, KeyError)
+                println("no suck key in kvstore: $(err), will fill this block as zeros")
+                break
+            else
+                println("catch an error while getindex in BigArray: $err with type of $(typeof(err))")
+                rethrow()
+            end
+        end 
     end
 end
 
 function getindex_multithreads( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
-    taskNum = TASK_NUM
     t1 = time()
     sz = map(length, idxes)
     buf = zeros(eltype(ba), sz)
@@ -337,7 +326,7 @@ function getindex_multithreads( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange
             close(channel)
         end
         # control the number of concurrent requests here
-        for i in 1:taskNum 
+        for i in 1:TASK_NUM  
             @async do_work_getindex!(channel, buf, ba)
         end
     end
