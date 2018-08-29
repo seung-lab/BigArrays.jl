@@ -6,7 +6,7 @@ export global_range2buffer_range, global_range2chunk_range
 export cartesian_range2unit_range, unit_range2string, cartesian_range2string 
 
 # make Array accept cartetian range as index
-function cartesian_range2unit_range(r::CartesianIndices{CartesianIndex{N}}) where N
+function cartesian_range2unit_range(r::CartesianIndices{N}) where N
     map((x,y)->x:y, r.start.I, r.stop.I)
 end
 
@@ -15,8 +15,8 @@ end
 
 Transform a global range to a range inside buffer.
 """
-function global_range2buffer_range(globalRange::CartesianIndices{CartesianIndex{N}},
-                                 bufferGlobalRange::CartesianIndices{CartesianIndex{N}}) where N
+function global_range2buffer_range(globalRange::CartesianIndices{N},
+                                 bufferGlobalRange::CartesianIndices{N}) where N
     start = globalRange.start - bufferGlobalRange.start + 1
     stop  = globalRange.stop  - bufferGlobalRange.start + 1
     return CartesianIndices( start, stop )
@@ -27,7 +27,7 @@ end
 
 Transform a global range to a range inside chunk.
 """
-function global_range2chunk_range(globalRange::CartesianIndices{CartesianIndex{N}},
+function global_range2chunk_range(globalRange::CartesianIndices{N},
                                  chunkSize::NTuple{N};
                                  offset::CartesianIndex{N} = CartesianIndex{N}()-1) where N
     chunkID = index2chunkid(globalRange.start, chunkSize; offset=offset)
@@ -84,7 +84,7 @@ function unit_range2string(idxes::Union{Tuple,Vector})
     return ret[1:end-1]
 end
 
-function cartesian_range2string(r::CartesianIndices{CartesianIndex{N}}) where N
+function cartesian_range2string(r::CartesianIndices{N}) where N
     ret = ""
     for i in 1:3
         ret *= "$(r.start[i]-1)-$(r.stop[i])_"

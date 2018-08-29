@@ -7,14 +7,14 @@ import ..BigArrays: AbstractBigArray
 export Iterator
 
 struct Iterator{N}
-    globalRange     ::CartesianIndices{CartesianIndex{N}}
+    globalRange     ::CartesianIndices{N}
     chunkSize       ::NTuple{N}
-    chunkIDRange    ::CartesianIndices{CartesianIndex{N}}
+    chunkIDRange    ::CartesianIndices{N}
     # this offset really means the starting coordinate of the real data
     offset          ::CartesianIndex{N} 
 end
 
-function Iterator( globalRange::CartesianIndices{CartesianIndex{N}},
+function Iterator( globalRange::CartesianIndices{N},
                            chunkSize::NTuple{N};
                            offset::CartesianIndex{N} = CartesianIndex{N}() - 1 ) where N
     chunkIDStart = CartesianIndex(index2chunkid( globalRange.start, chunkSize; offset=offset ))
@@ -47,22 +47,14 @@ function Base.eltype( iter::Iterator )
     eltype( iter.globalRange )
 end
 
-"""
-the state is a tuple {chunkID, and the dimension that is increasing}
-"""
-function Base.start( iter::Iterator )
-    iter.chunkIDRange.start
-end
 
-"""
-    Base.next( iter::Iterator, state::CartesianRange )
-
-increase start coordinate following the column-order.
-"""
-function Base.next(  iter    ::Iterator{N},
-                     state   ::CartesianIndex{N} ) where N
-    chunkIDIndex, state = next(iter.chunkIDRange, state)
-    chunkID = chunkIDIndex.I
+function Base.iterate(iter::Iterator, state=iter.chunkIdRange.start)
+    if done(iter.chunkIDRange, state)
+        return nothing 
+    end 
+    #chunkIDIndex, state = next(iter.chunkIDRange, state)
+    #chunkID = chunkIDIndex.I
+    chunkID = state.I
 
     # get current global range in this chunk
     start = CartesianIndex( map((x,y,z,o)->max((x-1)*y+1+o, z), chunkID,
@@ -79,17 +71,10 @@ function Base.next(  iter    ::Iterator{N},
     rangeInBuffer = global_range2buffer_range(cutoutGlobalRange, iter.globalRange)
     # the global range of this chunk
     chunkGlobalRange = chunkid2global_range( chunkID, iter.chunkSize; offset=iter.offset )
-    return (chunkID, chunkGlobalRange, cutoutGlobalRange, rangeInChunk, rangeInBuffer), state
-end
 
-"""
-    Base.done( iter::Iterator,  state::CartesianRange )
+    nextChunkIDIndex, nextState = next(iter.chunkIDRange, state)
 
-if all the axeses were saturated, stop the iteration.
-"""
-function Base.done(  iter::Iterator{N},
-                     state::CartesianIndex{N}) where N
-    done(iter.chunkIDRange, state)
-end
+    return (chunkID, chunkGlobalRange, cutoutGlobalRange, rangeInChunk, rangeInBuffer), nextState
+end  
 
 end # end of module

@@ -12,39 +12,36 @@ include("backends/include.jl")
 
 using OffsetArrays 
 using JSON
-using Libz
+using Distributed 
 
 #import .BackendBase: AbstractBigArrayBackend  
 # Note that DenseArray only works for memory stored Array
 # http://docs.julialang.org/en/release-0.4/manual/arrays/#implementation
 export AbstractBigArray, BigArray 
 
-function __init__()
-    global const WORKER_POOL = WorkerPool( workers() )
-    @show WORKER_POOL 
-    global const GZIP_MAGIC_NUMBER = UInt8[0x1f, 0x8b, 0x08]  
-    global const TASK_NUM = 8
-    global const CHUNK_CHANNEL_SIZE = 2
-    # map datatype of python to Julia 
-    global const DATATYPE_MAP = Dict{String, DataType}(
-        "bool"      => Bool,
-        "uint8"     => UInt8, 
-        "uint16"    => UInt16, 
-        "uint32"    => UInt32, 
-        "uint64"    => UInt64, 
-        "float32"   => Float32, 
-        "float64"   => Float64 
-    )  
+const WORKER_POOL = WorkerPool( workers() )
+const GZIP_MAGIC_NUMBER = UInt8[0x1f, 0x8b, 0x08]  
+const TASK_NUM = 8
+const CHUNK_CHANNEL_SIZE = 2
+# map datatype of python to Julia 
+const DATATYPE_MAP = Dict{String, DataType}(
+    "bool"      => Bool,
+    "uint8"     => UInt8, 
+    "uint16"    => UInt16, 
+    "uint32"    => UInt32, 
+    "uint64"    => UInt64, 
+    "float32"   => Float32, 
+    "float64"   => Float64 
+)  
 
-    global const CODING_MAP = Dict{String,Any}(
-        # note that the raw encoding in cloud storage will be automatically gzip encoded!
-        "raw"       => GzipCoding,
-        "jpeg"      => JPEGCoding,
-        "blosclz"   => BlosclzCoding,
-        "gzip"      => GzipCoding, 
-        "zstd"      => ZstdCoding 
-    )
-end 
+const CODING_MAP = Dict{String,Any}(
+    # note that the raw encoding in cloud storage will be automatically gzip encoded!
+    "raw"       => GzipCoding,
+    "jpeg"      => JPEGCoding,
+    "blosclz"   => BlosclzCoding,
+    "gzip"      => GzipCoding, 
+    "zstd"      => ZstdCoding 
+)
 
 
 """
@@ -74,9 +71,7 @@ function BigArray( d::AbstractBigArrayBackend)
 end
 
 function BigArray( d::AbstractBigArrayBackend, info::Vector{UInt8})
-    if all(info[1:3] .== GZIP_MAGIC_NUMBER)
-        info = Libz.decompress(info)
-    end 
+    Codings.decode(info, GzipCoding) 
     BigArray(d, String(info))
 end 
 
@@ -216,7 +211,7 @@ function setindex_multiprocesses!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
         for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
             chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = adjust_volume_boundary(ba, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer)
             block = buf[cartesian_range2unit_range(rangeInBuffer)...]
-            @schedule remotecall_fetch(setindex_remote_worker, WORKER_POOL, 
+            @async remotecall_fetch(setindex_remote_worker, WORKER_POOL, 
                                        block, ba, chunkGlobalRange)
         end 
     end 
@@ -232,10 +227,10 @@ function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
 end 
 
 function Base.merge(ba::BigArray{D,T,N,C}, arr::OffsetArray{T,N, Array{T,N}}) where {D,T,N,C}
-    @unsafe ba[indices(arr)...] = arr |> parent
+    @inbounds ba[indices(arr)...] = arr |> parent
 end 
 
-@inline function Base.CartesianRange(ba::BigArray)
+@inline function Base.CartesianIndices(ba::BigArray)
     start = ba.offset + 1
     stop = ba.offset + CartesianIndex(ba.volumeSize)
     return CartesianIndices( start, stop )

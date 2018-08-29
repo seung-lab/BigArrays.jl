@@ -18,7 +18,7 @@ function __init__()
     elseif haskey(ENV, "JULIA_NUM_THREADS")
         Blosc.set_num_threads( Meta.parse(ENV["JULIA_NUM_THREADS"]) )
     else
-        Blosc.set_num_threads( cld(Sys.CPU_CORES, 2) )
+        Blosc.set_num_threads( cld(Sys.CPU_THREADS, 2) )
     end
     # use the default compression method, 
     # the default compressor is blosclz.

@@ -32,7 +32,6 @@ end
 
 function Base.setindex!( self::BinDict, value::Array, key::AbstractString )
     data = reinterpret(UInt8, value[:])
-    #data = Libz.deflate( data )
     fileName = joinpath( get_path(self), key )
     write(fileName, data)
 end 

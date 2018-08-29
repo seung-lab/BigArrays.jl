@@ -80,8 +80,8 @@ write( joinpath(tempDir, "info"), infoString )
 @testset "test merge function with backend of BinDict with blosclz compression" begin
     ba = BigArray( BinDict(datasetDir) )
     a = rand(UInt8, 200,200,10)
-    @unsafe merge(ba, OffsetArray(a, 1:200, 1:200, 1:10))
-    @unsafe b = ba[1:200, 1:200, 1:10]
+    @inbounds merge(ba, OffsetArray(a, 1:200, 1:200, 1:10))
+    @inbounds b = ba[1:200, 1:200, 1:10]
     @test all(parent(a).==parent(b))
 end # end of testset
 
