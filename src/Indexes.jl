@@ -79,7 +79,7 @@ end
 function unit_range2string(idxes::Union{Tuple,Vector})
     ret = ""
     for idx in idxes
-        ret *= "$(start(idx)-1)-$(idx[end])_"
+        ret *= "$(idx.start-1)-$(idx.stop)_"
     end 
     return ret[1:end-1]
 end
@@ -100,7 +100,7 @@ the format of string should look like this:
 """
 function string2unit_range( str::AbstractString )
     groups = match(r"(-?\d+)-(-?\d+)_(-?\d+)-(-?\d+)_(-?\d+)-(-?\d+)(?:\.gz)?$", str)
-    idxes = map(parse, groups.captures)
+    idxes = map(Meta.parse, groups.captures)
     [idxes[1]+1:idxes[2], idxes[3]+1:idxes[4], idxes[5]+1:idxes[6]]
 end 
 

@@ -231,10 +231,12 @@ function Base.merge(ba::BigArray{D,T,N,C}, arr::OffsetArray{T,N, Array{T,N}}) wh
     @inbounds ba[indices(arr)...] = arr |> parent
 end 
 
-@inline function Base.CartesianIndices(ba::BigArray)
-    start = ba.offset + 1
+@inline function Base.CartesianIndices(ba::BigArray{D,T,N,C}) where {D,T,N,C}
+    start = ba.offset + CartesianIndex{N}(1)
     stop = ba.offset + CartesianIndex(ba.volumeSize)
-    return CartesianIndices( start, stop )
+    ranges = map((x,y)->x:y, start.I, stop.I)
+    @show ranges
+    return CartesianIndices( ranges )
 end 
 
 """

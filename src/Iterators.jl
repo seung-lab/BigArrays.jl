@@ -47,8 +47,13 @@ function Base.eltype( iter::Iterator )
     eltype( iter.globalRange )
 end
 
-function Base.iterate(iter::Iterator, state=iter.chunkIdRange.start)
-    if done(iter.chunkIDRange, state)
+"""
+    Base.iterate(iter::Iterator, state=iter.chunkIdRange.start) 
+"""
+function Base.iterate(iter::Iterator{N}, 
+                      state::CartesianIndex{N}=iter.chunkIdRange.start) where N
+    @show state
+    if state > last(iter.chunkIDRange) 
         return nothing 
     end 
     #chunkIDIndex, state = next(iter.chunkIDRange, state)

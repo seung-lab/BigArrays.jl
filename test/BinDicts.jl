@@ -23,8 +23,8 @@ write( joinpath(tempDir, "info"), infoString )
     a = rand(UInt8, 20)
     h["test"] = a
     b = h["test"]
-    @assert haskey(h, "test")
-    @assert !haskey(h, "notexist")
+    @test haskey(h, "test")
+    @test !haskey(h, "notexist")
     @show a
     @show b
     @test all(a.==b)
@@ -32,7 +32,7 @@ end # testset
 
 @testset "test negative coordinate" begin 
     ba = BigArray( BinDict(datasetDir) )
-    @show CartesianRange(ba)
+    @show CartesianIndices(ba)
     a = rand(UInt8, 200,200,2000)
     ba[-199:0, -99:100, -4:1995] = a
     b = ba[-199:0, -99:100, -4:1995] 
