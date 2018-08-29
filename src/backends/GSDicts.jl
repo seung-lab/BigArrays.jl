@@ -18,25 +18,20 @@ end
 """
     GSDict( path::String; gzip::Bool = GZIP )
 construct an associative datastructure based on Google Cloud Storage
-format: :ND | :Neuroglancer
+format.
 """
 function GSDict( path::String; gzip::Bool = GZIP, 
                     credentialFileName = get_credential_filename(),
                     valueType::DataType = Vector{UInt8})
     bucketName, keyPrefix = splitgs(path)
-    bucketName = replace(bucketName, "gs://", "")
-
-    session = GoogleSession( credentialFileName, ["devstorage.full_control"])
+    bucketName = replace(bucketName, "gs://"=>"")
+    
+    session = GoogleSession( credentialFileName, ["devstorage.full_control"]) 
     set_session!(storage, session)    # storage is the API root, exported from GoogleCloud.jl
-    kvStore = KeyStore{String, valueType}(
-        bucketName,             # Key-value store name. Created if it doesn't already exist.
-        session;
-        key_format  = :string,
-        val_format  = :data,
-        empty       = false,    # Defaults to false. Empty the bucket if it exists.
-        gzip        = gzip
-    )
-
+    kvStore = KeyStore{String, valueType}(  bucketName; session=session, key_format=:string, 
+                                          val_format=:data, empty=false, gzip=gzip) 
+    
+    @show kvStore
     GSDict( kvStore, bucketName, keyPrefix, session )
 end
 
@@ -85,7 +80,7 @@ function Base.keys( d::GSDict )
     ds = storage(:Object, :list, d.bucketName; prefix=d.keyPrefix, fields="items(name)")
     ret = Vector{String}()
     for i in eachindex(ds)
-        chunkFileName = replace(ds[i][:name], "$(rstrip(d.keyPrefix, '/'))/", "" )
+        chunkFileName = replace(ds[i][:name], "$(rstrip(d.keyPrefix, '/'))/" => "" )
         push!(ret, chunkFileName)
     end
     return ret
@@ -115,7 +110,7 @@ end
     split gs path to bucket name and key
 """
 function splitgs( path::String )
-    path = replace(path, "gs://", "")
+    path = replace(path, "gs://"=>"")
     bucketName, key = split(path, "/", limit=2)
     key = strip(key, '/')
     return String(bucketName), String(key)

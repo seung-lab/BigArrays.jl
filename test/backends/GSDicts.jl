@@ -7,7 +7,7 @@ using Test
 @testset "test gsdict io" begin 
     kv  = GSDict("gs://seunglab/jpwu/test/image/4_4_40")
 
-    # test fakekey error capture
+    println("test fakekey error capture")
     try 
         kv["fakekey"]
     catch err 

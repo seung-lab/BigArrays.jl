@@ -3,7 +3,7 @@ using BigArrays
 using BigArrays.GSDicts
 using OffsetArrays
 
-d = GSDict( "gs://seunglab/jpwu/test/image/4_4_40/" );
+d = GSDict( "gs://seunglab/jpwu/test/image/4_4_40/" )
 ba = BigArray(d)
 
 @show ba.chunkSize

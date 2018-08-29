@@ -1,15 +1,17 @@
 julia 0.7
 JSON
 Memoize
-ImageMagick
 Blosc
 TranscodingStreams
 CodecZlib
 CodecZstd
 EMIRT
 OffsetArrays
+JSON
+Distributed
+
+
+#GoogleCloud
 #AWSCore
 #AWSSDK
-JSON
-#GoogleCloud
-Distributed
+

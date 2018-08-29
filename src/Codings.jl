@@ -1,6 +1,6 @@
 module Codings
 
-using ImageMagick
+#using ImageMagick
 using Blosc
 using TranscodingStreams, CodecZlib, CodecZstd
 
@@ -18,7 +18,7 @@ function __init__()
     elseif haskey(ENV, "JULIA_NUM_THREADS")
         Blosc.set_num_threads( Meta.parse(ENV["JULIA_NUM_THREADS"]) )
     else
-        Blosc.set_num_threads( cld(Sys.CPU_THREADS, 2) )
+        Blosc.set_num_threads( cld(Base.Sys.CPU_THREADS, 2) )
     end
     # use the default compression method, 
     # the default compressor is blosclz.
@@ -80,14 +80,14 @@ function encode( data::Array, coding::Type{JPEGCoding} )
     error("unimplemented!")
 end
 
-function decode( data::Vector{UInt8}, coding::Type{JPEGCoding} )
-    image = ImageMagick.load_(data)
-    @assert size(image,2) * size(image,2) == size(image,1)
-    blockSize = (size(image,2), size(image,2), size(image,2))
-    image = reshape(image, blockSize)
-    image = permutedims(image, [3,1,2])
-    image = reinterpret(UInt8, vec(image))
-    return image
-end
+#function decode( data::Vector{UInt8}, coding::Type{JPEGCoding} )
+#    image = ImageMagick.load_(data)
+#    @assert size(image,2) * size(image,2) == size(image,1)
+#    blockSize = (size(image,2), size(image,2), size(image,2))
+#    image = reshape(image, blockSize)
+#    image = permutedims(image, [3,1,2])
+#    image = reinterpret(UInt8, vec(image))
+#    return image
+#end
 
 end # end of module

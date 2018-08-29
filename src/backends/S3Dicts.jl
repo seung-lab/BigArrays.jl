@@ -5,26 +5,23 @@ using JSON
 using AWSCore
 using AWSSDK.S3
 #using Retry
-#using Libz 
 using Memoize
 import HTTP
 import BigArrays.BackendBase: AbstractBigArrayBackend, get_info, get_scale_name 
 
-function __init__()
-    global const NEUROGLANCER_CONFIG_FILENAME = "info"
-    global const METADATA = Dict{String, String}(
-            "Content-Type"      => "binary/octet-stream") 
-    global const GZIP_MAGIC_NUMBER = UInt8[0x1f, 0x8b, 0x08]
+global const NEUROGLANCER_CONFIG_FILENAME = "info"
+global const METADATA = Dict{String, String}(
+        "Content-Type"      => "binary/octet-stream") 
+global const GZIP_MAGIC_NUMBER = UInt8[0x1f, 0x8b, 0x08]
 
 
-    if haskey(ENV, "AWS_ACCESS_KEY_ID")
-        global const AWS_CREDENTIAL = AWSCore.aws_config()
-    elseif isfile("/secrets/aws-secret.json")
-        d = JSON.parsefile("/secrets/aws-secret.json")
-        global const AWS_CREDENTIAL = AWSCore.aws_config(creds=AWSCredentials(d["AWS_ACCESS_KEY_ID"], d["AWS_SECRET_ACCESS_KEY"]))
-    else 
-        @warn("did not find AWS credential! set it in environment variables.")
-    end 
+if haskey(ENV, "AWS_ACCESS_KEY_ID")
+    global const AWS_CREDENTIAL = AWSCore.aws_config()
+elseif isfile("/secrets/aws-secret.json")
+    d = JSON.parsefile("/secrets/aws-secret.json")
+    global const AWS_CREDENTIAL = AWSCore.aws_config(creds=AWSCredentials(d["AWS_ACCESS_KEY_ID"], d["AWS_SECRET_ACCESS_KEY"]))
+else 
+    @warn("did not find AWS credential! set it in environment variables.")
 end 
 
 export S3Dict

@@ -10,6 +10,7 @@ include("Indexes.jl"); using .Indexes;
 include("Iterators.jl"); using .Iterators;
 include("backends/include.jl") 
 
+using Distributed
 using OffsetArrays 
 using JSON
 using Distributed 
@@ -460,7 +461,8 @@ function list_missing_chunks(ba::BigArray, idxes::Union{UnitRange, Int}...)
     missingChunkList 
 end
 
-function list_missing_chunks(ba::BigArray, keySet::Set{String}, idxes::Union{UnitRange, Int}...)
+function list_missing_chunks(ba::BigArray, keySet::Set{String}, 
+                             idxes::Union{UnitRange, Int}...)
     t1 = time()
     sz = map(length, idxes)
     missingChunkList = Vector{CartesianIndices}()
