@@ -172,9 +172,12 @@ function setindex_multithreads!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     idxes = colon2unit_range(buf, idxes)
     @show idxes
     # check alignment
-    @assert all(map((x,y,z)->mod(x.start - 1 - y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the start of index should align with BigArray chunk size"
+    @assert all(map((x,y,z)->mod(x.start - 1 - y, z), 
+                    idxes, ba.offset.I, ba.chunkSize).==0) 
+                    "the start of index should align with BigArray chunk size"
     t1 = time() 
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
+    @show baIter
     @sync begin 
         channel = Channel{Tuple}( CHUNK_CHANNEL_SIZE )
         @async begin 
@@ -236,6 +239,8 @@ end
     stop = ba.offset + CartesianIndex(ba.volumeSize)
     ranges = map((x,y)->x:y, start.I, stop.I)
     @show ranges
+    @show typeof(ranges)
+    @show CartesianIndices(ranges)
     return CartesianIndices( ranges )
 end 
 
@@ -315,6 +320,7 @@ function getindex_multithreads( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange
     sz = map(length, idxes)
     buf = zeros(eltype(ba), sz)
     baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
+
     @sync begin
         channel = Channel{Tuple}( CHUNK_CHANNEL_SIZE )
         @async begin

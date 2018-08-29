@@ -32,7 +32,7 @@ end # testset
 
 @testset "test negative coordinate" begin 
     ba = BigArray( BinDict(datasetDir) )
-    @show CartesianIndices(ba)
+    #@show CartesianIndices(ba)
     a = rand(UInt8, 200,200,2000)
     ba[-199:0, -99:100, -4:1995] = a
     b = ba[-199:0, -99:100, -4:1995] 

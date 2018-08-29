@@ -17,17 +17,19 @@ end
 function Iterator( globalRange::CartesianIndices{N},
                            chunkSize::NTuple{N};
                            offset::CartesianIndex{N} = CartesianIndex{N}() - 1 ) where N
-    chunkIDStart = CartesianIndex(index2chunkid( first(globalRange), chunkSize; offset=offset ))
-    chunkIDStop  = CartesianIndex(index2chunkid( last(globalRange),  chunkSize; offset=offset ))
-    chunkIDRange = CartesianIndices(chunkIDStart, chunkIDStop)
+    chunkIDStart = index2chunkid( first(globalRange), chunkSize; offset=offset )
+    chunkIDStop  = index2chunkid( last(globalRange),  chunkSize; offset=offset )
+    ranges = map((x,y)->x:y, chunkIDStart, chunkIDStop)
+    chunkIDRange = CartesianIndices(ranges)
     Iterator( globalRange, chunkSize, chunkIDRange, offset )
 end
 
 function Iterator(   idxes::Tuple,
                      chunkSize::NTuple{N};
-                     offset::CartesianIndex{N} = CartesianIndex{N}()-1) where N
+                     offset::CartesianIndex{N} = CartesianIndex{N}(0)) where N
     # the offset in neuroglancer really means the starting coordinate of valid data
-    # since bigarray assumes infinite data range, here we only need to use it to adjust the alignment of chunks 
+    # since bigarray assumes infinite data range, 
+    # here we only need to use it to adjust the alignment of chunks 
     # so we only use the mod to make offset
     offset = CartesianIndex( map((o,c) -> mod(o,c), offset.I, chunkSize) ) 
     idxes = map(index2unit_range, idxes)
@@ -61,14 +63,14 @@ function Base.iterate(iter::Iterator{N},
     chunkID = state.I
 
     # get current global range in this chunk
-    start = CartesianIndex( map((x,y,z,o)->max((x-1)*y+1+o, z), chunkID,
-                                iter.chunkSize, first(iter.globalRange).I,
-                            iter.offset.I ))
-    stop  = CartesianIndex( map((x,y,z,o)->min(x*y+o, z),       chunkID,
-                                iter.chunkSize, last(iter.globalRange).I,
-                            iter.offset.I ))
+    start = map((x,y,z,o)->max((x-1)*y+1+o, z), chunkID,
+                            iter.chunkSize, first(iter.globalRange).I,
+                            iter.offset.I )
+    stop  = map((x,y,z,o)->min(x*y+o, z),       chunkID,
+                            iter.chunkSize, last(iter.globalRange).I,
+                            iter.offset.I )
     # the global range of the cutout in this chunk
-    cutoutGlobalRange = CartesianIndices(start, stop)
+    cutoutGlobalRange = CartesianIndices(map((x,y)->x:y, start, stop))
     # the range inside this chunk
     rangeInChunk  = global_range2chunk_range( cutoutGlobalRange, iter.chunkSize; offset=iter.offset)
     # the range inside the buffer
