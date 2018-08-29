@@ -5,14 +5,17 @@ julia:
     - release
     - nightly
 
+
+sudo: required 
+
 notifications:
     email: false
 git:
   depth: 999999
 
 script:
-    - apt-get install hdf5-tools 
-    - julia -e 'Pkg.clone(pwd()); Pkg.test("BigArrays")'
+    - sudo apt-get install -y hdf5-tools 
+    - julia -e 'import Pkg; Pkg.clone(pwd()); Pkg.test("BigArrays")'
 
 matrix:
     allow_failures:

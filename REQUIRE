@@ -11,3 +11,4 @@ AWSCore
 AWSSDK
 JSON
 GoogleCloud
+HTTP
