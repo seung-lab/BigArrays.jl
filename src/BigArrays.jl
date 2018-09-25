@@ -7,7 +7,7 @@ include("BackendBase.jl"); using .BackendBase
 include("Codings.jl"); 
 using .Codings;
 include("Indexes.jl"); using .Indexes;
-include("Iterators.jl"); using .Iterators;
+include("ChunkIterators.jl"); using .ChunkIterators;
 include("backends/include.jl") 
 
 using Distributed
@@ -22,7 +22,7 @@ export AbstractBigArray, BigArray
 
 const WORKER_POOL = WorkerPool( workers() )
 const GZIP_MAGIC_NUMBER = UInt8[0x1f, 0x8b, 0x08]  
-const TASK_NUM = 8
+const TASK_NUM = 0
 const CHUNK_CHANNEL_SIZE = 2
 # map datatype of python to Julia 
 const DATATYPE_MAP = Dict{String, DataType}(
@@ -170,14 +170,12 @@ this version uses channel to control the number of asynchronized request
 function setindex_multithreads!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
                        idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
     idxes = colon2unit_range(buf, idxes)
-    @show idxes
     # check alignment
     @assert all(map((x,y,z)->mod(x.start - 1 - y, z), 
                     idxes, ba.offset.I, ba.chunkSize).==0) 
                     "the start of index should align with BigArray chunk size"
-    t1 = time() 
-    baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
-    @show baIter
+    t1 = time()
+    baIter = ChunkIterator(idxes, ba.chunkSize; offset=ba.offset)
     @sync begin 
         channel = Channel{Tuple}( CHUNK_CHANNEL_SIZE )
         @async begin 
@@ -210,7 +208,7 @@ function setindex_multiprocesses!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     # check alignment
     @assert all(map((x,y,z)->mod(x.start - 1 - y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the start of index should align with BigArray chunk size" 
     t1 = time() 
-    baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
+    baIter = ChunkIterator(idxes, ba.chunkSize; offset=ba.offset)
     @sync begin  
         for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
             chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = adjust_volume_boundary(ba, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer)
@@ -238,9 +236,6 @@ end
     start = ba.offset + CartesianIndex{N}(1)
     stop = ba.offset + CartesianIndex(ba.volumeSize)
     ranges = map((x,y)->x:y, start.I, stop.I)
-    @show ranges
-    @show typeof(ranges)
-    @show CartesianIndices(ranges)
     return CartesianIndices( ranges )
 end 
 
@@ -319,7 +314,7 @@ function getindex_multithreads( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange
     t1 = time()
     sz = map(length, idxes)
     buf = zeros(eltype(ba), sz)
-    baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
+    baIter = ChunkIterator(idxes, ba.chunkSize; offset=ba.offset)
 
     @sync begin
         channel = Channel{Tuple}( CHUNK_CHANNEL_SIZE )
@@ -395,7 +390,7 @@ function getindex_multiprocesses( ba::BigArray{D, T, N, C}, idxes::Union{UnitRan
     jobs    = RemoteChannel(()->Channel{Tuple}( channelSize ));
     results = RemoteChannel(()->Channel{OffsetArray}( channelSize ));
     
-    baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
+    baIter = ChunkIterator(idxes, ba.chunkSize; offset=ba.offset)
     
     @sync begin
         @async begin
@@ -440,7 +435,7 @@ get number of chunks needed to do cutout from this range
 """
 function get_num_chunks(ba::BigArray, idxes::Union{UnitRange, Int}...)
     chunkNum = 0
-    baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)                          
+    baIter = ChunkIterator(idxes, ba.chunkSize; offset=ba.offset)                          
 	for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
         chunkNum += 1
 	end                                                                                
@@ -456,7 +451,7 @@ function list_missing_chunks(ba::BigArray, idxes::Union{UnitRange, Int}...)
     t1 = time()
     sz = map(length, idxes)
     missingChunkList = Vector{CartesianIndices}()
-    baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
+    baIter = ChunkIterator(idxes, ba.chunkSize; offset=ba.offset)
     @sync begin 
         for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
             @async begin 
@@ -474,7 +469,7 @@ function list_missing_chunks(ba::BigArray, keySet::Set{String},
     t1 = time()
     sz = map(length, idxes)
     missingChunkList = Vector{CartesianIndices}()
-    baIter = Iterator(idxes, ba.chunkSize; offset=ba.offset)
+    baIter = ChunkIterator(idxes, ba.chunkSize; offset=ba.offset)
     for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
         if !(cartesian_range2string(chunkGlobalRange) in keySet)
             push!(missingChunkList, chunkGlobalRange)

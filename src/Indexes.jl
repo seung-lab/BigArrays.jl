@@ -17,9 +17,9 @@ Transform a global range to a range inside buffer.
 """
 function global_range2buffer_range(globalRange::CartesianIndices{N},
                                  bufferGlobalRange::CartesianIndices{N}) where N
-    start = globalRange.start - bufferGlobalRange.start + 1
-    stop  = globalRange.stop  - bufferGlobalRange.start + 1
-    return CartesianIndices( start, stop )
+    start = first(globalRange) - first(bufferGlobalRange) + one(first(globalRange))
+    stop  = last(globalRange)  - first(bufferGlobalRange) + one(last(globalRange))
+    return CartesianIndices( map((x,y)->x:y, start.I, stop.I) )
 end
 
 """
@@ -35,7 +35,7 @@ function global_range2chunk_range(globalRange::CartesianIndices{N},
                                                             chunkID, chunkSize, offset.I))
     stop  = index2cartesian_index( map((s,i,sz,o)->s-(i-1)*sz-o, last(globalRange).I,
                                                             chunkID, chunkSize, offset.I))
-    return CartesianIndices(start, stop)
+    return CartesianIndices(map((x,y)->x:y, start.I, stop.I))
 end
 
 function index2chunkid(idx::CartesianIndex{N}, chunkSize::NTuple{N};
@@ -44,11 +44,12 @@ function index2chunkid(idx::CartesianIndex{N}, chunkSize::NTuple{N};
     ( map((x,y,o)->fld(x-1-o, y)+1, idx.I, chunkSize, offset.I) ... ,)
 end
 
-function chunkid2global_range(chunkID::NTuple{N}, chunkSize::NTuple{N};
+function chunkid2global_range(chunkID::CartesianIndex{N}, chunkSize::NTuple{N};
                               offset::CartesianIndex{N} = CartesianIndex{N}()-1) where N
-    start = index2cartesian_index( map((x,y)->(x-1)*y+1, chunkID, chunkSize) )
-    stop  = index2cartesian_index( map((x,y)->x*y,       chunkID, chunkSize) )
-    return CartesianIndices(start+offset, stop+offset)
+    start = index2cartesian_index( map((x,y)->(x-1)*y+1, chunkID.I, chunkSize) ) + offset 
+    stop  = index2cartesian_index( map((x,y)->x*y,       chunkID.I, chunkSize) ) + offset 
+    range = map((x,y)->x:y, start.I, stop.I)
+    return CartesianIndices(range)
 end
 
 """
@@ -110,7 +111,7 @@ end
 function union(globalRange::CartesianIndices, idxes::CartesianIndices)
     start = map(min, first(globalRange).I, first(idxes).I)
     stop  = map(max, last(globalRange).I,  last(idxes).I)
-    return CartesianIndices(start, stop)
+    return CartesianIndices( map((x,y)->x:y, start.I, stop.I) )
 end
 function union!(r1::CartesianIndices, r2::CartesianIndices)
     r1 = union(r1, r2)
@@ -124,7 +125,7 @@ function string2cartesian_range( s::String )
     secs = split(s, "_")
     starts = map( x->Meta.parse(split(x,"-")[1])+1, secs )
     stops  = map( x->Meta.parse(split(x,"-")[2]), secs )
-    CartesianIndices( CartesianIndex(starts...), CartesianIndex( stops... ) )
+    CartesianIndices( map((x,y)->x:y, starts, stops) )
 end
 
 function index2unit_range(x::UnitRange)
