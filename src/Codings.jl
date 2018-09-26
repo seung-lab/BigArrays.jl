@@ -57,7 +57,7 @@ end
 
 function encode(data::Array, coding::Type{GzipCoding})
     #Libz.deflate(reinterpret(UInt8, data[:]))
-    transcode(GzipCompressor, reinterpret(UInt8, vec(data)))
+    transcode(GzipCompressor, reinterpret(UInt8, vec(data)) |> Vector)
 end
 
 function decode(data::Vector{UInt8}, coding::Type{GzipCoding})

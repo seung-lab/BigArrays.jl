@@ -7,7 +7,7 @@ export cartesian_range2unit_range, unit_range2string, cartesian_range2string
 
 # make Array accept cartetian range as index
 function cartesian_range2unit_range(r::CartesianIndices{N}) where N
-    map((x,y)->x:y, r.start.I, r.stop.I)
+    map((x,y)->x:y, first(r).I, last(r).I)
 end
 
 """
@@ -80,7 +80,7 @@ end
 function unit_range2string(idxes::Union{Tuple,Vector})
     ret = ""
     for idx in idxes
-        ret *= "$(idx.start-1)-$(idx.stop)_"
+        ret *= "$(first(idx)-1)-$(last(idx))_"
     end 
     return ret[1:end-1]
 end

@@ -171,7 +171,7 @@ function setindex_multithreads!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
                        idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
     idxes = colon2unit_range(buf, idxes)
     # check alignment
-    @assert all(map((x,y,z)->mod(x.start - 1 - y, z), 
+    @assert all(map((x,y,z)->mod(first(x) - 1 - y, z), 
                     idxes, ba.offset.I, ba.chunkSize).==0) 
                     "the start of index should align with BigArray chunk size"
     t1 = time()
@@ -206,12 +206,14 @@ function setindex_multiprocesses!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
                        idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
     idxes = colon2unit_range(buf, idxes)
     # check alignment
-    @assert all(map((x,y,z)->mod(x.start - 1 - y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the start of index should align with BigArray chunk size" 
+    @assert all(map((x,y,z)->mod(first(x) - 1 - y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the start of index should align with BigArray chunk size" 
     t1 = time() 
     baIter = ChunkIterator(idxes, ba.chunkSize; offset=ba.offset)
     @sync begin  
         for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
-            chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = adjust_volume_boundary(ba, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer)
+            chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = 
+                adjust_volume_boundary(ba, chunkGlobalRange, globalRange, 
+                                       rangeInChunk, rangeInBuffer)
             block = buf[cartesian_range2unit_range(rangeInBuffer)...]
             @async remotecall_fetch(setindex_remote_worker, WORKER_POOL, 
                                        block, ba, chunkGlobalRange)
@@ -222,10 +224,30 @@ function setindex_multiprocesses!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     println("saving speed: $(totalSize/elapsed) MB/s")
 end 
 
+"""
+sequential function, good for debuging
+"""
+function setindex_sequential!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
+                             idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
+    idxes = colon2unit_range(buf, idxes)
+    baIter = ChunkIterator(idxes, ba.chunkSize; offset=ba.offset)
+    chk = zeros(T, ba.chunkSize)
+    for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
+        chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = 
+            adjust_volume_boundary(ba, chunkGlobalRange, globalRange, 
+                                   rangeInChunk, rangeInBuffer)
+        fill!(chk, convert(T, 0))
+        chk[cartesian_range2unit_range(rangeInChunk)...] = 
+                                        buf[cartesian_range2unit_range(rangeInBuffer)...]
+        ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encode( chk, C)
+    end
+end 
+
 function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
             idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
+    setindex_sequential!(ba, buf, idxes...)
     #setindex_multiprocesses!(ba, buf, idxes...)
-    setindex_multithreads!(ba, buf, idxes...)
+    #setindex_multithreads!(ba, buf, idxes...)
 end 
 
 function Base.merge(ba::BigArray{D,T,N,C}, arr::OffsetArray{T,N, Array{T,N}}) where {D,T,N,C}
@@ -248,10 +270,10 @@ function adjust_volume_boundary(ba::BigArray, chunkGlobalRange::CartesianIndices
                                 rangeInChunk::CartesianIndices, 
                                 rangeInBuffer::CartesianIndices)
     volumeStop = map(+, ba.offset.I, ba.volumeSize)
-    chunkGlobalRangeStop = [chunkGlobalRange.stop.I ...]
-    globalRangeStop = [globalRange.stop.I ...]
-    rangeInBufferStop = [rangeInBuffer.stop.I ...]
-    rangeInChunkStop = [rangeInChunk.stop.I...] 
+    chunkGlobalRangeStop = [last(chunkGlobalRange).I ...]
+    globalRangeStop = [last(globalRange).I ...]
+    rangeInBufferStop = [last(rangeInBuffer).I ...]
+    rangeInChunkStop = [last(rangeInChunk).I...] 
 
     for (i,s) in enumerate(volumeStop)
         if chunkGlobalRangeStop[i] > s
@@ -261,33 +283,39 @@ function adjust_volume_boundary(ba::BigArray, chunkGlobalRange::CartesianIndices
         if distanceOverBorder > 0
             globalRangeStop[i] -= distanceOverBorder
             @assert globalRangeStop[i] == s
-            @assert globalRangeStop[i] > globalRange.start.I[i]
+            @assert globalRangeStop[i] > first(globalRange).I[i]
             rangeInBufferStop[i] -= distanceOverBorder
             rangeInChunkStop[i] -= distanceOverBorder
         end
     end
-    chunkGlobalRange = CartesianIndices(chunkGlobalRange.start, 
-                                      CartesianIndex((chunkGlobalRangeStop...,)))
-    globalRange = CartesianIndices(globalRange.start, 
-                                 CartesianIndex((globalRangeStop...,)))
+    start = first(chunkGlobalRange).I
+    stop =  (chunkGlobalRangeStop...,) 
+    chunkGlobalRange = CartesianIndices( map((x,y)->x:y, start, stop) )
 
-    rangeInBuffer = CartesianIndices(rangeInBuffer.start, 
-                                   CartesianIndex((rangeInBufferStop...,)))
-    rangeInChunk = CartesianIndices(rangeInChunk.start, 
-                                  CartesianIndex((rangeInChunkStop...,)))
+    start = first(globalRange).I 
+    stop = (globalRangeStop...,) 
+    globalRange = CartesianIndices( map((x,y)->x:y, start, stop) )
+
+    start = first(rangeInBuffer).I 
+    stop = (rangeInBufferStop...,)
+    rangeInBuffer = CartesianIndices( map((x,y)->x:y, start, stop) )
+
+    start = first(rangeInChunk).I 
+    stop = (rangeInChunkStop...,) 
+    rangeInChunk = CartesianIndices( map((x,y)->x:y, start, stop) )
     return chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer
 end 
 
 function do_work_getindex!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C}) where {D,T,N,C}
     baRange = CartesianIndices(ba)
     for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in chan
-        if any(map((x,y)->x>y, globalRange.start.I, baRange.stop.I)) ||
-            any(map((x,y)->x<y, globalRange.stop.I, baRange.start.I))
+        if any(map((x,y)->x>y, first(globalRange).I, last(baRange).I)) ||
+            any(map((x,y)->x<y, last(globalRange).I, first(baRange).I))
             @warn("out of volume range, keep it as zeros")
             continue
         end
         chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = adjust_volume_boundary(ba, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer)
-        chunkSize = (chunkGlobalRange.stop - chunkGlobalRange.start + 1).I
+        chunkSize = (last(chunkGlobalRange) - first(chunkGlobalRange) + 1).I
         try 
             #println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))")
             key = cartesian_range2string(chunkGlobalRange)
@@ -339,7 +367,7 @@ function remote_getindex_worker(ba::BigArray{D,T,N,C}, jobs::RemoteChannel,
                                 results::RemoteChannel) where {D,T,N,C}
     baRange = CartesianIndices(ba)
     blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = take!(jobs)
-    if any(map((x,y)->x>y, globalRange.start.I, baRange.stop.I)) || any(map((x,y)->x<y, globalRange.stop.I, baRange.start.I))
+    if any(map((x,y)->x>y, first(globalRange).I, last(baRange).I)) || any(map((x,y)->x<y, last(globalRange).I, first(baRange).I))
         @warn("out of volume range, keep it as zeros")
         return
     end
@@ -347,7 +375,7 @@ function remote_getindex_worker(ba::BigArray{D,T,N,C}, jobs::RemoteChannel,
     # finalize to avoid memory leak, see
     # https://discourse.julialang.org/t/understanding-distributed-memory-garbage-collection/8726/2
     #finalize(jobs)
-    chunkSize = (chunkGlobalRange.stop - chunkGlobalRange.start + 1).I
+    chunkSize = (last(chunkGlobalRange) - first(chunkGlobalRange) + 1).I
     #println("processing block in global range: $(cartesian_range2string(globalRange))")
     delay = 0.05
     for t in 1:4
@@ -419,9 +447,60 @@ function getindex_multiprocesses( ba::BigArray{D, T, N, C}, idxes::Union{UnitRan
     ret 
 end 
 
+"""
+    get_index_sequential(ba::BigArray, idxes::Union{UnitRange, Int}...) 
+sequential implementation for debuging 
+"""
+function getindex_sequential(ba::BigArray{D, T, N, C}, 
+                             idxes::Union{UnitRange, Int}...) where {D,T,N,C}
+    t1 = time()
+    sz = map(length, idxes)
+    buf = zeros(eltype(ba), sz)
+    baRange = CartesianIndices(ba)
+    baIter = ChunkIterator(idxes, ba.chunkSize; offset=ba.offset)
+    for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter  
+        @show blockId
+        if any(map((x,y)->x>y, first(globalRange).I, last(baRange).I)) ||
+            any(map((x,y)->x<y, last(globalRange).I, first(baRange).I))
+            @warn("out of volume range, keep it as zeros")
+            continue
+        end
+        chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = 
+            adjust_volume_boundary(ba, chunkGlobalRange, globalRange, 
+                                   rangeInChunk, rangeInBuffer)
+            chunkSize = (last(chunkGlobalRange) - first(chunkGlobalRange) + 
+                         one(last(chunkGlobalRange))).I
+        try 
+            #println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))")
+            key = cartesian_range2string(chunkGlobalRange)
+            v = ba.kvStore[cartesian_range2string(chunkGlobalRange)]
+            v = Codings.decode(v, C)
+            chk = reinterpret(T, v) |> Vector
+            chk = reshape(chk, chunkSize)
+            @inbounds buf[cartesian_range2unit_range(rangeInBuffer)...] = 
+                                    chk[cartesian_range2unit_range(rangeInChunk)...]
+            break 
+        catch err 
+            if isa(err, KeyError)
+                println("no suck key in kvstore: $(err), will fill this block as zeros")
+                break
+            else
+                println("catch an error while getindex in BigArray: $err with type of $(typeof(err))")
+                rethrow()
+            end
+        end 
+    end
+
+    totalSize = length(buf) * sizeof(eltype(buf)) / 1024/1024 # mega bytes
+    elapsed = time() - t1 # seconds 
+    println("cutout speed: $(totalSize/elapsed) MB/s")
+    OffsetArray(buf, idxes...)
+end
+
 function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
     #getindex_multiprocesses(ba, idxes...)
-    getindex_multithreads(ba, idxes...)
+    #getindex_multithreads(ba, idxes...)
+    getindex_sequential(ba, idxes...)
 end
 
 function get_chunk_size(ba::AbstractBigArray)

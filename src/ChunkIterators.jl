@@ -54,15 +54,16 @@ end
 the initial state is true, meaning it is the start of iteration
 """
 function Base.iterate(iter::ChunkIterator{N}, 
-                      state::Union{Bool, CartesianIndex{N}}=true) where N
-    if state == true
+                      state::Union{Nothing, Bool, CartesianIndex{N}}=true) where N
+    @show state
+    if isa(state, Bool) && state == true
+        # this is the first iteration 
         chunkID, nextState = iterate(iter.chunkIDRange)
-    elseif state > last(iter.chunkIDRange)
+    elseif state == last(iter.chunkIDRange)
         return nothing
-    else 
+    else
         chunkID, nextState = iterate(iter.chunkIDRange, state)
     end 
-    @show chunkID
     # get current global range in this chunk
     start = map((x,y,z,o)->max((x-1)*y+1+o, z), chunkID.I,
                             iter.chunkSize, first(iter.globalRange).I,
@@ -78,7 +79,9 @@ function Base.iterate(iter::ChunkIterator{N},
     rangeInBuffer = global_range2buffer_range(cutoutGlobalRange, iter.globalRange)
     # the global range of this chunk
     chunkGlobalRange = chunkid2global_range( chunkID, iter.chunkSize; offset=iter.offset )
-
+    
+    @show iter.chunkIDRange
+    @show nextState
     return (chunkID, chunkGlobalRange, cutoutGlobalRange, rangeInChunk, rangeInBuffer), nextState
 end  
 

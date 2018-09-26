@@ -30,9 +30,16 @@ write( joinpath(tempDir, "info"), infoString )
     @test all(a.==b)
 end # testset 
 
+@testset "test IO of BigArray with backend of BinDict" begin
+    ba = BigArray( BinDict(datasetDir) )
+    a = rand(UInt8, 200,200,10)
+    ba[1:200, 1:200, 1:10] = a
+    b = ba[1:200, 1:200, 1:10]
+    @test all(a.==parent(b))
+end # end of testset
+
 @testset "test negative coordinate" begin 
     ba = BigArray( BinDict(datasetDir) )
-    #@show CartesianIndices(ba)
     a = rand(UInt8, 200,200,2000)
     ba[-199:0, -99:100, -4:1995] = a
     b = ba[-199:0, -99:100, -4:1995] 
