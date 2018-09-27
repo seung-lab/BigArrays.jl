@@ -11,8 +11,7 @@ notifications:
     email: false
 
 script:
-    - sudo apt-get install -y hdf5-tools 
-    - julia -e 'import Pkg; Pkg.add(pwd()); Pkg.test("BigArrays")'
+    - julia -e 'import Pkg; Pkg.clone(pwd()); Pkg.test("BigArrays")'
 
 matrix:
     allow_failures:
