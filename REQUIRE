@@ -5,10 +5,8 @@ Blosc
 TranscodingStreams
 CodecZlib
 CodecZstd
-EMIRT
 OffsetArrays
 JSON
-Distributed
 
 
 #GoogleCloud
