@@ -22,7 +22,7 @@ export AbstractBigArray, BigArray
 
 const WORKER_POOL = WorkerPool( workers() )
 const GZIP_MAGIC_NUMBER = UInt8[0x1f, 0x8b, 0x08]  
-const TASK_NUM = 0
+const TASK_NUM = 4
 const CHUNK_CHANNEL_SIZE = 2
 # map datatype of python to Julia 
 const DATATYPE_MAP = Dict{String, DataType}(
@@ -242,9 +242,9 @@ end
 
 function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
             idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
-    setindex_sequential!(ba, buf, idxes...)
+    #setindex_sequential!(ba, buf, idxes...)
+    setindex_multithreads!(ba, buf, idxes...)
     #setindex_multiprocesses!(ba, buf, idxes...)
-    #setindex_multithreads!(ba, buf, idxes...)
 end 
 
 #function Base.merge!(ba::BigArray{D,T,N,C}, arr::OffsetArray{T,N, Array{T,N}}) where {D,T,N,C}
@@ -311,8 +311,11 @@ function do_work_getindex!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D
             @warn("out of volume range, keep it as zeros")
             continue
         end
-        chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = adjust_volume_boundary(ba, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer)
-        chunkSize = (last(chunkGlobalRange) - first(chunkGlobalRange) + 1).I
+        chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = 
+            adjust_volume_boundary(ba, chunkGlobalRange, globalRange, 
+                                   rangeInChunk, rangeInBuffer)
+        chunkSize = (last(chunkGlobalRange) - first(chunkGlobalRange) + 
+                     one(CartesianIndex{N})).I
         try 
             #println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))")
             key = cartesian_range2string(chunkGlobalRange)
@@ -493,8 +496,8 @@ end
 
 function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
     #getindex_multiprocesses(ba, idxes...)
-    #getindex_multithreads(ba, idxes...)
-    getindex_sequential(ba, idxes...)
+    getindex_multithreads(ba, idxes...)
+    #getindex_sequential(ba, idxes...)
 end
 
 function get_chunk_size(ba::AbstractBigArray)
