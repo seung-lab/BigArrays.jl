@@ -55,7 +55,6 @@ the initial state is true, meaning it is the start of iteration
 """
 function Base.iterate(iter::ChunkIterator{N}, 
                       state::Union{Nothing, Bool, CartesianIndex{N}}=true) where N
-    @show state
     if isa(state, Bool) && state == true
         # this is the first iteration 
         chunkID, nextState = iterate(iter.chunkIDRange)
@@ -80,8 +79,6 @@ function Base.iterate(iter::ChunkIterator{N},
     # the global range of this chunk
     chunkGlobalRange = chunkid2global_range( chunkID, iter.chunkSize; offset=iter.offset )
     
-    @show iter.chunkIDRange
-    @show nextState
     return (chunkID, chunkGlobalRange, cutoutGlobalRange, rangeInChunk, rangeInBuffer), nextState
 end  
 

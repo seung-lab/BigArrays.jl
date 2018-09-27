@@ -43,7 +43,7 @@ end
 
 function encode(data::Array, coding::Type{ZstdCoding})
     #Libz.deflate(reinterpret(UInt8, data[:]))
-    transcode(ZstdCompressor, reinterpret(UInt8, vec(data)))
+    transcode(ZstdCompressor, reinterpret(UInt8, vec(data)) |> Vector)
 end
 
 function decode(data::Vector{UInt8}, coding::Type{ZstdCoding}) 

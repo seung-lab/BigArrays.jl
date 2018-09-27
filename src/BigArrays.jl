@@ -231,14 +231,11 @@ function setindex_sequential!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
                              idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
     idxes = colon2unit_range(buf, idxes)
     baIter = ChunkIterator(idxes, ba.chunkSize; offset=ba.offset)
-    chk = zeros(T, ba.chunkSize)
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
         chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = 
             adjust_volume_boundary(ba, chunkGlobalRange, globalRange, 
                                    rangeInChunk, rangeInBuffer)
-        fill!(chk, convert(T, 0))
-        chk[cartesian_range2unit_range(rangeInChunk)...] = 
-                                        buf[cartesian_range2unit_range(rangeInBuffer)...]
+        chk = buf[cartesian_range2unit_range(rangeInBuffer)...]
         ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encode( chk, C)
     end
 end 
@@ -250,12 +247,12 @@ function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     #setindex_multithreads!(ba, buf, idxes...)
 end 
 
-function Base.merge(ba::BigArray{D,T,N,C}, arr::OffsetArray{T,N, Array{T,N}}) where {D,T,N,C}
-    @inbounds ba[indices(arr)...] = arr |> parent
-end 
+#function Base.merge!(ba::BigArray{D,T,N,C}, arr::OffsetArray{T,N, Array{T,N}}) where {D,T,N,C}
+#    @inbounds ba[axes(arr)...] = arr  
+#end 
 
 @inline function Base.CartesianIndices(ba::BigArray{D,T,N,C}) where {D,T,N,C}
-    start = ba.offset + CartesianIndex{N}(1)
+    start = ba.offset + one(CartesianIndex{N})
     stop = ba.offset + CartesianIndex(ba.volumeSize)
     ranges = map((x,y)->x:y, start.I, stop.I)
     return CartesianIndices( ranges )
@@ -270,10 +267,10 @@ function adjust_volume_boundary(ba::BigArray, chunkGlobalRange::CartesianIndices
                                 rangeInChunk::CartesianIndices, 
                                 rangeInBuffer::CartesianIndices)
     volumeStop = map(+, ba.offset.I, ba.volumeSize)
-    chunkGlobalRangeStop = [last(chunkGlobalRange).I ...]
-    globalRangeStop = [last(globalRange).I ...]
-    rangeInBufferStop = [last(rangeInBuffer).I ...]
-    rangeInChunkStop = [last(rangeInChunk).I...] 
+    chunkGlobalRangeStop = [last(chunkGlobalRange).I ...,]
+    globalRangeStop = [last(globalRange).I ...,]
+    rangeInBufferStop = [last(rangeInBuffer).I ...,]
+    rangeInChunkStop = [last(rangeInChunk).I...,] 
 
     for (i,s) in enumerate(volumeStop)
         if chunkGlobalRangeStop[i] > s
@@ -325,7 +322,6 @@ function do_work_getindex!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D
             chk = reshape(chk, chunkSize)
             @inbounds buf[cartesian_range2unit_range(rangeInBuffer)...] = 
                                     chk[cartesian_range2unit_range(rangeInChunk)...]
-            break 
         catch err 
             if isa(err, KeyError)
                 println("no suck key in kvstore: $(err), will fill this block as zeros")
@@ -459,7 +455,6 @@ function getindex_sequential(ba::BigArray{D, T, N, C},
     baRange = CartesianIndices(ba)
     baIter = ChunkIterator(idxes, ba.chunkSize; offset=ba.offset)
     for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter  
-        @show blockId
         if any(map((x,y)->x>y, first(globalRange).I, last(baRange).I)) ||
             any(map((x,y)->x<y, last(globalRange).I, first(baRange).I))
             @warn("out of volume range, keep it as zeros")
@@ -479,7 +474,6 @@ function getindex_sequential(ba::BigArray{D, T, N, C},
             chk = reshape(chk, chunkSize)
             @inbounds buf[cartesian_range2unit_range(rangeInBuffer)...] = 
                                     chk[cartesian_range2unit_range(rangeInChunk)...]
-            break 
         catch err 
             if isa(err, KeyError)
                 println("no suck key in kvstore: $(err), will fill this block as zeros")
