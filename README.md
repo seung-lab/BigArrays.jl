@@ -35,8 +35,10 @@ super easy to add more, please raise an issue if you need more.
 
 # Installation
 Install [Julia 1.0 or 0.7](https://julialang.org/downloads/), in the REPL, press `]` to enter package management mode, then 
-    add BigArrays
-    
+```
+add BigArrays
+```
+
 # usage
 
 `BigArrays` do not have limit of dataset size, if your reading index is outside of existing file range, will return an array filled with zeros.
