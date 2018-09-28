@@ -22,12 +22,12 @@ storing and accessing large julia array using different backends.
 Any other storage backends could be mounted in local filesystem will work. For example, AWS S3 and Google Cloud Storage could be supported by mounting the bucket as local directory.
 
 ### compression and decompression
-| Algorithm     | compression       | decompression     |
-| ------------- |:-----------------:| -----------------:|
-| gzip          | :white_check_mark | :white_check_mark |
-| zstd          | :white_check_mark | :white_check_mark |
-| blosclz       | :white_check_mark | :white_check_mark |
-| jpeg          | :white_check_mark | :x:               |
+| Algorithm     | compression        | decompression      |
+| ------------- |:------------------:| ------------------:|
+| gzip          | :white_check_mark: | :white_check_mark: |
+| zstd          | :white_check_mark: | :white_check_mark: |
+| blosclz       | :white_check_mark: | :white_check_mark: |
+| jpeg          | :white_check_mark: | :x:                |
 
 ## Installation
 
