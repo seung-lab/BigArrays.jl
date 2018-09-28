@@ -2,9 +2,9 @@ BigArrays.jl
 ============
 [![Build Status](https://travis-ci.org/seung-lab/BigArrays.jl.svg?branch=master)](https://travis-ci.org/seung-lab/BigArrays.jl)
 
-storing and accessing large julia array using different backends.
+storing and accessing large julia array.
 
-## Features
+# Features
 - serverless, clients do IO directly
 - multiple processes to fully use all the CPU cores
 - arbitrary subset cutout (saving should be chunk size aligned)
@@ -13,40 +13,45 @@ storing and accessing large julia array using different backends.
 - arbitrary dataset size (in theory, tested dataset size: ~ 9 TB)
 - multiple chunk compression algorithms
 - highly scalable due to the serverless design
-- arbitrary data type 
+- multiple data types 
 - support negative coordinate
 
-### supported backends
+## supported backends
 - [x] Local binary files
 
 Any other storage backends could be mounted in local filesystem will work. For example, AWS S3 and Google Cloud Storage could be supported by mounting the bucket as local directory.
 
-### compression and decompression
+## compression and decompression
 | Algorithm     | compression        | decompression      |
 | ------------- |:------------------:| ------------------:|
 | gzip          | :white_check_mark: | :white_check_mark: |
 | zstd          | :white_check_mark: | :white_check_mark: |
 | blosclz       | :white_check_mark: | :white_check_mark: |
-| jpeg          | :white_check_mark: | :x:                |
+| jpeg          | :x:                | :white_check_mark: |
 
-## Installation
+## supported data types
+Bool, UInt8, UInt16, UInt32, UInt64, Float32, Float64.
+super easy to add more, please raise an issue if you need more.
 
+# Installation
+Install [Julia 1.0 or 0.7](https://julialang.org/downloads/), in the REPL, press `]` to enter package management mode, then 
     add BigArrays
     
-## usage
+# usage
 
 `BigArrays` do not have limit of dataset size, if your reading index is outside of existing file range, will return an array filled with zeros.
 
-#### setup info file 
+## setup info file 
 the info file is a JSON file, which defines all the configuration of the dataset. It was defined in [neuroglancer](https://github.com/seung-lab/neuroglancer/wiki/Precomputed-API#info-json-file-specification) 
 
-### use backend of local binary file 
+## use backend of local binary file 
 ```julia
 using BigArrays
 using BigArrays.BinDicts
 ba = BigArray( BinDict("/path/of/dataset") )
 ```
 then use `ba` as normal array, the returned cutout result will be an OffsetArray, if you need normal Julia Array, use `parent` function to get it. 
+For more examples, check out the [tests](https://github.com/seung-lab/BigArrays.jl/blob/master/test/BinDicts.jl).
 
 # Development
 BigArrays is a high-level architecture to transform Key-Value store (backend) to Julia Array (frontend). it provide an interface of AbstractArray, and implement the get_index and set_index functions. 
