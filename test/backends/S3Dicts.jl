@@ -7,7 +7,9 @@ using Libz
 
     a = rand(UInt8, 50)
 
+    println("save object")
     as3["test"] = a
+    println("get object")
     b = as3["test"]
     @test all(a.==b)
     @test haskey(as3, "test") == true

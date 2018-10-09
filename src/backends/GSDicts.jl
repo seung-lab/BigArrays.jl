@@ -29,7 +29,8 @@ function GSDict( path::String; gzip::Bool = GZIP,
     session = GoogleSession( credentialFileName, ["devstorage.full_control"]) 
     set_session!(storage, session)    # storage is the API root, exported from GoogleCloud.jl
     kvStore = KeyStore{String, valueType}(  bucketName; session=session, key_format=:string, 
-                                          val_format=:data, empty=false, gzip=gzip) 
+                                          val_format=:data, empty=false, gzip=gzip, 
+                                         debug=true) 
     
     @show kvStore
     GSDict( kvStore, bucketName, keyPrefix, session )

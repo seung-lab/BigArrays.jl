@@ -4,8 +4,7 @@ abstract type AbstractBigArray <: AbstractArray{Any,Any} end
 
 # basic functions
 include("BackendBase.jl"); using .BackendBase
-include("Codings.jl"); 
-using .Codings;
+include("Codings.jl"); using .Codings;
 include("Indexes.jl"); using .Indexes;
 include("ChunkIterators.jl"); using .ChunkIterators;
 include("backends/include.jl") 

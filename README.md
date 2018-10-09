@@ -1,11 +1,33 @@
 BigArrays.jl
 ============
+
 [![Build Status](https://travis-ci.org/seung-lab/BigArrays.jl.svg?branch=master)](https://travis-ci.org/seung-lab/BigArrays.jl)
 
-storing and accessing large julia array.
+Cutout and saving arbitrary chunks in Julia with backends of 
+local and cloud storages.
+
+# Introduction  
+## Booming of large scale 3D image datasets 
+With the augmentation of sample embedding and physical sectioning, modern electon and light microscopes have expanded field of view in the order of magnitudes with high resolution. As a result, we have seen a booming of large scale 3D image datasets around the world in recent years. In most cases, large scale image data can not fit in computer memory and traditional standalone software is not able to handle these datasets. Managing the datasets, including injecting, cutout and visualization, is challenging and getting more and more urgent. 
+
+## Current Solutions  
+Almost all the large image handling solutions use precomputed image pyramids, called [mipmaps](https://en.wikipedia.org/wiki/Mipmap). Normally, the images were chopped to small blocks with multiple resolution levels. The blocks were normally compressed with a variaty of algorithms, such as gzip and jpeg. The highest resolution blocks were normally called mip level 0. The higher mip levels were normally built using recursive downsampling. Since the data management software were normally designed and optimized for the storage backend, the solutions could be classified according to the storage architecture. 
+
+For the traditional block storage backend, the blocks could all be saved in one big file and the blocks could be located by disk seek to avoid the filesystem search overhead. However, the internal filesystem increased the software complexity and the dataset size was limited by the largest file size of the filesystem. The blocks could also be realigned based on space filling curves, such as [Hilbert Curve](https://en.wikipedia.org/wiki/Hilbert_curve), for faster reading of neighboring blocks. However, the size of dataset was limited by the largest file size of the local storage. Although single file could also take adavantage of modern [Redundant Array of Independent Disks (RAID)](https://en.wikipedia.org/wiki/RAID) system for parallel high-bandwidth IO. The block IO could normally not taking advantage of the high bandwidth since the block size is normally small. In this case, the latency will become dominant factor of performance. The RAID system have bigger latency and could perform worse than single disk. For example, the commercialized [Amira LDA format](https://www.fei.com/software/amira-avizo-for-large-data-management/) is based on this approach.
+
+For the traditional file system storage, the blocks were managed by the local filesystem. The files could also be shared across machines using network file system, which is normally slower than block storage since it has file search overhead and is normally not distributed across many servers.
+
+For the mordern [object storage](https://en.wikipedia.org/wiki/Object_storage) backend, such as Google Cloud Storage and AWS S3, the meta data was separated and managed by dedicated metadata servers and the IO could be distributed across data servers. Object storage normally have web api and is easy to share files. Thus, it is both fast and easy to share with more complex software and higher maintainance cost.  
+
+| Storage Backend | Advantages             | Disadvantages      | Example               |
+| --------------- |:----------------------:| ------------------:| --------------------- |
+| Block Storage   | fast                   | not easy to share  | Amira LDA format
+| File System     | easy to share          | normally slower    | [TDat](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5534480/)
+| Object Storage  | fast and easy to share | more expansive     | [Bossdb](https://bossdb.org/)
 
 # Features
-- serverless, clients do IO directly
+- serverless, clients communicate with storage backends directly. 
+The cutout was performed in the client side. 
 - multiple processes to fully use all the CPU cores
 - arbitrary subset cutout (saving should be chunk size aligned)
 - extensible with multiple backends

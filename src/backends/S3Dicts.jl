@@ -5,21 +5,19 @@ using JSON
 using AWSCore
 using AWSSDK.S3
 #using Retry
-using Memoize
 import HTTP
 import BigArrays.BackendBase: AbstractBigArrayBackend, get_info, get_scale_name 
 
 global const NEUROGLANCER_CONFIG_FILENAME = "info"
-global const METADATA = Dict{String, String}(
-        "Content-Type"      => "binary/octet-stream") 
+global const CONTENT_TYPE = "binary/octet-stream" 
 global const GZIP_MAGIC_NUMBER = UInt8[0x1f, 0x8b, 0x08]
 
 
 if haskey(ENV, "AWS_ACCESS_KEY_ID")
-    global const AWS_CREDENTIAL = AWSCore.aws_config()
+    global AWS_CREDENTIAL = AWSCore.aws_config()
 elseif isfile("/secrets/aws-secret.json")
     d = JSON.parsefile("/secrets/aws-secret.json")
-    global const AWS_CREDENTIAL = AWSCore.aws_config(creds=AWSCredentials(d["AWS_ACCESS_KEY_ID"], d["AWS_SECRET_ACCESS_KEY"]))
+    global AWS_CREDENTIAL = AWSCore.aws_config(creds=AWSCredentials(d["AWS_ACCESS_KEY_ID"], d["AWS_SECRET_ACCESS_KEY"]))
 else 
     @warn("did not find AWS credential! set it in environment variables.")
 end 
@@ -36,7 +34,7 @@ end
 construct S3Dict from a directory path of s3
 """
 function S3Dict( path::String )
-    path = replace(path, "s3://", "")
+    path = replace(path, "s3://" => "")
     bkt, keyPrefix = split(path, "/", limit = 2)
     keyPrefix = strip(keyPrefix, '/')
     S3Dict(bkt, keyPrefix)
@@ -62,18 +60,21 @@ function Base.setindex!(h::S3Dict, v::Array, key::AbstractString)
     else 
         contentEncoding = ""
     end 
-    arguments = Dict(:Bucket   => h.bkt,
-                 :Key      => joinpath(h.keyPrefix, key),
-                 :Body     => data, 
-                 Symbol("Content-Type")  => METADATA["Content-Type"],
-                 Symbol("Content-Encoding") => contentEncoding )
-
-    resp = S3.put_object(AWS_CREDENTIAL, arguments) 
+    arguments = Dict("Bucket"   => h.bkt,
+                 "Key"      => joinpath(h.keyPrefix, key),
+                 "Body"     => data, 
+                 "Content-Type"  => CONTENT_TYPE,
+                 "Content-Encoding" => contentEncoding)
+    #@show arguments
+    resp = S3.put_object(AWS_CREDENTIAL, arguments)
+    nothing
 end
 
 function Base.getindex(h::S3Dict, key::AbstractString)
     try 
-        data = S3.get_object(AWS_CREDENTIAL; Bucket=h.bkt, Key=joinpath(h.keyPrefix, key))
+        data = S3.get_object(AWS_CREDENTIAL; 
+                             Bucket=h.bkt, 
+                             Key=joinpath(h.keyPrefix, key))
         return data
     catch err
         @show err 
