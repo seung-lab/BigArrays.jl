@@ -8,8 +8,8 @@ CodecZstd
 OffsetArrays
 JSON
 
-
+AWSCore
+AWSS3
+HTTP
 #GoogleCloud
-#AWSCore
 #AWSSDK
-#HTTP
