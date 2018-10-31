@@ -3,16 +3,17 @@ using BigArrays
 using BigArrays.GSDicts
 using OffsetArrays
 
-d = GSDict( "gs://seunglab/jpwu/test/image/4_4_40/" )
-ba = BigArray(d)
-
-@show ba.chunkSize
-@show ndims(ba)
-@show size(ba)
-@show eltype(ba)
-a = rand(UInt8, 256,256,16)
 
 @testset "test 3D image reading and saving" begin  
+    d = GSDict( "gs://seunglab/jpwu/test/image/4_4_40/" )
+    ba = BigArray(d)
+
+    @show ba.chunkSize
+    @show ndims(ba)
+    @show size(ba)
+    @show eltype(ba)
+    a = rand(UInt8, 256,256,16)
+
     # ba = BigArray(d, UInt8, (128,128,8))
     @time ba[257:512, 257:512, 17:32] = a
     # BigArrays.mysetindex!(ba, a, (201:400, 201:400, 161:116))

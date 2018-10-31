@@ -1,5 +1,6 @@
 module GSDicts
 
+using HTTP
 using GoogleCloud
 using JSON
 import BigArrays.BackendBase: AbstractBigArrayBackend, get_info, get_scale_name 
@@ -30,9 +31,8 @@ function GSDict( path::String; gzip::Bool = GZIP,
     set_session!(storage, session)    # storage is the API root, exported from GoogleCloud.jl
     kvStore = KeyStore{String, valueType}(  bucketName; session=session, key_format=:string, 
                                           val_format=:data, empty=false, gzip=gzip, 
-                                         debug=true) 
+                                         debug=false) 
     
-    @show kvStore
     GSDict( kvStore, bucketName, keyPrefix, session )
 end
 
@@ -67,8 +67,17 @@ end
 
 function Base.getindex( d::GSDict, key::String)
 	#authorize( d.googleSession )
-    data = d.kvStore[joinpath(d.keyPrefix, key)] 
-    return data
+    try 
+        return d.kvStore[joinpath(d.keyPrefix, key)] 
+    catch err 
+        if isa(err, HTTP.ExceptionRequest.StatusError) && err.status==404
+            throw(KeyError("NoSuchKey in Google Cloud Storage: $(key)"))
+        else
+            println("get an unknown error: ", err)
+            println("error type is: ", typeof(err))
+            rethrow
+        end 
+    end 
 end
 
 function Base.keys( d::GSDict )

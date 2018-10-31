@@ -14,6 +14,8 @@ using Test
         if isa(err, KeyError)
             println("get normal KeyError: $(err)")
         else
+            println("get an error: ", err)
+            println("error type: ", typeof(err))
             rethrow()
         end
     end

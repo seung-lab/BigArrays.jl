@@ -11,5 +11,5 @@ JSON
 AWSCore
 AWSS3
 HTTP
-#GoogleCloud
+GoogleCloud
 #AWSSDK
