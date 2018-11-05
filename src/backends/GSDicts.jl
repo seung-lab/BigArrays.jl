@@ -30,8 +30,7 @@ function GSDict( path::String; gzip::Bool = GZIP,
     session = GoogleSession( credentialFileName, ["devstorage.full_control"]) 
     set_session!(storage, session)    # storage is the API root, exported from GoogleCloud.jl
     kvStore = KeyStore{String, valueType}(  bucketName; session=session, key_format=:string, 
-                                          val_format=:data, empty=false, gzip=gzip, 
-                                         debug=false) 
+                                          val_format=:data, empty=false, gzip=gzip, debug=false) 
     
     GSDict( kvStore, bucketName, keyPrefix, session )
 end
@@ -39,7 +38,7 @@ end
 ##################### properties ##############################
 function get_info( self::GSDict )
     storage(:Object, :get, self.bucketName,
-                   joinpath(dirname(strip(self.keyPrefix,'/')), "info"))
+                   joinpath(dirname(rstrip(self.keyPrefix,'/')), "info"))
 end
 
 function get_scale_name(self::GSDict)
@@ -122,7 +121,7 @@ end
 function splitgs( path::String )
     path = replace(path, "gs://"=>"")
     bucketName, key = split(path, "/", limit=2)
-    key = strip(key, '/')
+    key = rstrip(key, '/')
     return String(bucketName), String(key)
 end
 

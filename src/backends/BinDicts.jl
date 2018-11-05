@@ -20,7 +20,7 @@ function get_info( self::BinDict )
 end 
 
 function get_scale_name( self::BinDict ) 
-    basename( strip(get_path(self), '/') )
+    basename( rstrip(get_path(self), '/') )
 end 
 
 function Base.getindex( self::BinDict, key::AbstractString)
