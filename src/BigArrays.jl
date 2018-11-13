@@ -55,14 +55,16 @@ struct BigArray{D<:AbstractBigArrayBackend, T<:Real, N, C<:AbstractBigArrayCodin
     chunkSize   :: NTuple{N}
     volumeSize  :: NTuple{N}
     offset      :: CartesianIndex{N}
+    fillMissing :: Bool 
     function BigArray(
                     kvStore     ::D,
                     foo         ::Type{T},
                     chunkSize   ::NTuple{N},
                     volumeSize  ::NTuple{N},
                     coding      ::Type{C};
-                    offset      ::CartesianIndex{N} = CartesianIndex{N}() - 1) where {D,T,N,C}
-        new{D, T, N, C}(kvStore, chunkSize, volumeSize, offset)
+                    offset      ::CartesianIndex{N} = CartesianIndex{N}() - 1,
+                    fillMissing ::Bool = true) where {D,T,N,C}
+        new{D, T, N, C}(kvStore, chunkSize, volumeSize, offset, fillMissing)
     end
 end
 
@@ -366,7 +368,7 @@ function remote_getindex_worker(ba::BigArray{D,T,N,C}, jobs::RemoteChannel,
         chk = reshape(reinterpret(T, chk), chunkSize)
         @inbounds sharedBuffer[globalRange] = chk[rangeInChunk]
     catch err 
-        if isa(err, KeyError)
+        if isa(err, KeyError) && ba.fillMissing 
             println("no such key in file system: $(err), will fill this block as zeros")
             return 
         else 
@@ -429,7 +431,7 @@ function do_work_getindex!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D
             chk = reshape(chk, chunkSize)
             @inbounds buf[rangeInBuffer] = chk[rangeInChunk]
         catch err 
-            if isa(err, KeyError)
+            if isa(err, KeyError) && ba.fillMissing
                 println("no suck key in kvstore: $(err), will fill this block as zeros")
                 break
             else
@@ -486,7 +488,7 @@ function remote_getindex_worker(ba::BigArray{D,T,N,C}, jobs::RemoteChannel,
         arr = OffsetArray(chk, cartesian_range2unit_range(globalRange)...) 
         put!(results, arr)
     catch err
-        if isa(err, KeyError)
+        if isa(err, KeyError) && ba.fillMissing
             println("no such key: $(err), will fill with zeros.")
         else  
             println("catch an error while get index in remote worker: $err")
@@ -565,7 +567,7 @@ function getindex_sequential(ba::BigArray{D, T, N, C},
             chk = reshape(chk, chunkSize)
             @inbounds buf[rangeInBuffer] = chk[rangeInChunk]
         catch err 
-            if isa(err, KeyError)
+            if isa(err, KeyError) && ba.fillMissing
                 println("no suck key in kvstore: $(err), will fill this block as zeros")
                 break
             else

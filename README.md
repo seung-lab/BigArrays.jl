@@ -39,9 +39,11 @@ The cutout was performed in the client side.
 - support negative coordinate
 
 ## supported backends
-- [x] Local binary files
+- [x] Local file system
+- [x] Google Cloud Storage 
+- [x] AWS S3 
 
-Any other storage backends could be mounted in local filesystem will work. For example, AWS S3 and Google Cloud Storage could be supported by mounting the bucket as local directory.
+Any other storage backends could be mounted in local filesystem will work. For example, shared file system could be supported by mounting the files as local directory. Most of cloud storage could also be mounted and used via local file system backend. 
 
 ## compression and decompression
 | Algorithm     | compression        | decompression      |
@@ -53,7 +55,7 @@ Any other storage backends could be mounted in local filesystem will work. For e
 
 ## supported data types
 Bool, UInt8, UInt16, UInt32, UInt64, Float32, Float64.
-super easy to add more, please raise an issue if you need more.
+easy to add more, please raise an issue if you need more.
 
 # Installation
 Install [Julia 1.0 or 0.7](https://julialang.org/downloads/), in the REPL, press `]` to enter package management mode, then 
