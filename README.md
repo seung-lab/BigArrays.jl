@@ -25,6 +25,17 @@ For the mordern [object storage](https://en.wikipedia.org/wiki/Object_storage) b
 | File System     | easy to share          | normally slower    | [TDat](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5534480/)
 | Object Storage  | fast and easy to share | more expansive     | [Bossdb](https://bossdb.org/)
 
+## The importance of large scale visualization 
+Traditionally, images were visualized with standalone softwares in a single workstation. Although there exist some sophesticated softwares to visualize large scale image datasets, such as [Amira-Avizo](https://www.fei.com/software/amira-avizo-for-large-data-management/) and [TrackEM2](https://imagej.net/TrakEM2), it requires special setup for the users. 
+
+## The rise of Julia in data science 
+Data scientists have long been prototyping with dynamically typed language, such as Matlab and python. After the algorithms become stable, they'll start to reimplement the algorithm with faster statically typed language for production run. Julia was designed to solve this two-language problem. 
+
+Data scientists can use Julia interactively with Real-Eval-Print-Loop (REPL) in terminal or Jupyter Notebooks. In the mean time, Julia code could be compiled to native machine code for fast execution thanks for the design of just-in-time compilation with type inference. Julia is getting more and more popular among data scientists since we can explore the data and develop algorithms interactively and also deploy the same code to process large scale of datasets.
+
+## The design of BigArrays.jl
+BigArrays.jl was designed with a separation of frontend and backend. The front end provide a Julia Array interface with the same indexing syntax. The backend was abstracted as a Key-Value store and all the storage backend only need to provide a key-value indexing interface.
+
 # Features
 - serverless, clients communicate with storage backends directly. 
 The cutout was performed in the client side. 
