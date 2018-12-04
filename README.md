@@ -36,6 +36,8 @@ Data scientists can use Julia interactively with Real-Eval-Print-Loop (REPL) in 
 ## The design of BigArrays.jl
 BigArrays.jl was designed with a separation of frontend and backend. The front end provide a Julia Array interface with the same indexing syntax. The backend was abstracted as a Key-Value store and all the storage backend only need to provide a key-value indexing interface.
 
+The saved format is consistent with [neuroglancer](https://github.com/google/neuroglancer) for direct visualization and exploration of large scale image volume. BigArrays also support more compression methods for the fine control of speed and compression ratio. 
+
 # Features
 - serverless, clients communicate with storage backends directly. 
 The cutout was performed in the client side. 
