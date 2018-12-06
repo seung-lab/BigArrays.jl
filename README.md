@@ -2,6 +2,7 @@ BigArrays.jl
 ============
 
 [![Build Status](https://travis-ci.org/seung-lab/BigArrays.jl.svg?branch=master)](https://travis-ci.org/seung-lab/BigArrays.jl)
+[![Coverage Status](https://coveralls.io/repos/github/seung-lab/BigArrays.jl/badge.svg?branch=master)](https://coveralls.io/github/seung-lab/BigArrays.jl?branch=master)
 
 Cutout and saving arbitrary chunks in Julia with backends of 
 local and cloud storages.

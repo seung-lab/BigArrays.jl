@@ -104,7 +104,7 @@ function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     elseif ba.mode == :sharedarray 
         setindex_sharedarray!(ba, buf, idxes...,)
     elseif ba.mode == :sequential 
-        setindex_sequential(ba, buf, idxes...)
+        setindex_sequential!(ba, buf, idxes...)
     else 
         error("only support modes of multithreads, multiprocesses, sharedarray, sequential")
     end 
