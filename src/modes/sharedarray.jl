@@ -1,10 +1,28 @@
+#"""
+#For now, we have to define our own indexing functions for performance.
+#because of this issue: 
+#https://github.com/JuliaLang/julia/issues/21957
+#"""
+#@inline function Base.getindex(S::SharedArray, i::Real) 
+#	getindex(S.s, i)
+#end
+#@inline function Base.setindex!(S::SharedArray, x, i::Real) 
+#	setindex!(S.s, x, i)
+#end
+#@inline function Base.getindex(S::SharedArray, i::Real...) 
+#	getindex(S.s, i...)
+#end
+#@inline function Base.setindex!(S::SharedArray, x, i::Real...) 
+#	setindex!(S.s, x, i...)
+#end
+
 function setindex_sharedarray_worker(ba::BigArray{D,T,N,C}, 
                                 sharedBuffer::OffsetArray{T,N,SharedArray{T,N}},
                                 chunkGlobalRange::CartesianIndices{N},
                                 rangeInBuffer::CartesianIndices{N}) where {D,T,N,C}
     try
-        block = sharedBuffer[rangeInBuffer]
-        ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encode( block, C)
+        @inbounds block = sharedBuffer[rangeInBuffer]
+        @inbounds ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encode( block, C)
     catch err 
         println("catch an error while saving in BigArray: $err with type $(typeof(err))")
         rethrow()

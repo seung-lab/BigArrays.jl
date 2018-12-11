@@ -46,6 +46,15 @@ end # end of testset
     @test all(a.==parent(b))
 end # end of testset
 
+#@testset "test sharedarray mode..." begin 
+#    ba = BigArray( BinDict(datasetDir); mode=:sharedarray )
+#    a = rand(UInt8, 200,200,2000)
+#    ba[-199:0, -99:100, -4:1995] = a
+#    b = ba[-199:0, -99:100, -4:1995] 
+#    @test all(a.==parent(b))
+#end # end of testset
+
+
 @testset "test aligned IO crossing the volume boundary" begin 
     ba = BigArray( BinDict(datasetDir) )
     a = rand(UInt8, 200,200,10)
