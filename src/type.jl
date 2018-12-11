@@ -1,3 +1,6 @@
+
+const DEFAULT_MODE = :multithreads 
+
 """
     BigArray
 currently, assume that the array dimension (x,y,z,...) is >= 3
@@ -18,26 +21,34 @@ struct BigArray{D<:AbstractBigArrayBackend, T<:Real, N, C<:AbstractBigArrayCodin
                     coding      ::Type{C};
                     offset      ::CartesianIndex{N} = CartesianIndex{N}() - 1,
                     fillMissing ::Bool=true,
-                    mode        ::Symbol=:multithreads) where {D,T,N,C}
+                    mode        ::Symbol=DEFAULT_MODE) where {D,T,N,C}
         new{D, T, N, C}(kvStore, chunkSize, volumeSize, offset, fillMissing, mode)
     end
 end
 
-function BigArray( d::AbstractBigArrayBackend)
+function BigArray(d::AbstractBigArrayBackend; 
+                  fillMissing::Bool=true,
+                  mode::Symbol=DEFAULT_MODE)  
     info = get_info(d)
-    return BigArray(d, info)
+    return BigArray(d, info; fillMissing=fillMissing, mode=mode)
 end
 
-function BigArray( d::AbstractBigArrayBackend, info::Vector{UInt8})
+function BigArray( d::AbstractBigArrayBackend, info::Vector{UInt8};
+                  fillMissing::Bool=true,
+                  mode::Symbol=DEFAULT_MODE) 
     Codings.decode(info, GzipCoding) 
-    BigArray(d, String(info))
+    BigArray(d, String(info); fillMissing=fillMissing, mode=mode)
 end 
 
-function BigArray( d::AbstractBigArrayBackend, info::AbstractString )
-    BigArray(d, JSON.parse( info, dicttype=Dict{Symbol, Any} ))
+function BigArray( d::AbstractBigArrayBackend, info::AbstractString;
+                fillMissing::Bool=true,
+                mode::Symbol=DEFAULT_MODE)  
+    BigArray(d, JSON.parse( info, dicttype=Dict{Symbol, Any} ); fillMissing=fillMissing, mode=mode)
 end 
 
-function BigArray( d::AbstractBigArrayBackend, infoConfig::Dict{Symbol, Any}) 
+function BigArray( d::AbstractBigArrayBackend, infoConfig::Dict{Symbol, Any};
+                  fillMissing::Bool=fillMissing,
+                  mode::Symbol=DEFAULT_MODE) 
     # chunkSize
     scale_name = get_scale_name(d)
     T = DATATYPE_MAP[infoConfig[:data_type]]
@@ -56,7 +67,8 @@ function BigArray( d::AbstractBigArrayBackend, infoConfig::Dict{Symbol, Any})
             break 
         end 
     end 
-    BigArray(d, T, chunkSize, volumeSize, encoding; offset=CartesianIndex(offset)) 
+    BigArray(d, T, chunkSize, volumeSize, encoding; 
+             offset=CartesianIndex(offset), fillMissing=fillMissing, mode=mode) 
 end
 
 ######################### base functions #######################

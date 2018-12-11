@@ -13,7 +13,7 @@ using SharedArrays
 export AbstractBigArray, BigArray 
 
 # basic functions
-include("BackendBase.jl"); using .BackendBase
+include("BackendBase.jl"); using .BackendBase;
 include("Codings.jl"); using .Codings;
 include("Indexes.jl"); using .Indexes;
 include("ChunkIterators.jl"); using .ChunkIterators;
