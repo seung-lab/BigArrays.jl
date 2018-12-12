@@ -1,0 +1,269 @@
+{
+  "data_type": "uint32",
+  "mesh": "mesh_mip_4_err40",
+  "num_channels": 1,
+  "scales": [
+    {
+      "chunk_sizes": [
+        [
+          64,
+          64,
+          56
+        ]
+      ],
+      "encoding": "raw",
+      "key": "5_5_45",
+      "resolution": [
+        5,
+        5,
+        45
+      ],
+      "size": [
+        69888,
+        34048,
+        1792
+      ],
+      "voxel_offset": [
+        14720,
+        12032,
+        16400
+      ]
+    },
+    {
+      "chunk_sizes": [
+        [
+          64,
+          64,
+          56
+        ]
+      ],
+      "encoding": "raw",
+      "key": "10_10_45",
+      "resolution": [
+        10,
+        10,
+        45
+      ],
+      "size": [
+        34944,
+        17024,
+        1792
+      ],
+      "voxel_offset": [
+        7360,
+        6016,
+        16400
+      ]
+    },
+    {
+      "chunk_sizes": [
+        [
+          64,
+          64,
+          56
+        ]
+      ],
+      "encoding": "raw",
+      "key": "20_20_45",
+      "resolution": [
+        20,
+        20,
+        45
+      ],
+      "size": [
+        17472,
+        8512,
+        1792
+      ],
+      "voxel_offset": [
+        3680,
+        3008,
+        16400
+      ]
+    },
+    {
+      "chunk_sizes": [
+        [
+          64,
+          64,
+          56
+        ]
+      ],
+      "encoding": "raw",
+      "key": "40_40_45",
+      "resolution": [
+        40,
+        40,
+        45
+      ],
+      "size": [
+        8736,
+        4256,
+        1792
+      ],
+      "voxel_offset": [
+        1840,
+        1504,
+        16400
+      ]
+    },
+    {
+      "chunk_sizes": [
+        [
+          64,
+          64,
+          56
+        ]
+      ],
+      "encoding": "raw",
+      "key": "80_80_45",
+      "resolution": [
+        80,
+        80,
+        45
+      ],
+      "size": [
+        4368,
+        2128,
+        1792
+      ],
+      "voxel_offset": [
+        920,
+        752,
+        16400
+      ]
+    },
+    {
+      "chunk_sizes": [
+        [
+          64,
+          64,
+          56
+        ]
+      ],
+      "encoding": "raw",
+      "key": "160_160_45",
+      "resolution": [
+        160,
+        160,
+        45
+      ],
+      "size": [
+        2184,
+        1064,
+        1792
+      ],
+      "voxel_offset": [
+        460,
+        376,
+        16400
+      ]
+    },
+    {
+      "chunk_sizes": [
+        [
+          64,
+          64,
+          56
+        ]
+      ],
+      "encoding": "raw",
+      "key": "320_320_45",
+      "resolution": [
+        320,
+        320,
+        45
+      ],
+      "size": [
+        1092,
+        532,
+        1792
+      ],
+      "voxel_offset": [
+        230,
+        188,
+        16400
+      ]
+    },
+    {
+      "chunk_sizes": [
+        [
+          64,
+          64,
+          56
+        ]
+      ],
+      "encoding": "raw",
+      "key": "640_640_45",
+      "resolution": [
+        640,
+        640,
+        45
+      ],
+      "size": [
+        546,
+        266,
+        1792
+      ],
+      "voxel_offset": [
+        115,
+        94,
+        16400
+      ]
+    },
+    {
+      "chunk_sizes": [
+        [
+          64,
+          64,
+          56
+        ]
+      ],
+      "encoding": "raw",
+      "key": "1280_1280_45",
+      "resolution": [
+        1280,
+        1280,
+        45
+      ],
+      "size": [
+        273,
+        133,
+        1792
+      ],
+      "voxel_offset": [
+        57,
+        47,
+        16400
+      ]
+    },
+    {
+      "chunk_sizes": [
+        [
+          64,
+          64,
+          56
+        ]
+      ],
+      "encoding": "raw",
+      "key": "2560_2560_45",
+      "resolution": [
+        2560,
+        2560,
+        45
+      ],
+      "size": [
+        137,
+        67,
+        1792
+      ],
+      "voxel_offset": [
+        28,
+        23,
+        16400
+      ]
+    }
+  ],
+  "skeletons": "skeleton_mip_4_postprocessed",
+  "type": "segmentation"
+}

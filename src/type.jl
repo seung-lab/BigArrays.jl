@@ -29,47 +29,55 @@ end
 function BigArray(d::AbstractBigArrayBackend; 
                   fillMissing::Bool=true,
                   mode::Symbol=DEFAULT_MODE)  
-    info = get_info(d)
+    info = get_info(d) |> Info 
     return BigArray(d, info; fillMissing=fillMissing, mode=mode)
 end
 
 function BigArray( d::AbstractBigArrayBackend, info::Vector{UInt8};
                   fillMissing::Bool=true,
                   mode::Symbol=DEFAULT_MODE) 
-    Codings.decode(info, GzipCoding) 
+    info = Codings.decode(info, GzipCoding) |> Info 
     BigArray(d, String(info); fillMissing=fillMissing, mode=mode)
 end 
 
 function BigArray( d::AbstractBigArrayBackend, info::AbstractString;
                 fillMissing::Bool=true,
                 mode::Symbol=DEFAULT_MODE)  
-    BigArray(d, JSON.parse( info, dicttype=Dict{Symbol, Any} ); fillMissing=fillMissing, mode=mode)
+    BigArray(d, Info(info); fillMissing=fillMissing, mode=mode)
 end 
 
 function BigArray( d::AbstractBigArrayBackend, infoConfig::Dict{Symbol, Any};
-                  fillMissing::Bool=fillMissing,
-                  mode::Symbol=DEFAULT_MODE) 
-    # chunkSize
-    scale_name = get_scale_name(d)
-    T = DATATYPE_MAP[infoConfig[:data_type]]
-    local offset::Tuple, encoding, chunkSize::Tuple, volumeSize::Tuple 
-    for scale in infoConfig[:scales]
-        if scale[:key] == scale_name 
-            chunkSize = (scale[:chunk_sizes][1]...,)
-            offset = (scale[:voxel_offset]...,)
-            volumeSize = (scale[:size]...,)
-            encoding = CODING_MAP[ scale[:encoding] ]
-            if infoConfig[:num_channels] > 1
-                chunkSize = (chunkSize..., infoConfig[:num_channels])
-                volumeSize = (volumeSize..., infoConfig[:num_channels])
-                offset = (offset..., 0)
-            end
-            break 
-        end 
-    end 
-    BigArray(d, T, chunkSize, volumeSize, encoding; 
-             offset=CartesianIndex(offset), fillMissing=fillMissing, mode=mode) 
+                    fillMissing::Bool=fillMissing, mode::Symbol=DEFAULT_MODE) 
+    info = Info(infoConfig)
+    BigArray(d, info; mip=mip, fillMissing=fillMissing, mode=mode) 
 end
+
+"""
+    BigArray( d::AbstractBigArrayBackend, info::Info;
+                  mip::Int = 0,
+                  fillMissing::Bool=fillMissing,
+                  mode::Symbol=DEFAULT_MODE)
+
+Parameters:
+    d: the bigarray storage backend 
+    info: the info containing the metadata
+    mip: mip level. 0 is the highest resolution. 
+            the mip level is like a image pyramid with difference downsampled levels.
+    fillMissing: whether fill the missing blocks in the storage backend with zeros or not. 
+    mode: the io mode with options in {multithreading, sequential, multiprocesses, sharedarray}
+"""
+function BigArray( d::AbstractBigArrayBackend, info::Info;
+                  fillMissing::Bool=fillMissing,
+                  mode::Symbol=DEFAULT_MODE)
+    dataType = Infos.get_data_type(info) 
+    key = get_scale_name(d) |> Symbol
+    chunkSize, encoding, resolution, voxelOffset, volumeSize = 
+                                Infos.get_properties_in_mip_level(info, key)
+    @debug chunkSize, encoding, resolution, voxelOffset, volumeSize
+    BigArray(d, dataType, chunkSize, volumeSize, encoding; 
+             offset=CartesianIndex(voxelOffset), fillMissing=fillMissing, mode=mode) 
+end
+
 
 ######################### base functions #######################
 
