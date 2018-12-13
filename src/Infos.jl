@@ -83,7 +83,7 @@ function Base.Dict(self::InfoScale)
     return d
 end
 
-function Base.string(self::InfoScale)
+@inline function Base.string(self::InfoScale)
     d = Dict(self)
     JSON.json(d)
 end
@@ -95,22 +95,30 @@ end
 @inline function get_chunk_size(self::InfoScale)
     @assert length(self.chunkSizes) == 1
     self.chunkSizes[1] 
+end
+
+@inline function set_chunk_size!(self::InfoScale, chunkSize::NTuple{3,Int})
+    @assert length(self.chunkSizes) == 1
+    self.chunkSizes[1]=chunkSize
 end 
 
-@inline function get_encoding(self::InfoScale)
-    self.encoding 
+@inline function get_encoding(self::InfoScale) self.encoding end
+
+@inline function set_encoding!(self::InfoScale, encoding::Symbol)
+    self.encoding = ENCODING_MAP[encoding]
 end 
 
-@inline function get_resolution(self::InfoScale)
-    self.resolution 
+@inline function get_resolution(self::InfoScale) self.resolution end 
+@inline function set_resolution!(self::InfoScale, resolution::NTuple{3,T}) where T
+    self.resolution = map(Float64, resolution)
 end 
 
-@inline function get_size(self::InfoScale)
-    self.size 
-end 
+@inline function get_size(self::InfoScale) self.size end 
+@inline function set_size!(self::InfoScale, size::NTuple{3,Int}) self.size=size end 
 
-@inline function get_voxel_offset(self::InfoScale)
-    self.voxelOffset 
+@inline function get_voxel_offset(self::InfoScale) self.voxelOffset end
+@inline function set_voxel_offset!(self::InfoScale, voxelOffset::CartesianIndex{3}) 
+    self.voxelOffset = voxelOffset 
 end 
 
 function get_properties(self::InfoScale)
@@ -138,7 +146,6 @@ end
 
 function Info(d::Dict{Symbol,Any})
     dataType = DATATYPE_MAP[ d[:data_type] ]
-
     mesh = get(d, :mesh, "")
     numChannels = d[:num_channels]
     scales = map(InfoScale, d[:scales])
@@ -184,27 +191,41 @@ end
     Base.string(self::Info)
 
 """
-function Base.string(self::Info)
+@inline function Base.string(self::Info)
     d = Dict(self)
     JSON.json(d)
 end 
 
 ############ get the properties ##########
 @inline function get_data_type(self::Info) self.dataType end 
+@inline function set_data_type!(self::Info, dataType::DataType) self.dataType=dataType end 
 
 @inline function get_mesh(self::Info) self.mesh end 
+@inline function set_mesh!(self::Info, mesh::String) self.mesh=mesh end 
 
 @inline function get_chunk_size(self::Info, mip::Integer=0) 
-    self.scales.chunkSizes[mip+1]
+    InfoScales.get_chunk_size( self.scales[mip+1] ) 
+end
+@inline function set_chunk_size!(self::Info, chunkSize::NTuple{3,Int}, mip::Integer)
+    InfoScales.set_chunk_size!( self.scales[mip+1], chunkSize) 
+end 
+@inline function set_chunk_size!(self::Info, chunkSize::NTuple{3,Int})
+    for infoScale in self.scales 
+        InfoScales.set_chunk_size!( infoScale )
+    end
 end 
 
 @inline function get_num_channels(self::Info) self.numChannels end 
+@inline function set_num_channels!(self::Info, numChannels::Int) self.numChannels=numChannels end 
 
 @inline function get_scales(self::Info) self.scales end 
+@inline function set_scales!(self::Info, scales::Vector{InfoScale}) self.scales=scales end 
 
 @inline function get_skeletons(self::Info) self.skeletons end 
+@inline function set_skeletons!(self::Info, skeletons::String) self.skeletons=skeletons end 
 
 @inline function get_layer_type(self::Info) self.layerType end 
+@inline function set_layer_type(self::Info, layerType::Symbol) self.layerType=layerType end 
 
 """
     get_properties_in_mip_level(self::Info, mip::Integer=0)
