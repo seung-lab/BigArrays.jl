@@ -75,7 +75,7 @@ function BigArray( d::AbstractBigArrayBackend, info::Info;
                                 Infos.get_properties_in_mip_level(info, key)
     @debug chunkSize, encoding, resolution, voxelOffset, volumeSize
     BigArray(d, dataType, chunkSize, volumeSize, encoding; 
-             offset=CartesianIndex(voxelOffset), fillMissing=fillMissing, mode=mode) 
+             offset=voxelOffset, fillMissing=fillMissing, mode=mode) 
 end
 
 

@@ -15,4 +15,16 @@ using JSON
 
     info = Info(d)
     Infos.get_properties_in_mip_level(info, 0)
+
+    d = Dict(info)
+    @test isa(d, Dict{Symbol, Any})
+
+    str = string(info)
+    d2 = JSON.parse(str, dicttype=Dict{Symbol, Any})
+    # the d will not equal to d2 because the element type of vector is Any in d2
+    #@test d == d2
+
+    #println("test info construction function")
+    #info = Info()
+    #@test info != nothing
 end
