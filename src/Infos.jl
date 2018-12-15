@@ -35,7 +35,7 @@ mutable struct InfoScale
     chunkSizes  ::Vector{NTuple{3,Int}}
     encoding    ::DataType  
     resolution  ::NTuple{3,Float64}
-    size        ::NTuple{3,Int}
+    volumeSize  ::NTuple{3,Int}
     voxelOffset ::CartesianIndex{3}
 end
 
@@ -45,18 +45,18 @@ end
                     encoding::DataType=GzipCoding,
                     resolution::NTuple{3,Float64}=map(x->Float64(parse(x)), 
                                                       split(string(key), "_")),
-                    size::NTuple{3,Int}=(1024,1024,1024),
+                    volumeSize::NTuple{3,Int}=(1024,1024,1024),
                     voxelOffset::CartesianIndex{3}=CartesianIndex{3}(0,0,0))
  
 """
-function InfoScale(; key::Symbol=:4_4_40, 
+function InfoScale(; key::Symbol=Symbol("4_4_40"), 
                     chunkSizes::Vector{NTuple{3,Int}}=[(64,64,64)],
                     encoding::DataType=GzipCoding,
-                    resolution::NTuple{3,Float64}=map(x->Float64(parse(x)), 
-                                                      split(string(key), "_")),
-                    size::NTuple{3,Int}=(1024,1024,1024),
+                    resolution::NTuple{3,Float64}=Tuple(map(x->Float64(Meta.parse(x)), 
+                                                            split(string(key), "_"))),
+                    volumeSize::NTuple{3,Int}=(1024,1024,1024),
                     voxelOffset::CartesianIndex{3}=CartesianIndex{3}(0,0,0))
-    InfoScale(key, chunkSizes, encoding, resolution, size, voxelOffset)
+    InfoScale(key, chunkSizes, encoding, resolution, volumeSize, voxelOffset)
 end 
 
 function InfoScale(d::Dict{Symbol, Any})
@@ -64,9 +64,9 @@ function InfoScale(d::Dict{Symbol, Any})
     encoding = ENCODING_MAP[ d[:encoding] ]
     key = d[:key] |> Symbol 
     resolution = tuple(Float64.(d[:resolution])...)
-    size = tuple(Int.(d[:size])...)
+    volumeSize = tuple(Int.(d[:size])...)
     voxelOffset = CartesianIndex{3}(Int.(d[:voxel_offset])...)
-    InfoScale(key, chunkSizes, encoding, resolution, size, voxelOffset)
+    InfoScale(key, chunkSizes, encoding, resolution, volumeSize, voxelOffset)
 end
 
 function Base.Dict(self::InfoScale)
@@ -78,7 +78,7 @@ function Base.Dict(self::InfoScale)
             d[:encoding] = string(k)
         end 
     end 
-    d[:size] = [get_size(self)...]
+    d[:size] = [get_volume_size(self)...]
     d[:voxelOffset] = [Tuple(get_voxel_offset(self))...]
     return d
 end
@@ -113,8 +113,10 @@ end
     self.resolution = map(Float64, resolution)
 end 
 
-@inline function get_size(self::InfoScale) self.size end 
-@inline function set_size!(self::InfoScale, size::NTuple{3,Int}) self.size=size end 
+@inline function get_volume_size(self::InfoScale) self.volumeSize end 
+@inline function set_volume_size!(self::InfoScale, volumeSize::NTuple{3,Int}) 
+    self.volumeSize=volumeSize 
+end 
 
 @inline function get_voxel_offset(self::InfoScale) self.voxelOffset end
 @inline function set_voxel_offset!(self::InfoScale, voxelOffset::CartesianIndex{3}) 
@@ -126,8 +128,27 @@ function get_properties(self::InfoScale)
     encoding = get_encoding(self)
     resolution = get_resolution(self)
     voxelOffset = get_voxel_offset(self)
-    size = get_size(self)
-    return chunkSize, encoding, resolution, voxelOffset, size 
+    volumeSize = get_volume_size(self)
+    return chunkSize, encoding, resolution, voxelOffset, volumeSize 
+end
+
+"""
+    generate_next_mip(self::InfoScale)
+
+only downsample the images in XY plane by 2 times. 
+meaning increase the resolution by 2x in X and Y axis 
+the chunk size will remain the same 
+the encoding will also be the same 
+"""
+function generate_next_mip(self::InfoScale)
+    resolution = (self.resolution[1]*2.0, self.resolution[2]*2.0, self.resolution[3])
+    key = Symbol("$(round(Int,resolution[1]))_$(round(Int,resolution[2]))_$(round(Int,resolution[3]))")
+    chunkSize = get_chunk_size(self)
+    encoding = get_encoding(self)
+    volumeSize = map(div, get_volume_size(self), (2,2,1))
+    voxelOffset = CartesianIndex(map(div, Tuple(get_voxel_offset(self)), (2,2,1)))
+
+    return InfoScale(key, [chunkSize], encoding, resolution, volumeSize, voxelOffset)
 end 
 
 end # end of InfoScales module 
@@ -143,6 +164,41 @@ mutable struct Info
     skeletons   ::String 
     layerType   ::Symbol
 end
+
+"""
+    Info(; 
+        dataType::DataType=UInt8,
+        mesh::String="",
+        numChannels::Int=1,
+        scales::Vector{InfoScale}=[InfoScale()],
+        skeletons::String="",
+        layerType::Symbol=:image)
+
+layerType: the layer type defined in neuroglancer precomputed format: {image, segmentation}
+"""
+function Info(; 
+                dataType::DataType=UInt8,
+                mesh::String="",
+                numChannels::Int=1,
+                scales::Vector{InfoScale}=[InfoScale()],
+                skeletons::String="",
+                layerType::Symbol=:image,
+                volumeSize::NTuple{3,Int}=(1024,1024,1024),
+                chunkSize::NTuple{3,Int}=(64,64,64),
+                voxelOffset::CartesianIndex{3}=CartesianIndex{3}((0,0,0)),
+                numMip::Int=1)
+    infoScale = scales[1]
+    InfoScales.set_volume_size!(infoScale, volumeSize) 
+    InfoScales.set_chunk_size!(infoScale, chunkSize)
+    InfoScales.set_voxel_offset!(infoScale, voxelOffset)
+
+    for mip in 2:numMip
+        infoScale = InfoScales.generate_next_mip(infoScale)
+        push!(scales, infoScale)
+    end 
+
+    Info(dataType, mesh, numChannels, scales, skeletons, layerType)
+end 
 
 function Info(d::Dict{Symbol,Any})
     dataType = DATATYPE_MAP[ d[:data_type] ]

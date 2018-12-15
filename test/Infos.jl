@@ -23,8 +23,10 @@ using JSON
     d2 = JSON.parse(str, dicttype=Dict{Symbol, Any})
     # the d will not equal to d2 because the element type of vector is Any in d2
     #@test d == d2
+    
 
-    #println("test info construction function")
-    #info = Info()
-    #@test info != nothing
+    println("test info construction function")
+    infoScale = Infos.InfoScale()
+    info = Info(; numMip=2)
+    @test info != nothing
 end
