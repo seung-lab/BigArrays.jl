@@ -30,8 +30,16 @@ write( joinpath(tempDir, "info"), infoString )
     @test all(a.==b)
 end # testset 
 
+@testset "test file protocol" begin 
+    ba = BigArray( ("file:/" * datasetDir) )
+    a = rand(UInt8, 200,200,10)
+    ba[1:200, 1:200, 1:10] = a
+    b = ba[1:200, 1:200, 1:10]
+    @test all(a.==parent(b))
+end 
+
 @testset "test IO of BigArray with backend of BinDict" begin
-    ba = BigArray( BinDict(datasetDir) )
+    ba = BigArray( datasetDir )
     a = rand(UInt8, 200,200,10)
     ba[1:200, 1:200, 1:10] = a
     b = ba[1:200, 1:200, 1:10]

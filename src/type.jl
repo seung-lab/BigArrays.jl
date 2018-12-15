@@ -26,27 +26,41 @@ struct BigArray{D<:AbstractBigArrayBackend, T<:Real, N, C<:AbstractBigArrayCodin
     end
 end
 
-function BigArray(d::AbstractBigArrayBackend; 
-                  fillMissing::Bool=true,
-                  mode::Symbol=DEFAULT_MODE)  
+"""
+    BigArray(layerPath::AbstractString; fillMissing=true, mod::Symbol=DEFAULT_MODE)
+"""
+function BigArray(layerPath::AbstractString; fillMissing=true, mode::Symbol=DEFAULT_MODE)
+    if isdir(layerPath) || startswith(layerPath, "file://")
+        d = BinDict(layerPath)
+    elseif startswith(layerPath, "gs://")
+        d = GSDict(layerPath)
+    elseif startswith(layerPath, "s3://")
+        d = S3Dict(layerPath)
+    else
+        @error "only support protocols of {file, gs, s3}, but got: " layerPath 
+    end 
+    BigArray(d; fillMissing=fillMissing, mode=mode)
+end 
+
+@inline function BigArray(d::AbstractBigArrayBackend; fillMissing::Bool=true, mode::Symbol=DEFAULT_MODE)  
     info = get_info(d) |> Info 
     return BigArray(d, info; fillMissing=fillMissing, mode=mode)
 end
 
-function BigArray( d::AbstractBigArrayBackend, info::Vector{UInt8};
+@inline function BigArray( d::AbstractBigArrayBackend, info::Vector{UInt8};
                   fillMissing::Bool=true,
                   mode::Symbol=DEFAULT_MODE) 
     info = Codings.decode(info, GzipCoding) |> Info 
     BigArray(d, String(info); fillMissing=fillMissing, mode=mode)
 end 
 
-function BigArray( d::AbstractBigArrayBackend, info::AbstractString;
+@inline function BigArray( d::AbstractBigArrayBackend, info::AbstractString;
                 fillMissing::Bool=true,
                 mode::Symbol=DEFAULT_MODE)  
     BigArray(d, Info(info); fillMissing=fillMissing, mode=mode)
 end 
 
-function BigArray( d::AbstractBigArrayBackend, infoConfig::Dict{Symbol, Any};
+@inline function BigArray( d::AbstractBigArrayBackend, infoConfig::Dict{Symbol, Any};
                     fillMissing::Bool=fillMissing, mode::Symbol=DEFAULT_MODE) 
     info = Info(infoConfig)
     BigArray(d, info; mip=mip, fillMissing=fillMissing, mode=mode) 
@@ -66,7 +80,7 @@ Parameters:
     fillMissing: whether fill the missing blocks in the storage backend with zeros or not. 
     mode: the io mode with options in {multithreading, sequential, multiprocesses, sharedarray}
 """
-function BigArray( d::AbstractBigArrayBackend, info::Info;
+@inline function BigArray( d::AbstractBigArrayBackend, info::Info;
                   fillMissing::Bool=fillMissing,
                   mode::Symbol=DEFAULT_MODE)
     dataType = Infos.get_data_type(info) 

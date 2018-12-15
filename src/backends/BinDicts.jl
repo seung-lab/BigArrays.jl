@@ -9,6 +9,17 @@ BinDict should follow the format of neuroglancer precomputed. the dataset struct
 """
 struct BinDict <: AbstractBigArrayBackend  
     path::String
+    
+    function BinDict(path::AbstractString)
+        path = replace(path, "file://"=>"/", count=1)
+        @show path
+        @assert isdir(path)
+        new(path)
+    end 
+end 
+
+@inline function Base.show(self::BinDict)
+    println("BinDict in ", get_path(self))
 end 
 
 function get_path(self::BinDict)

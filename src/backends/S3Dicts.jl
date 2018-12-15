@@ -35,6 +35,7 @@ end
 construct S3Dict from a directory path of s3
 """
 function S3Dict( path::String )
+    @assert startswith(path, "s3://")
     path = replace(path, "s3://" => "")
     bkt, keyPrefix = split(path, "/", limit = 2)
     keyPrefix = rstrip(keyPrefix, '/')

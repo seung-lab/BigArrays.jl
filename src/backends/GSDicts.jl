@@ -24,6 +24,7 @@ format.
 function GSDict( path::String; gzip::Bool = GZIP, 
                     credentialFileName = get_credential_filename(),
                     valueType::DataType = Vector{UInt8})
+    @assert startswith(path, "gs://")
     bucketName, keyPrefix = splitgs(path)
     bucketName = replace(bucketName, "gs://"=>"")
     
