@@ -69,6 +69,16 @@ function InfoScale(d::Dict{Symbol, Any})
     InfoScale(key, chunkSizes, encoding, resolution, volumeSize, voxelOffset)
 end
 
+function Base.show(self::InfoScale)
+    println("\nkey:         ", get_key(key))
+    println("chunk size:    ", get_chunk_size(self))
+    println("encoding:      ", get_encoding(self))
+    println("resolution:    ", get_resolution(self))
+    println("volume size:   ", get_volume_size(self))
+    println("voxel offset:  ", get_voxel_offset(self))
+end 
+
+
 function Base.Dict(self::InfoScale)
     d = Dict{Symbol,Any}()
     d[:key] = get_key(self)
@@ -219,6 +229,15 @@ end
     Info(String(data))
 end
 
+function Base.show(self::Info)
+    println("\ndata type:   ", get_data_type(self))
+    println("mesh:          ", get_mesh(self))
+    println("num of channel:", get_num_channels(self))
+    println("scales:        ", get_scales(self))
+    println("skeletons:     ", get_skeletons(self))
+    println("layer type:    ", get_layer_type(self))
+end 
+
 """
     Base.Dict(self::Info)
 
@@ -270,6 +289,15 @@ end
         InfoScales.set_chunk_size!( infoScale )
     end
 end 
+@inline function get_encoding(self::Info, mip::Integer=0)
+    InfoScales.get_encoding( get_scales(self)[mip+1] )
+end 
+@inline function set_encoding!(self::Info, encoding::DataType)
+    for scale in get_scales(self)
+        InfoScales.set_encoding!(scale, encoding)
+    end 
+    nothing 
+end
 
 @inline function get_num_channels(self::Info) self.numChannels end 
 @inline function set_num_channels!(self::Info, numChannels::Int) self.numChannels=numChannels end 

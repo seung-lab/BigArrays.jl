@@ -215,9 +215,15 @@ function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}..
     end 
 end
 
-function get_chunk_size(ba::AbstractBigArray)
-    ba.chunkSize
-end
+@inline function get_chunk_size(ba::BigArray) ba.chunkSize end
+@inline function set_chunk_size(ba::BigArray, chunkSize::NTuple{3,Int})
+    ba.chunkSize = chunkSize 
+end 
+
+@inline function get_mode(self::BigArray) self.mode end 
+@inline function set_mode(self::BigArray{D,T,N,C}, mode::Symbol) where {D,T,N,C}
+    ba.mode = mode 
+end 
 
 ###################### utils ####################
 """
