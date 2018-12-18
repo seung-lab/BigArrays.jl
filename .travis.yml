@@ -10,6 +10,9 @@ sudo: required
 notifications:
     email: false
 
+before_install:
+    - apt install -y libmagickwand-dev
+
 script:
     - julia -e 'import Pkg; Pkg.clone(pwd()); Pkg.test("BigArrays", coverage=true)'
 
