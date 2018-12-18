@@ -109,6 +109,8 @@ function get_credential_filename()
         return joinpath(dirname(@__FILE__), "../.google_credentials.json")
     elseif isfile("/secrets/google-secret.json")
         return "/secrets/google-secret.json"
+    elseif isfile(expanduser("~/.cloudvolume/secrets/google-secret.json"))
+        return expanduser("~/.cloudvolume/secrets/google-secret.json")
     else
         # to enable building of this package 
         @warn("google credential file is not in default place!")

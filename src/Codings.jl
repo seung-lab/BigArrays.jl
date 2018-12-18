@@ -1,6 +1,6 @@
 module Codings
 
-#using ImageMagick
+using ImageMagick
 using Blosc
 using TranscodingStreams, CodecZlib, CodecZstd
 
@@ -80,14 +80,14 @@ function encode( data::Array, coding::Type{JPEGCoding} )
     error("unimplemented!")
 end
 
-#function decode( data::Vector{UInt8}, coding::Type{JPEGCoding} )
-#    image = ImageMagick.load_(data)
-#    @assert size(image,2) * size(image,2) == size(image,1)
-#    blockSize = (size(image,2), size(image,2), size(image,2))
-#    image = reshape(image, blockSize)
-#    image = permutedims(image, [3,1,2])
-#    image = reinterpret(UInt8, vec(image))
-#    return image
-#end
+function decode( data::Vector{UInt8}, coding::Type{JPEGCoding} )
+    image = ImageMagick.load_(data)
+    @assert size(image,2) * size(image,2) == size(image,1)
+    blockSize = (size(image,2), size(image,2), size(image,2))
+    image = reshape(image, blockSize)
+    image = permutedims(image, [3,1,2])
+    image = reinterpret(UInt8, vec(image))
+    return image
+end
 
 end # end of module

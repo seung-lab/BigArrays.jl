@@ -112,7 +112,10 @@ function Base.size(ba::BigArray, i::Int)
     size(ba)[i]
 end
 
-function Base.show(ba::BigArray) show(ba.chunkSize) end
+@inline function Base.show(io::IO, ba::BigArray)
+    write("key-value store: ", ba.kvStore)
+    write("block size: ", ba.chunkSize) 
+end
 
 function Base.display(ba::BigArray)
     for field in fieldnames(ba)
