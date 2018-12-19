@@ -1,5 +1,6 @@
 
 const DEFAULT_MODE = :multithreads 
+const DEFAULT_FILL_MISSING = true 
 
 """
     BigArray
@@ -29,7 +30,7 @@ end
 """
     BigArray(layerPath::AbstractString; fillMissing=true, mod::Symbol=DEFAULT_MODE)
 """
-function BigArray(layerPath::AbstractString; fillMissing=true, mode::Symbol=DEFAULT_MODE)
+function BigArray(layerPath::AbstractString; fillMissing=DEFAULT_FILL_MISSING, mode::Symbol=DEFAULT_MODE)
     if isdir(layerPath) || startswith(layerPath, "file://")
         d = BinDict(layerPath)
     elseif startswith(layerPath, "gs://")
@@ -42,26 +43,27 @@ function BigArray(layerPath::AbstractString; fillMissing=true, mode::Symbol=DEFA
     BigArray(d; fillMissing=fillMissing, mode=mode)
 end 
 
-@inline function BigArray(d::AbstractBigArrayBackend; fillMissing::Bool=true, mode::Symbol=DEFAULT_MODE)  
+@inline function BigArray(d::AbstractBigArrayBackend; fillMissing::Bool=DEFAULT_FILL_MISSING, 
+                          mode::Symbol=DEFAULT_MODE)  
     info = get_info(d) |> Info 
     return BigArray(d, info; fillMissing=fillMissing, mode=mode)
 end
 
 @inline function BigArray( d::AbstractBigArrayBackend, info::Vector{UInt8};
-                  fillMissing::Bool=true,
+                  fillMissing::Bool=DEFAULT_FILL_MISSING,
                   mode::Symbol=DEFAULT_MODE) 
     info = Codings.decode(info, GzipCoding) |> Info 
     BigArray(d, String(info); fillMissing=fillMissing, mode=mode)
 end 
 
 @inline function BigArray( d::AbstractBigArrayBackend, info::AbstractString;
-                fillMissing::Bool=true,
+                fillMissing::Bool=DEFAULT_FILL_MISSING,
                 mode::Symbol=DEFAULT_MODE)  
     BigArray(d, Info(info); fillMissing=fillMissing, mode=mode)
 end 
 
 @inline function BigArray( d::AbstractBigArrayBackend, infoConfig::Dict{Symbol, Any};
-                    fillMissing::Bool=fillMissing, mode::Symbol=DEFAULT_MODE) 
+                    fillMissing::Bool=DEFAULT_FILL_MISSING, mode::Symbol=DEFAULT_MODE) 
     info = Info(infoConfig)
     BigArray(d, info; mip=mip, fillMissing=fillMissing, mode=mode) 
 end
@@ -69,7 +71,7 @@ end
 """
     BigArray( d::AbstractBigArrayBackend, info::Info;
                   mip::Int = 0,
-                  fillMissing::Bool=fillMissing,
+                  fillMissing::Bool=DEFAULT_FILL_MISSING,
                   mode::Symbol=DEFAULT_MODE)
 
 Parameters:
@@ -80,8 +82,8 @@ Parameters:
     fillMissing: whether fill the missing blocks in the storage backend with zeros or not. 
     mode: the io mode with options in {multithreading, sequential, multiprocesses, sharedarray}
 """
-@inline function BigArray( d::AbstractBigArrayBackend, info::Info;
-                  fillMissing::Bool=fillMissing,
+function BigArray( d::AbstractBigArrayBackend, info::Info;
+                  fillMissing::Bool=DEFAULT_FILL_MISSING,
                   mode::Symbol=DEFAULT_MODE)
     dataType = Infos.get_data_type(info) 
     key = get_scale_name(d) |> Symbol
@@ -92,6 +94,27 @@ Parameters:
              offset=voxelOffset, fillMissing=fillMissing, mode=mode) 
 end
 
+"""
+    BigArray(info::Info; fillMissing::Bool=DEFAULT_FILL_MISSING, mode=DEFAULT_MODE)
+    
+create a new directory with random name. 
+this function was designed for test and benchmark.
+we need another function the clear the whole array 
+"""
+function BigArray(info::Info; mip::Integer=1,
+                  fillMissing::Bool=DEFAULT_FILL_MISSING, mode=DEFAULT_MODE)
+    # prepare directory
+    layerDir = tempname()
+    datasetDir = joinpath(layerDir, string(Infos.get_key(info, 1))) 
+    mkdir(layerDir)
+    mkdir(datasetDir)
+    d = BinDict(datasetDir)
+    
+    # write the info as file 
+    write(joinpath(layerDir, "info"), JSON.json(Dict(info)))
+
+    return BigArray(d, info; fillMissing=fillMissing, mode=mode)
+end
 
 ######################### base functions #######################
 
@@ -113,8 +136,8 @@ function Base.size(ba::BigArray, i::Int)
 end
 
 @inline function Base.show(io::IO, ba::BigArray)
-    write("key-value store: ", ba.kvStore)
-    write("block size: ", ba.chunkSize) 
+    #show(io, ba.kvStore)
+    show(io, ba.chunkSize) 
 end
 
 function Base.display(ba::BigArray)

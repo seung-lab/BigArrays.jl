@@ -1,5 +1,6 @@
 using BigArrays
 using BigArrays.BinDicts
+using BigArrays.Infos
 using Test
 using OffsetArrays 
 
@@ -17,6 +18,11 @@ infoString = """
 """
 
 write( joinpath(tempDir, "info"), infoString )
+
+@testset "test bigarray construction" begin 
+    info = Info()
+    ba = BigArray(info)
+end 
 
 @testset "test BinDict" begin 
     h = BinDict(datasetDir)

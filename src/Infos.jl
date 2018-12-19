@@ -69,13 +69,13 @@ function InfoScale(d::Dict{Symbol, Any})
     InfoScale(key, chunkSizes, encoding, resolution, volumeSize, voxelOffset)
 end
 
-function Base.show(self::InfoScale)
-    println("\nkey:         ", get_key(key))
-    println("chunk size:    ", get_chunk_size(self))
-    println("encoding:      ", get_encoding(self))
-    println("resolution:    ", get_resolution(self))
-    println("volume size:   ", get_volume_size(self))
-    println("voxel offset:  ", get_voxel_offset(self))
+function Base.show(io::IO, self::InfoScale)
+    show(io, get_key(key))
+#    println("chunk size:    ", get_chunk_size(self))
+#    println("encoding:      ", get_encoding(self))
+#    println("resolution:    ", get_resolution(self))
+#    println("volume size:   ", get_volume_size(self))
+#    println("voxel offset:  ", get_voxel_offset(self))
 end 
 
 
@@ -87,7 +87,7 @@ function Base.Dict(self::InfoScale)
         if v == get_encoding(self)
             d[:encoding] = string(k)
         end 
-    end 
+    end
     d[:size] = [get_volume_size(self)...]
     d[:voxelOffset] = [Tuple(get_voxel_offset(self))...]
     return d
@@ -278,19 +278,23 @@ end
 @inline function get_mesh(self::Info) self.mesh end 
 @inline function set_mesh!(self::Info, mesh::String) self.mesh=mesh end 
 
-@inline function get_chunk_size(self::Info, mip::Integer=0) 
-    InfoScales.get_chunk_size( self.scales[mip+1] ) 
+@inline function get_key(self::Info, mip::Integer=1)
+    InfoScales.get_key( get_scales(self)[mip] )
+end 
+
+@inline function get_chunk_size(self::Info, mip::Integer=1) 
+    InfoScales.get_chunk_size( self.scales[mip] ) 
 end
 @inline function set_chunk_size!(self::Info, chunkSize::NTuple{3,Int}, mip::Integer)
-    InfoScales.set_chunk_size!( self.scales[mip+1], chunkSize) 
+    InfoScales.set_chunk_size!( self.scales[mip], chunkSize) 
 end 
 @inline function set_chunk_size!(self::Info, chunkSize::NTuple{3,Int})
     for infoScale in self.scales 
         InfoScales.set_chunk_size!( infoScale )
     end
 end 
-@inline function get_encoding(self::Info, mip::Integer=0)
-    InfoScales.get_encoding( get_scales(self)[mip+1] )
+@inline function get_encoding(self::Info, mip::Integer=1)
+    InfoScales.get_encoding( get_scales(self)[mip] )
 end 
 @inline function set_encoding!(self::Info, encoding::DataType)
     for scale in get_scales(self)
@@ -312,11 +316,11 @@ end
 @inline function set_layer_type(self::Info, layerType::Symbol) self.layerType=layerType end 
 
 """
-    get_properties_in_mip_level(self::Info, mip::Integer=0)
+    get_properties_in_mip_level(self::Info, mip::Integer=1)
 """
-function get_properties_in_mip_level(self::Info, mip::Integer=0)
+function get_properties_in_mip_level(self::Info, mip::Integer=1)
     numChannels = get_num_channels(self)
-    infoScale = self.scales[mip+1]
+    infoScale = self.scales[mip]
     chunkSize, encoding, resolution, voxelOffset, volumeSize = 
                                         InfoScales.get_properties(infoScale)
     if numChannels > 1
@@ -333,8 +337,7 @@ end
 function get_properties_in_mip_level(self::Info, key::Symbol)
     for (i, infoScale) in self.scales |> enumerate 
         if key == InfoScales.get_key(infoScale)
-            mip = i - 1
-            return get_properties_in_mip_level(self, mip) 
+            return get_properties_in_mip_level(self, i) 
         end 
     end
     @error "did not find any corresponding mip level with key: " key
