@@ -1,5 +1,7 @@
 
-function setindex_multithreads_worker( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C} ) where {D,T,N,C}
+function setindex_multithreads_worker( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N} ) where {D,T,N}
+    C = get_encoding(ba)
+    mipLevelName = get_mip_level_name(ba)
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in channel
         # println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))")
         chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = adjust_volume_boundary(ba, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer)
@@ -7,9 +9,10 @@ function setindex_multithreads_worker( channel::Channel{Tuple}, buf::Array{T,N},
         for t in 1:4
             try
                 chk = buf[rangeInBuffer]
-                key = cartesian_range2string( chunkGlobalRange )
+                key = joinpath(mipLevelName, cartesian_range2string( chunkGlobalRange ) )
                 ba.kvStore[ key ] = encode( chk, C)
-                @assert haskey(ba.kvStore, key)
+                # for the GSDicts backend, the haskey function will really download the object!
+                #@assert haskey(ba.kvStore, key)
                 break
             catch err 
                 println("catch an error while saving in BigArray: $err")
@@ -19,7 +22,7 @@ function setindex_multithreads_worker( channel::Channel{Tuple}, buf::Array{T,N},
                     println("rethrow the error: $err")
                     rethrow()
                 else 
-                    warn("retry for the $(t)'s time.")
+                    @warn("retry for the $(t)'s time.")
                 end 
                 sleep(delay*(0.8+(0.4*rand())))
                 delay *= 10
@@ -33,15 +36,17 @@ end
     put array in RAM to a BigArray backend
 this version uses channel to control the number of asynchronized request
 """
-function setindex_multithreads!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
-                       idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
+function setindex_multithreads!( ba::BigArray{D,T,N}, buf::Array{T,N},
+                       idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N}
     idxes = colon2unit_range(buf, idxes)
+    offset = get_offset(ba)
+    chunkSize = BigArrays.get_chunk_size(ba)
     # check alignment
     @assert all(map((x,y,z)->mod(first(x) - 1 - y, z), 
-                    idxes, ba.offset.I, ba.chunkSize).==0) 
+                    idxes, offset.I, chunkSize).==0) 
                     "the start of index should align with BigArray chunk size"
     t1 = time()
-    baIter = ChunkIterator(idxes, ba.chunkSize; offset=ba.offset)
+    baIter = ChunkIterator(idxes, chunkSize; offset=offset)
     @sync begin 
         channel = Channel{Tuple}( CHUNK_CHANNEL_SIZE )
         @async begin 
@@ -58,8 +63,10 @@ function setindex_multithreads!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     println("saving speed: $(sizeof(buf)/1024/1024/elapsed) MB/s")
 end 
 
-function getindex_multithreads_worker!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N,C}) where {D,T,N,C}
+function getindex_multithreads_worker!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N}) where {D,T,N}
     baRange = CartesianIndices(ba)
+    C = get_encoding(ba)
+    mipLevelName = get_mip_level_name(ba)
     for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in chan
         if any(map((x,y)->x>y, first(globalRange).I, last(baRange).I)) ||
             any(map((x,y)->x<y, last(globalRange).I, first(baRange).I))
@@ -74,7 +81,7 @@ function getindex_multithreads_worker!(chan::Channel{Tuple}, buf::Array{T,N}, ba
         try 
             #println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))")
             key = cartesian_range2string(chunkGlobalRange)
-            v = ba.kvStore[cartesian_range2string(chunkGlobalRange)]
+            v = ba.kvStore[joinpath(mipLevelName, cartesian_range2string(chunkGlobalRange))]
             v = Codings.decode(v, C)
             chk = reinterpret(T, v)
             chk = reshape(chk, chunkSize)
@@ -91,11 +98,11 @@ function getindex_multithreads_worker!(chan::Channel{Tuple}, buf::Array{T,N}, ba
     end
 end
 
-function getindex_multithreads( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
+function getindex_multithreads( ba::BigArray, idxes::Union{UnitRange, Int}...)
     t1 = time()
     sz = map(length, idxes)
     buf = zeros(eltype(ba), sz)
-    baIter = ChunkIterator(idxes, ba.chunkSize; offset=ba.offset)
+    baIter = ChunkIterator(idxes, get_chunk_size(ba); offset=get_offset(ba))
 
     @sync begin
         channel = Channel{Tuple}( CHUNK_CHANNEL_SIZE )

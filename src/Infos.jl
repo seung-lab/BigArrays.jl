@@ -70,7 +70,7 @@ function InfoScale(d::Dict{Symbol, Any})
 end
 
 function Base.show(io::IO, self::InfoScale)
-    show(io, get_key(key))
+    show(io, get_key(self))
 #    println("chunk size:    ", get_chunk_size(self))
 #    println("encoding:      ", get_encoding(self))
 #    println("resolution:    ", get_resolution(self))
@@ -110,6 +110,13 @@ end
 @inline function set_chunk_size!(self::InfoScale, chunkSize::NTuple{3,Int})
     @assert length(self.chunkSizes) == 1
     self.chunkSizes[1]=chunkSize
+end
+
+@inline function get_offset(self::InfoScale)
+    self.voxelOffset 
+end 
+@inline function set_offset(self::InfoScale, offset::CartesianIndex{N}) where N 
+    self.voxelOffset = offset 
 end 
 
 @inline function get_encoding(self::InfoScale) self.encoding end
@@ -166,13 +173,26 @@ end # end of InfoScales module
 
 using .InfoScales 
 
-mutable struct Info 
-    dataType    ::DataType 
+mutable struct Info{T,N} 
     mesh        ::String 
     numChannels ::Int 
     scales      ::Vector{InfoScale}
     skeletons   ::String 
     layerType   ::Symbol
+    function Info(dataType::DataType, mesh::String, 
+                  numChannels::Int, scales::Vector{InfoScale},
+                 skeletons::String, layerType::Symbol)
+        if numChannels == 1
+            # this is a 3D volume 
+            N = 3
+        elseif numChannels > 1
+            # we have multiple channels, this should be a 4D volume 
+            N = 4
+        else 
+            @error "num of channels should be a positive integer."
+        end 
+        new{dataType, N}(mesh,numChannels, scales, skeletons, layerType)
+    end 
 end
 
 """
@@ -229,8 +249,8 @@ end
     Info(String(data))
 end
 
-function Base.show(self::Info)
-    println("\ndata type:   ", get_data_type(self))
+function Base.show(self::Info{T}) where T
+    println("\ndata type:   ", T)
     println("mesh:          ", get_mesh(self))
     println("num of channel:", get_num_channels(self))
     println("scales:        ", get_scales(self))
@@ -243,10 +263,10 @@ end
 
 the transformation follows JSON format 
 """
-function Base.Dict(self::Info)
+function Base.Dict(self::Info{T}) where T
     d = Dict{Symbol, Any}()
     for (k,v) in DATATYPE_MAP 
-        if v == get_data_type(self)
+        if v == T
             d[:data_type] = string(k)
         end 
     end 
@@ -272,9 +292,6 @@ end
 end 
 
 ############ get the properties ##########
-@inline function get_data_type(self::Info) self.dataType end 
-@inline function set_data_type!(self::Info, dataType::DataType) self.dataType=dataType end 
-
 @inline function get_mesh(self::Info) self.mesh end 
 @inline function set_mesh!(self::Info, mesh::String) self.mesh=mesh end 
 
@@ -293,6 +310,21 @@ end
         InfoScales.set_chunk_size!( infoScale )
     end
 end 
+
+@inline function get_offset(self::Info, mip::Integer=1) 
+    InfoScales.get_offset( self.scales[mip] ) 
+end
+@inline function set_offset!(self::Info{N,T}, offset::CartesianIndex{N}, mip::Integer) where {T,N}
+    InfoScales.set_offset!( self.scales[mip], offset) 
+end
+
+@inline function get_volume_size(self::Info, mip::Integer=1)
+    InfoScales.get_volume_size(self.scales[mip])
+end 
+@inline function set_volume_size!(self::Info, volumeSize::NTuple{3,Int}, mip::Integer=1)
+    InfoScales.set_volume_size!(self.scales[mip], volumeSize)
+end 
+
 @inline function get_encoding(self::Info, mip::Integer=1)
     InfoScales.get_encoding( get_scales(self)[mip] )
 end 
