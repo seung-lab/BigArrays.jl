@@ -1,5 +1,6 @@
-function setindex_multiprocesses_worker(block::Array{T,N}, ba::BigArray{D,T,N,C}, 
-                                        chunkGlobalRange::CartesianIndices) where {D,T,N,C}
+function setindex_multiprocesses_worker(block::Array{T,N}, ba::BigArray{D,T,N}, 
+                                        chunkGlobalRange::CartesianIndices{N}) where {D,T,N}
+    C = get_encoding(ba)
     ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encode( block, C)
 end
 
@@ -7,8 +8,8 @@ end
     put array in RAM to a BigArray
 this version uses channel to control the number of asynchronized request
 """
-function setindex_multiprocesses!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
-                       idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
+function setindex_multiprocesses!( ba::BigArray{D,T,N}, buf::Array{T,N},
+                       idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N}
     idxes = colon2unit_range(buf, idxes)
     # check alignment
     @assert all(map((x,y,z)->mod(first(x) - 1 - y, z), idxes, ba.offset.I, ba.chunkSize).==0) "the start of index should align with BigArray chunk size" 
@@ -28,8 +29,8 @@ function setindex_multiprocesses!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     println("saving speed: $(sizeof(buf)/1024/1024/elapsed) MB/s")
 end 
 
-function getindex_multiprocesses_worker(ba::BigArray{D,T,N,C}, jobs::RemoteChannel, 
-                                results::RemoteChannel) where {D,T,N,C}
+function getindex_multiprocesses_worker(ba::BigArray{D,T,N}, jobs::RemoteChannel, 
+                                results::RemoteChannel) where {D,T,N}
     baRange = CartesianIndices(ba)
     blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = take!(jobs)
     if any(map((x,y)->x>y, first(globalRange).I, last(baRange).I)) || any(map((x,y)->x<y, last(globalRange).I, first(baRange).I))
@@ -44,7 +45,7 @@ function getindex_multiprocesses_worker(ba::BigArray{D,T,N,C}, jobs::RemoteChann
     #println("processing block in global range: $(cartesian_range2string(globalRange))")
     try 
         data = ba.kvStore[ cartesian_range2string(chunkGlobalRange) ]
-        chk = Codings.decode(data, C)
+        chk = Codings.decode(data, get_encoding(ba))
         chk = reshape(reinterpret(T, chk), chunkSize)
         chk = chk[rangeInChunk]
         arr = OffsetArray(chk, cartesian_range2unit_range(globalRange)...) 
@@ -61,7 +62,7 @@ function getindex_multiprocesses_worker(ba::BigArray{D,T,N,C}, jobs::RemoteChann
     end 
 end 
 
-function getindex_multiprocesses( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
+function getindex_multiprocesses( ba::BigArray{D, T, N}, idxes::Union{UnitRange, Int}...) where {D,T,N}
     t1 = time()
     sz = map(length, idxes)
     ret = OffsetArray(zeros(T, sz), idxes...)

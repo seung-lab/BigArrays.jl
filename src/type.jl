@@ -7,30 +7,19 @@ const DEFAULT_FILL_MISSING = true
 currently, assume that the array dimension (x,y,z,...) is >= 3
 all the manipulation effects in the x,y,z dimension
 """
-struct BigArray{D<:AbstractBigArrayBackend, T<:Real, N, C<:AbstractBigArrayCoding} <: AbstractBigArray
+struct BigArray{D<:AbstractBigArrayBackend, T<:Real, N} <: AbstractBigArray
     kvStore     :: D
-    chunkSize   :: NTuple{N}
-    volumeSize  :: NTuple{N}
-    offset      :: CartesianIndex{N}
+    info        :: Info{T,N}
+    mip         :: Int
     fillMissing :: Bool 
     mode        :: Symbol
-    function BigArray(
-                    kvStore     ::D,
-                    foo         ::Type{T},
-                    chunkSize   ::NTuple{N},
-                    volumeSize  ::NTuple{N},
-                    coding      ::Type{C};
-                    offset      ::CartesianIndex{N} = CartesianIndex{N}() - 1,
-                    fillMissing ::Bool=true,
-                    mode        ::Symbol=DEFAULT_MODE) where {D,T,N,C}
-        new{D, T, N, C}(kvStore, chunkSize, volumeSize, offset, fillMissing, mode)
-    end
 end
 
 """
-    BigArray(layerPath::AbstractString; fillMissing=true, mod::Symbol=DEFAULT_MODE)
+    BigArray(layerPath::AbstractString; mip=1, fillMissing=true, mod::Symbol=DEFAULT_MODE)
 """
-function BigArray(layerPath::AbstractString; fillMissing=DEFAULT_FILL_MISSING, mode::Symbol=DEFAULT_MODE)
+function BigArray(layerPath::AbstractString; mip::Int=1, fillMissing::Bool=DEFAULT_FILL_MISSING, 
+                  mode::Symbol=DEFAULT_MODE)
     if isdir(layerPath) || startswith(layerPath, "file://")
         d = BinDict(layerPath)
     elseif startswith(layerPath, "gs://")
@@ -40,58 +29,53 @@ function BigArray(layerPath::AbstractString; fillMissing=DEFAULT_FILL_MISSING, m
     else
         @error "only support protocols of {file, gs, s3}, but got: " layerPath 
     end 
-    BigArray(d; fillMissing=fillMissing, mode=mode)
+    BigArray(d; mip=mip, fillMissing=fillMissing, mode=mode)
 end 
 
-@inline function BigArray(d::AbstractBigArrayBackend; fillMissing::Bool=DEFAULT_FILL_MISSING, 
+@inline function BigArray(d::AbstractBigArrayBackend; mip::Int=1, 
+                          fillMissing::Bool=DEFAULT_FILL_MISSING, 
                           mode::Symbol=DEFAULT_MODE)  
-    info = get_info(d) |> Info 
-    return BigArray(d, info; fillMissing=fillMissing, mode=mode)
+    info = d["info"] |> Info 
+    return BigArray(d, info, mip, fillMissing, mode)
 end
 
 @inline function BigArray( d::AbstractBigArrayBackend, info::Vector{UInt8};
-                  fillMissing::Bool=DEFAULT_FILL_MISSING,
+                  mip::Int=1, fillMissing::Bool=DEFAULT_FILL_MISSING,
                   mode::Symbol=DEFAULT_MODE) 
     info = Codings.decode(info, GzipCoding) |> Info 
-    BigArray(d, String(info); fillMissing=fillMissing, mode=mode)
+    BigArray(d, string(info), mip, fillMissing, mode)
 end 
 
 @inline function BigArray( d::AbstractBigArrayBackend, info::AbstractString;
-                fillMissing::Bool=DEFAULT_FILL_MISSING,
-                mode::Symbol=DEFAULT_MODE)  
-    BigArray(d, Info(info); fillMissing=fillMissing, mode=mode)
+                            mip::Int=1, fillMissing::Bool=DEFAULT_FILL_MISSING,
+                            mode::Symbol=DEFAULT_MODE)  
+    BigArray(d, Info(info), mip, fillMissing, mode)
 end 
 
 @inline function BigArray( d::AbstractBigArrayBackend, infoConfig::Dict{Symbol, Any};
-                    fillMissing::Bool=DEFAULT_FILL_MISSING, mode::Symbol=DEFAULT_MODE) 
-    info = Info(infoConfig)
-    BigArray(d, info; mip=mip, fillMissing=fillMissing, mode=mode) 
+                            mip::Int=1, fillMissing::Bool=DEFAULT_FILL_MISSING, 
+                            mode::Symbol=DEFAULT_MODE) 
+    BigArray(d, Info(infoConfig)info, mip, fillMissing, mode) 
 end
 
 """
-    BigArray( d::AbstractBigArrayBackend, info::Info;
-                  mip::Int = 0,
+    BigArray( d::AbstractBigArrayBackend, info::Info{T,N};
+                  mip::Int = 1,
                   fillMissing::Bool=DEFAULT_FILL_MISSING,
                   mode::Symbol=DEFAULT_MODE)
 
 Parameters:
     d: the bigarray storage backend 
     info: the info containing the metadata
-    mip: mip level. 0 is the highest resolution. 
+    mip: mip level. Note that mip 1 is the highest resolution. 
             the mip level is like a image pyramid with difference downsampled levels.
     fillMissing: whether fill the missing blocks in the storage backend with zeros or not. 
     mode: the io mode with options in {multithreading, sequential, multiprocesses, sharedarray}
 """
-function BigArray( d::AbstractBigArrayBackend, info::Info;
-                  fillMissing::Bool=DEFAULT_FILL_MISSING,
-                  mode::Symbol=DEFAULT_MODE)
-    dataType = Infos.get_data_type(info) 
-    key = get_scale_name(d) |> Symbol
-    chunkSize, encoding, resolution, voxelOffset, volumeSize = 
-                                Infos.get_properties_in_mip_level(info, key)
-    @debug chunkSize, encoding, resolution, voxelOffset, volumeSize
-    BigArray(d, dataType, chunkSize, volumeSize, encoding; 
-             offset=voxelOffset, fillMissing=fillMissing, mode=mode) 
+function BigArray( d::AbstractBigArrayBackend, info::Info{T,N};
+                  mip::Int=1, fillMissing::Bool=DEFAULT_FILL_MISSING,
+                  mode::Symbol=DEFAULT_MODE) where {T,N} 
+    BigArray(d, info, mip, fillMissing, mode) 
 end
 
 """
@@ -101,8 +85,9 @@ create a new directory with random name.
 this function was designed for test and benchmark.
 we need another function the clear the whole array 
 """
-function BigArray(info::Info; mip::Integer=1,
-                  fillMissing::Bool=DEFAULT_FILL_MISSING, mode=DEFAULT_MODE)
+function BigArray(info::Info{T,N}; mip::Integer=1,
+                  fillMissing::Bool=DEFAULT_FILL_MISSING, 
+                  mode=DEFAULT_MODE) where {T,N}
     # prepare directory
     layerDir = tempname()
     datasetDir = joinpath(layerDir, string(Infos.get_key(info, 1))) 
@@ -113,7 +98,7 @@ function BigArray(info::Info; mip::Integer=1,
     # write the info as file 
     write(joinpath(layerDir, "info"), JSON.json(Dict(info)))
 
-    return BigArray(d, info; fillMissing=fillMissing, mode=mode)
+    return BigArray(d, info, mip, fillMissing, mode)
 end
 
 ######################### base functions #######################
@@ -126,9 +111,9 @@ function Base.eltype( ba::BigArray{D,T,N} ) where {D, T, N}
     return T
 end
 
-function Base.size( ba::BigArray{D,T,N} ) where {D,T,N}
-    # get size according to the keys
-    return ba.volumeSize
+function Base.size( ba::BigArray ) 
+    # get size according to the size in info file 
+    return get_volume_size(ba)
 end
 
 function Base.size(ba::BigArray, i::Int)
@@ -137,7 +122,7 @@ end
 
 @inline function Base.show(io::IO, ba::BigArray)
     #show(io, ba.kvStore)
-    show(io, ba.chunkSize) 
+    show(io, get_chunk_size(ba)) 
 end
 
 function Base.display(ba::BigArray)
@@ -146,17 +131,13 @@ function Base.display(ba::BigArray)
     end
 end
 
-function Base.reshape(ba::BigArray{D,T,N}, newShape) where {D,T,N}
-    @warn("reshape failed, the shape of bigarray is immutable!")
-end
-
 """
-    Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
+    Base.setindex!( ba::BigArray{D,T,N}, buf::Array{T,N},
 
 setindex with different mode: sharedarray, multithreads, multiprocesses, sequential 
 """
-function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
-            idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
+@inline function Base.setindex!( ba::BigArray{D,T,N}, buf::Array{T,N},
+            idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N}
     if ba.mode == :multithreads 
         setindex_multithreads!(ba, buf, idxes...)
     elseif ba.mode == :multiprocesses 
@@ -170,9 +151,10 @@ function Base.setindex!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     end 
 end 
 
-@inline function Base.CartesianIndices(ba::BigArray{D,T,N,C}) where {D,T,N,C}
-    start = ba.offset + one(CartesianIndex{N})
-    stop = ba.offset + CartesianIndex(ba.volumeSize)
+@inline function Base.CartesianIndices(ba::BigArray{D,T,N}) where {D,T,N}
+    offset = get_offset(ba)
+    start = offset + one(CartesianIndex{N})
+    stop = offset + CartesianIndex(get_volume_size(ba))
     ranges = map((x,y)->x:y, start.I, stop.I)
     return CartesianIndices( ranges )
 end 
@@ -185,7 +167,8 @@ function adjust_volume_boundary(ba::BigArray, chunkGlobalRange::CartesianIndices
                                 globalRange::CartesianIndices,
                                 rangeInChunk::CartesianIndices, 
                                 rangeInBuffer::CartesianIndices)
-    volumeStop = map(+, ba.offset.I, ba.volumeSize)
+    offset = get_offset(ba)
+    volumeStop = map(+, offset.I, get_volume_size(ba))
     chunkGlobalRangeStop = [last(chunkGlobalRange).I ...,]
     globalRangeStop = [last(globalRange).I ...,]
     rangeInBufferStop = [last(rangeInBuffer).I ...,]
@@ -223,11 +206,11 @@ function adjust_volume_boundary(ba::BigArray, chunkGlobalRange::CartesianIndices
 end 
 
 """
-    Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
+    Base.getindex( ba::BigArray, idxes::Union{UnitRange, Int}...) 
 
 get index with different modes: sharedarray, multi_processes, multithreads, sequential 
 """
-function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}...) where {D,T,N,C}
+@inline function Base.getindex( ba::BigArray, idxes::Union{UnitRange, Int}...) 
     if ba.mode == :sharedarray 
         getindex_sharedarray(ba, idxes...,)
     elseif ba.mode == :multi_processes 
@@ -241,13 +224,58 @@ function Base.getindex( ba::BigArray{D, T, N, C}, idxes::Union{UnitRange, Int}..
     end 
 end
 
-@inline function get_chunk_size(ba::BigArray) ba.chunkSize end
-@inline function set_chunk_size(ba::BigArray, chunkSize::NTuple{3,Int})
-    ba.chunkSize = chunkSize 
+@inline function get_key_value_store(ba::BigArray) ba.kvStore end 
+@inline function get_info(ba::BigArray) ba.info end
+@inline function get_mip(ba::BigArray) ba.mip end 
+@inline function get_encoding(ba::BigArray)
+    info = get_info(ba)
+    mip = get_mip(ba)
+    Infos.get_encoding(info, mip)
+end
+
+@inline function get_num_channels(ba::BigArray)
+    Infos.get_num_channels(get_info(ba))
 end 
 
-@inline function get_mode(self::BigArray) self.mode end 
-@inline function set_mode(self::BigArray{D,T,N,C}, mode::Symbol) where {D,T,N,C}
+@inline function get_mip_level_name(ba::BigArray)
+    Infos.get_key(get_info(ba), get_mip(ba)) |> string 
+end 
+
+@inline function get_chunk_size(ba::BigArray{D,T,N}) where {D,T,N} 
+    chunkSize = Infos.get_chunk_size(get_info(ba), get_mip(ba))
+    if N == 3
+        return chunkSize 
+    else 
+        return (chunkSize..., get_num_channels(ba))
+    end 
+end
+
+@inline function set_chunk_size(ba::BigArray, chunkSize::Tuple{Int})
+    info = get_info(ba)
+    # if there are multiple channels, ignore the channel number
+    Infos.set_chunk_size(info, chunkSize[1:3])
+end 
+
+@inline function get_offset(ba::BigArray{D,T,N}) where {D,T,N}
+    offset = Infos.get_offset(get_info(ba), get_mip(ba))
+    if N == 3
+        return offset 
+    else 
+        return CartesianIndex(offset.I..., 0)
+    end 
+end
+
+@inline function get_volume_size(ba::BigArray{D,T,N}) where {D,T,N}
+    volumeSize = Infos.get_volume_size(get_info(ba), get_mip(ba))
+    if N == 3
+        return volumeSize 
+    else 
+        return (volumeSize..., get_num_channels(ba))
+    end 
+end 
+
+@inline function get_mode(ba::BigArray) ba.mode end 
+@inline function set_mode(ba::BigArray, mode::Symbol) 
     ba.mode = mode 
 end 
 
@@ -258,7 +286,7 @@ get number of chunks needed to do cutout from this range
 """
 function get_num_chunks(ba::BigArray, idxes::Union{UnitRange, Int}...)
     chunkNum = 0
-    baIter = ChunkIterator(idxes, ba.chunkSize; offset=ba.offset)                          
+    baIter = ChunkIterator(idxes, get_chunk_size(ba); offset=get_offset(ba))                          
 	for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
         chunkNum += 1
 	end                                                                                
@@ -274,7 +302,7 @@ function list_missing_chunks(ba::BigArray, idxes::Union{UnitRange, Int}...)
     t1 = time()
     sz = map(length, idxes)
     missingChunkList = Vector{CartesianIndices}()
-    baIter = ChunkIterator(idxes, ba.chunkSize; offset=ba.offset)
+    baIter = ChunkIterator(idxes, get_chunk_size(ba); offset=get_offset(ba))
     @sync begin 
         for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
             @async begin 
@@ -292,7 +320,7 @@ function list_missing_chunks(ba::BigArray, keySet::Set{String},
     t1 = time()
     sz = map(length, idxes)
     missingChunkList = Vector{CartesianIndices}()
-    baIter = ChunkIterator(idxes, ba.chunkSize; offset=ba.offset)
+    baIter = ChunkIterator(idxes, get_chunk_size(ba); offset=get_offset(ba))
     for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter
         if !(cartesian_range2string(chunkGlobalRange) in keySet)
             push!(missingChunkList, chunkGlobalRange)
@@ -301,4 +329,13 @@ function list_missing_chunks(ba::BigArray, keySet::Set{String},
     missingChunkList
 end 
 
+"""
+    commit_info(ba::BigArray)
 
+write info to the storage backend 
+"""
+function commit_info(ba::BigArray)
+    info = get_info(ba)
+    d = get_key_value_store(ba)
+    d["info"] = string(info)
+end 

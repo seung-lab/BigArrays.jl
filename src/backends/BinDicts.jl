@@ -22,32 +22,42 @@ end
     println("BinDict in ", get_path(self))
 end 
 
-function get_path(self::BinDict)
+@inline function get_path(self::BinDict)
     self.path 
 end 
 
-function get_info( self::BinDict )
-    read( joinpath( get_path(self), "../info" ) , String)
+@inline function get_info( self::BinDict )
+    read( joinpath( get_path(self), "info" ) , String)
 end 
 
-function get_scale_name( self::BinDict ) 
+@inline function get_scale_name( self::BinDict ) 
     basename( rstrip(get_path(self), '/') )
 end 
 
-function Base.getindex( self::BinDict, key::AbstractString)
+@inline function Base.getindex( self::BinDict, key::AbstractString)
     open( joinpath( get_path(self), key )) do f
         return read(f)
         #Libz.inflate(data)
     end
 end 
 
-function Base.setindex!( self::BinDict, value::Array, key::AbstractString )
+@inline function Base.setindex!( self::BinDict, value::Array, key::AbstractString )
     data = reinterpret(UInt8, value[:])
     fileName = joinpath( get_path(self), key )
     write(fileName, data)
+end
+
+"""
+    Base.setindex!(self::BinDict, value::AbstractString, key::AbstractString)
+
+this function was designed for saving info as plain text 
+"""
+@inline function Base.setindex!(self::BinDict, value::AbstractString, key::AbstractString)
+    fileName = joinpath( get_path(self), key)
+    write(fileName, value)
 end 
 
-function Base.haskey( self::BinDict, key::AbstractString )
+@inline function Base.haskey( self::BinDict, key::AbstractString )
     joinpath( get_path(self), key ) |> isfile 
 end
 
