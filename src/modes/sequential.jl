@@ -11,7 +11,8 @@ function setindex_sequential!( ba::BigArray{D,T,N}, buf::Array{T,N},
         chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = adjust_volume_boundary(ba, 
                                     chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer)
         @inbounds chk = buf[rangeInBuffer]
-        ba.kvStore[ joinpath(mipLevelName, cartesian_range2string(chunkGlobalRange)) ] = encode( chk, C)
+        ba.kvStore[ joinpath(mipLevelName, cartesian_range2string(chunkGlobalRange)) ] = 
+                                                                            encode( chk, C)
     end
 end 
 

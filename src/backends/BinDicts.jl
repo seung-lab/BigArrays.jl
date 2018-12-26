@@ -18,8 +18,8 @@ struct BinDict <: AbstractBigArrayBackend
     end 
 end 
 
-@inline function Base.show(self::BinDict)
-    println("BinDict in ", get_path(self))
+@inline function Base.show(io::IO, self::BinDict)
+    write(io, "BinDict in " * get_path(self))
 end 
 
 @inline function get_path(self::BinDict)
@@ -42,7 +42,7 @@ end
 end 
 
 @inline function Base.setindex!( self::BinDict, value::Array, key::AbstractString )
-    data = reinterpret(UInt8, value[:])
+    data = reinterpret(UInt8, value[:]) |> Vector
     fileName = joinpath( get_path(self), key )
     write(fileName, data)
 end
@@ -63,3 +63,4 @@ end
 
 
 end # module
+
