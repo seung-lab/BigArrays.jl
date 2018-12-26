@@ -31,10 +31,10 @@ struct BlosclzCoding <: AbstractBigArrayCoding end
 struct GzipCoding    <: AbstractBigArrayCoding end
 struct ZstdCoding    <: AbstractBigArrayCoding end 
 
-const DEFAULT_CODING = RawCoding
+const DEFAULT_CODING = GzipCoding
 
 function encode(data::Array, coding::Type{RawCoding})
-    reinterpret(UInt8, data[:])
+    reinterpret(UInt8, data[:]) |> Vector
 end
 
 function decode(data::Vector{UInt8}, coding::Type{RawCoding})
@@ -42,7 +42,6 @@ function decode(data::Vector{UInt8}, coding::Type{RawCoding})
 end
 
 function encode(data::Array, coding::Type{ZstdCoding})
-    #Libz.deflate(reinterpret(UInt8, data[:]))
     transcode(ZstdCompressor, reinterpret(UInt8, vec(data)) |> Vector)
 end
 

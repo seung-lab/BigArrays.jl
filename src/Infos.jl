@@ -22,7 +22,7 @@ export InfoScale
 
 const ENCODING_MAP = Dict{String,Any}(
     # note that the raw encoding in cloud storage will be automatically gzip encoded!
-    "raw"       => GzipCoding,
+    "raw"       => RawCoding,
     "jpeg"      => JPEGCoding,
     "blosclz"   => BlosclzCoding,
     "gzip"      => GzipCoding, 
@@ -89,7 +89,7 @@ function Base.Dict(self::InfoScale)
         end 
     end
     d[:size] = [get_volume_size(self)...]
-    d[:voxelOffset] = [Tuple(get_voxel_offset(self))...]
+    d[:voxel_offset] = [Tuple(get_voxel_offset(self))...]
     return d
 end
 
@@ -120,8 +120,17 @@ end
 end 
 
 @inline function get_encoding(self::InfoScale) self.encoding end
+@inline function set_encoding!(self::InfoScale, encoding::DataType) 
+    self.encoding = encoding 
+end
 
-@inline function set_encoding!(self::InfoScale, encoding::Symbol)
+"""
+    set_encoding!(self::InfoScale, encoding::Symbol)
+
+the encoding map is: 
+$(ENCODING_MAP)
+"""
+@inline function set_encoding!(self::InfoScale, encoding::String)
     self.encoding = ENCODING_MAP[encoding]
 end 
 
@@ -328,7 +337,7 @@ end
 @inline function get_encoding(self::Info, mip::Integer=1)
     InfoScales.get_encoding( get_scales(self)[mip] )
 end 
-@inline function set_encoding!(self::Info, encoding::DataType)
+@inline function set_encoding!(self::Info, encoding::Union{String, DataType})
     for scale in get_scales(self)
         InfoScales.set_encoding!(scale, encoding)
     end 

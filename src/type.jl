@@ -21,6 +21,7 @@ end
 function BigArray(layerPath::AbstractString; mip::Int=1, fillMissing::Bool=DEFAULT_FILL_MISSING, 
                   mode::Symbol=DEFAULT_MODE)
     if isdir(layerPath) || startswith(layerPath, "file://")
+        layerPath = replace(layerPath, "file://"=>"/", count=1)
         d = BinDict(layerPath)
     elseif startswith(layerPath, "gs://")
         d = GSDict(layerPath)
@@ -35,7 +36,7 @@ end
 @inline function BigArray(d::AbstractBigArrayBackend; mip::Int=1, 
                           fillMissing::Bool=DEFAULT_FILL_MISSING, 
                           mode::Symbol=DEFAULT_MODE)  
-    info = d["info"] |> Info 
+    info = d["info"] |> Info
     return BigArray(d, info, mip, fillMissing, mode)
 end
 
@@ -93,7 +94,7 @@ function BigArray(info::Info{T,N}; mip::Integer=1,
     datasetDir = joinpath(layerDir, string(Infos.get_key(info, 1))) 
     mkdir(layerDir)
     mkdir(datasetDir)
-    d = BinDict(datasetDir)
+    d = BinDict(layerDir)
     
     # write the info as file 
     write(joinpath(layerDir, "info"), JSON.json(Dict(info)))
