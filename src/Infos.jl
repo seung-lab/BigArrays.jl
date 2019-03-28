@@ -188,9 +188,9 @@ mutable struct Info{T,N}
     scales      ::Vector{InfoScale}
     skeletons   ::String 
     layerType   ::Symbol
-    function Info(dataType::DataType, mesh::String, 
+    function Info{T,N}(dataType::DataType, mesh::String, 
                   numChannels::Int, scales::Vector{InfoScale},
-                 skeletons::String, layerType::Symbol)
+                 skeletons::String, layerType::Symbol) where {T,N}
         if numChannels == 1
             # this is a 3D volume 
             N = 3
