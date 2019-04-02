@@ -68,7 +68,6 @@ end
 
 """
     BigArray( d::AbstractBigArrayBackend, info::Info;
-                  mip::Int = 0,
                   fillMissing::Bool=fillMissing,
                   mode::Symbol=DEFAULT_MODE)
 

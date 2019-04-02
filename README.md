@@ -66,13 +66,14 @@ Any other storage backends could be mounted in local filesystem will work. For e
 | zstd          | :white_check_mark: | :white_check_mark: |
 | blosclz       | :white_check_mark: | :white_check_mark: |
 | jpeg          | :x:                | :white_check_mark: |
+Notethat jpeg decompression code was commented out in default due to a ImageMagick.jl issue. You have to import ImageMagick first to load the correct version of libraries first.
 
 ## supported data types
 Bool, UInt8, UInt16, UInt32, UInt64, Float32, Float64.
 easy to add more, please raise an issue if you need more.
 
 # Installation
-Install [Julia 1.0 or 0.7](https://julialang.org/downloads/), in the REPL, press `]` to enter package management mode, then 
+Install [Julia 1.0](https://julialang.org/downloads/), in the REPL, press `]` to enter package management mode, then 
 ```
 add BigArrays
 ```

@@ -1,4 +1,4 @@
-julia 0.7
+julia 1.0
 JSON
 Memoize
 Blosc
@@ -7,7 +7,7 @@ CodecZlib
 CodecZstd
 OffsetArrays
 JSON
-ImageMagick 
+#ImageMagick 
 
 AWSCore
 AWSS3
