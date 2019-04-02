@@ -14,7 +14,7 @@ using JSON
     @test Info(d) != nothing
 
     info = Info(d)
-    Infos.get_properties_in_mip_level(info, 0)
+    Infos.get_properties_in_mip_level(info, 1)
 
     d = Dict(info)
     @test isa(d, Dict{Symbol, Any})

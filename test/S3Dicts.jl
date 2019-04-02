@@ -3,10 +3,9 @@ using BigArrays
 using BigArrays.S3Dicts
 using OffsetArrays
 
-d = S3Dict( "s3://seunglab/jpwu/test/image/4_4_40/" )
+d = S3Dict( "s3://seunglab/jpwu/test/image/" )
 ba = BigArray(d)
 
-@show ba.chunkSize
 @show ndims(ba)
 @show size(ba)
 @show eltype(ba)
@@ -24,7 +23,7 @@ a = rand(UInt8, 256,256,16)
 end 
 
 @testset "test 3D UInt32 segmentation reading and saving" begin 
-    d = S3Dict( "s3://seunglab/jpwu/test/segmentation/4_4_40/" )
+    d = S3Dict( "s3://seunglab/jpwu/test/segmentation/" )
     # ba = BigArray( d, configDict )
     ba = BigArray(d)
 
@@ -35,7 +34,7 @@ end
 end 
 
 @testset "test UInt64 segmenation with uint64" begin 
-    d = S3Dict( "s3://seunglab/jpwu/test/segmentation-uint64/4_4_40/" )
+    d = S3Dict( "s3://seunglab/jpwu/test/segmentation-uint64/" )
     ba = BigArray(d)
 
     a = rand(UInt64, 256,256,16)
@@ -46,7 +45,7 @@ end
 
 
 @testset "test affinity map" begin 
-    d = S3Dict( "s3://seunglab/jpwu/test/affinitymap/4_4_40/" )
+    d = S3Dict( "s3://seunglab/jpwu/test/affinitymap/" )
     ba = BigArray(d)
 
     a = rand(Float32, 256,256,16,3)
@@ -59,7 +58,7 @@ end
 end 
 
 @testset "test semantic map" begin 
-    d = S3Dict( "s3://seunglab/jpwu/test/semanticmap/4_4_40/" )
+    d = S3Dict( "s3://seunglab/jpwu/test/semanticmap/" )
     a = rand(Float32, 256,256,16,4)
     ba = BigArray(d)
 

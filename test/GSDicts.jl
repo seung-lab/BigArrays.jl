@@ -5,10 +5,9 @@ using OffsetArrays
 
 
 @testset "test 3D image reading and saving" begin  
-    d = GSDict( "gs://seunglab/jpwu/test/image/4_4_40/" )
-    ba = BigArray(d)
+    d = GSDict( "gs://seunglab/jpwu/test/image" )
+    ba = BigArray(d; mode=:sequential)
 
-    @show ba.chunkSize
     @show ndims(ba)
     @show size(ba)
     @show eltype(ba)
@@ -22,7 +21,7 @@ using OffsetArrays
 end
 
 @testset "test UInt32 segmentation" begin 
-    d = GSDict( "gs://seunglab/jpwu/test/segmentation/4_4_40/" )
+    d = GSDict( "gs://seunglab/jpwu/test/segmentation/" )
     # ba = BigArray( d, configDict )
     ba = BigArray(d)
     a = rand(UInt32, 256,256,16)
@@ -33,7 +32,7 @@ end
 
 
 @testset "test UInt64 segmenation with uint64" begin 
-    d = GSDict( "gs://seunglab/jpwu/test/segmentation-uint64/4_4_40/" )
+    d = GSDict( "gs://seunglab/jpwu/test/segmentation-uint64/" )
     ba = BigArray(d)
     a = rand(UInt64, 256,256,16)
     @time ba[257:512, 257:512, 17:32] = a
@@ -43,8 +42,8 @@ end
 
 
 @testset "test affinity map" begin 
-    d = GSDict( "gs://seunglab/jpwu/test/affinitymap/4_4_40/" )
-    ba = BigArray(d)
+    d = GSDict( "gs://seunglab/jpwu/test/affinitymap/" )
+    ba = BigArray(d; mode=:sequential)
 
     a = rand(Float32, 256,256,16,3)
     @time ba[257:512, 257:512, 17:32, 1:3] = a
@@ -55,7 +54,7 @@ end
 end 
 
 @testset "test semantic map" begin 
-    d = GSDict( "gs://seunglab/jpwu/test/semanticmap/4_4_40/" )
+    d = GSDict( "gs://seunglab/jpwu/test/semanticmap/" )
     a = rand(Float32, 256,256,16,4)
     ba = BigArray(d)
 

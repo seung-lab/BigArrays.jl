@@ -1,6 +1,5 @@
 using BigArrays.S3Dicts
 using Test
-using Libz
 
 @testset "test s3 IO" begin 
     as3  = S3Dict("s3://seunglab/jpwu/test/image/4_4_40")

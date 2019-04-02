@@ -1,13 +1,14 @@
 using BigArrays
 using BigArrays.BinDicts
+using BigArrays.Infos
 using Test
 using OffsetArrays 
 
 # prepare directory
-tempDir = tempname()
-@show tempDir
-datasetDir = joinpath(tempDir, "6_6_30")
-mkdir(tempDir)
+layerDir = tempname()
+@show layerDir
+datasetDir = joinpath(layerDir, "6_6_30")
+mkdir(layerDir)
 mkdir(datasetDir)
 infoString = """
 {"num_channels": 1, "type": "image", "data_type": "uint8", "scales": [
@@ -16,10 +17,17 @@ infoString = """
 ]} 
 """
 
-write( joinpath(tempDir, "info"), infoString )
+write( joinpath(layerDir, "info"), infoString )
+
+
+@testset "test bigarray construction" begin 
+    info = Info()
+    ba = BigArray(info)
+    BigArrays.commit_info(ba)
+end 
 
 @testset "test BinDict" begin 
-    h = BinDict(datasetDir)
+    h = BinDict(layerDir)
     a = rand(UInt8, 20)
     h["test"] = a
     b = h["test"]
@@ -30,8 +38,10 @@ write( joinpath(tempDir, "info"), infoString )
     @test all(a.==b)
 end # testset 
 
-@testset "test file protocol" begin 
-    ba = BigArray( ("file:/" * datasetDir) )
+@testset "test file protocol" begin
+    # use sequential mode for debug
+    ba = BigArray( ("file:/" * layerDir); mode=:sequential )
+    println("info: ", BigArrays.get_info(ba))
     a = rand(UInt8, 200,200,10)
     ba[1:200, 1:200, 1:10] = a
     b = ba[1:200, 1:200, 1:10]
@@ -39,7 +49,7 @@ end # testset
 end 
 
 @testset "test IO of BigArray with backend of BinDict" begin
-    ba = BigArray( datasetDir )
+    ba = BigArray( layerDir )
     a = rand(UInt8, 200,200,10)
     ba[1:200, 1:200, 1:10] = a
     b = ba[1:200, 1:200, 1:10]
@@ -47,7 +57,7 @@ end
 end # end of testset
 
 @testset "test negative coordinate" begin 
-    ba = BigArray( BinDict(datasetDir) )
+    ba = BigArray( BinDict(layerDir) )
     a = rand(UInt8, 200,200,2000)
     ba[-199:0, -99:100, -4:1995] = a
     b = ba[-199:0, -99:100, -4:1995] 
@@ -55,7 +65,7 @@ end # end of testset
 end # end of testset
 
 #@testset "test sharedarray mode..." begin 
-#    ba = BigArray( BinDict(datasetDir); mode=:sharedarray )
+#    ba = BigArray( BinDict(layerDir); mode=:sharedarray )
 #    a = rand(UInt8, 200,200,2000)
 #    ba[-199:0, -99:100, -4:1995] = a
 #    b = ba[-199:0, -99:100, -4:1995] 
@@ -64,7 +74,7 @@ end # end of testset
 
 
 @testset "test aligned IO crossing the volume boundary" begin 
-    ba = BigArray( BinDict(datasetDir) )
+    ba = BigArray( BinDict(layerDir) )
     a = rand(UInt8, 200,200,10)
     # respect the volume size, the chunk range over volume size will not be written
     ba[101:300, 101:300, 2006:2015] = a
@@ -75,7 +85,7 @@ end # end of testset
 end # end of testset
 
 @testset "test nonaligned IO crossing the volume boundary" begin 
-    ba = BigArray( BinDict(datasetDir) )
+    ba = BigArray( BinDict(layerDir) )
     a = rand(UInt8, 190,190,9)
     # respect the volume size, the chunk range over volume size will not be written
     ba[101:290, 101:290, 2006:2014] = a
@@ -87,10 +97,10 @@ end # end of testset
 
 
 infoString = replace(infoString, "gzip" => "zstd")
-write( joinpath(tempDir, "info"), infoString )
+write( joinpath(layerDir, "info"), infoString )
 
 @testset "test IO of BigArray with backend of BinDict with zstd compression" begin
-    ba = BigArray( BinDict(datasetDir) )
+    ba = BigArray( BinDict(layerDir) )
     a = rand(UInt8, 200,200,10)
     ba[1:200, 1:200, 1:10] = a
     b = ba[1:200, 1:200, 1:10]
@@ -99,10 +109,10 @@ end # end of testset
 
 
 infoString = replace(infoString, "zstd"=>"blosclz")
-write( joinpath(tempDir, "info"), infoString )
+write( joinpath(layerDir, "info"), infoString )
 
 @testset "test IO of BigArray with backend of BinDict with blosclz compression" begin
-    ba = BigArray( BinDict(datasetDir) )
+    ba = BigArray( BinDict(layerDir) )
     a = rand(UInt8, 200,200,10)
     ba[1:200, 1:200, 1:10] = a
     b = ba[1:200, 1:200, 1:10]
@@ -111,7 +121,7 @@ end # end of testset
 
 
 #@testset "test merge function with backend of BinDict with blosclz compression" begin
-#    ba = BigArray( BinDict(datasetDir) )
+#    ba = BigArray( BinDict(layerDir) )
 #    a = rand(UInt8, 200,200,10)
 #    @inbounds merge!(ba, OffsetArray(a, 1:200, 1:200, 1:10))
 #    @inbounds b = ba[1:200, 1:200, 1:10]
@@ -119,13 +129,12 @@ end # end of testset
 #end # end of testset
 
 infoString = replace(infoString, "blosclz" => "zstd")
-write( joinpath(tempDir, "info"), infoString )
+write( joinpath(layerDir, "info"), infoString )
 
 @testset "test dataset not aligned starting from 0" begin 
-    global datasetDir
-    datasetDir = joinpath(tempDir, "12_12_30")
+    datasetDir = joinpath(layerDir, "12_12_30")
     mkdir(datasetDir)
-    ba = BigArray( BinDict(datasetDir) )
+    ba = BigArray( BinDict(layerDir); mip=2 )
     a = rand(UInt8, 200,200,10)
     ba[204:403, 204:403, 103:112] = a
     b = ba[204:403, 204:403, 103:112] 
@@ -133,9 +142,7 @@ write( joinpath(tempDir, "info"), infoString )
 end # end of testset
 
 @testset "test dataset not aligned starting from 0 and negative coordinates" begin
-    global datasetDir
-    datasetDir = joinpath(tempDir, "12_12_30") 
-    ba = BigArray( BinDict(datasetDir) )
+    ba = BigArray( BinDict(layerDir); mip=2 )
     a = rand(UInt8, 200,200,10)
     ba[-96:103, -296:-97, -2:7] = a
     b = ba[-96:103, -296:-97, -2:7] 
@@ -144,4 +151,4 @@ end # end of testset
 
 
 # clean the temporary directory
-rm(tempDir; recursive=true)
+rm(layerDir; recursive=true)

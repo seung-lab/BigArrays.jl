@@ -16,10 +16,11 @@
 #	setindex!(S.s, x, i...)
 #end
 
-function setindex_sharedarray_worker(ba::BigArray{D,T,N,C}, 
+function setindex_sharedarray_worker(ba::BigArray{D,T,N}, 
                                 sharedBuffer::OffsetArray{T,N,SharedArray{T,N}},
                                 chunkGlobalRange::CartesianIndices{N},
-                                rangeInBuffer::CartesianIndices{N}) where {D,T,N,C}
+                                rangeInBuffer::CartesianIndices{N}) where {D,T,N}
+    C = get_encoding(ba)
     try
         @inbounds block = sharedBuffer[rangeInBuffer]
         @inbounds ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encode( block, C)
@@ -34,8 +35,8 @@ end
     put array in RAM to a BigArray
 this version uses channel to control the number of asynchronized request
 """
-function setindex_sharedarray!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
-                       idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N,C}
+function setindex_sharedarray!( ba::BigArray{D,T,N}, buf::Array{T,N},
+                       idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N}
     idxes = colon2unit_range(buf, idxes)
     sharedBuffer = OffsetArray(SharedArray(buf), idxes...)
     # check alignment
@@ -56,8 +57,8 @@ function setindex_sharedarray!( ba::BigArray{D,T,N,C}, buf::Array{T,N},
     println("saving speed: $(sizeof(sharedBuffer)/1024/1024/elapsed) MB/s")
 end 
 
-function getindex_sharedarray_worker!(ba::BigArray{D,T,N,C}, jobs::RemoteChannel, 
-                                sharedBuffer::OffsetArray{T,N,SharedArray{T,N}}) where {D,T,N,C}
+function getindex_sharedarray_worker!(ba::BigArray{D,T,N}, jobs::RemoteChannel, 
+                                sharedBuffer::OffsetArray{T,N,SharedArray{T,N}}) where {D,T,N}
     baRange = CartesianIndices(ba)
     blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = take!(jobs)
     if any(map((x,y)->x>y, first(globalRange).I, last(baRange).I)) || 
@@ -75,7 +76,7 @@ function getindex_sharedarray_worker!(ba::BigArray{D,T,N,C}, jobs::RemoteChannel
     #println("processing block in global range: $(cartesian_range2string(globalRange))")
     try 
         data = ba.kvStore[ cartesian_range2string(chunkGlobalRange) ]
-        chk = Codings.decode(data, C)
+        chk = Codings.decode(data, get_encoding(ba))
         chk = reshape(reinterpret(T, chk), chunkSize)
         @inbounds sharedBuffer[globalRange] = chk[rangeInChunk]
     catch err 
@@ -90,8 +91,7 @@ function getindex_sharedarray_worker!(ba::BigArray{D,T,N,C}, jobs::RemoteChannel
     nothing 
 end 
 
-function getindex_sharedarray(ba::BigArray{D,T,N,C}, 
-                              idxes::Union{UnitRange, Int}...) where {D,T,N,C}
+function getindex_sharedarray(ba::BigArray, idxes::Union{UnitRange, Int}...)
     t1 = time()
     sz = map(length, idxes)
     # it seems that the default value is automatically set to zero

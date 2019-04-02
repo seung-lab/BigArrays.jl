@@ -5,7 +5,7 @@ using Test
 #include(joinpath(dirname(@__FILE__), "google_cloud/storage_util.jl"))
 
 @testset "test gsdict io" begin 
-    kv  = GSDict("gs://seunglab/jpwu/test/image/4_4_40")
+    kv  = GSDict("gs://seunglab/jpwu/test/image")
 
     println("test fakekey error capture")
     try 
