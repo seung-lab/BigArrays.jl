@@ -10,7 +10,7 @@ all the manipulation effects in the x,y,z dimension
 struct BigArray{D<:AbstractBigArrayBackend, T<:Real, N} <: AbstractBigArray
     kvStore     :: D
     info        :: Info{T,N}
-    mip         :: Int
+    mip         :: Integer
     fillMissing :: Bool 
     mode        :: Symbol
 end
@@ -18,7 +18,7 @@ end
 """
     BigArray(layerPath::AbstractString; mip=1, fillMissing=true, mod::Symbol=DEFAULT_MODE)
 """
-function BigArray(layerPath::AbstractString; mip::Int=1, fillMissing::Bool=DEFAULT_FILL_MISSING, 
+function BigArray(layerPath::AbstractString; mip::Integer=1, fillMissing::Bool=DEFAULT_FILL_MISSING, 
                   mode::Symbol=DEFAULT_MODE)
     if isdir(layerPath) || startswith(layerPath, "file://")
         layerPath = replace(layerPath, "file://"=>"/", count=1)
@@ -33,7 +33,7 @@ function BigArray(layerPath::AbstractString; mip::Int=1, fillMissing::Bool=DEFAU
     BigArray(d; mip=mip, fillMissing=fillMissing, mode=mode)
 end 
 
-@inline function BigArray(d::AbstractBigArrayBackend; mip::Int=1, 
+@inline function BigArray(d::AbstractBigArrayBackend; mip::Integer=1, 
                           fillMissing::Bool=DEFAULT_FILL_MISSING, 
                           mode::Symbol=DEFAULT_MODE)  
     info = d["info"] |> Info
@@ -41,20 +41,20 @@ end
 end
 
 @inline function BigArray( d::AbstractBigArrayBackend, info::Vector{UInt8};
-                  mip::Int=1, fillMissing::Bool=DEFAULT_FILL_MISSING,
+                  mip::Integer=1, fillMissing::Bool=DEFAULT_FILL_MISSING,
                   mode::Symbol=DEFAULT_MODE) 
     info = Codings.decode(info, GzipCoding) |> Info 
     BigArray(d, string(info), mip, fillMissing, mode)
 end 
 
 @inline function BigArray( d::AbstractBigArrayBackend, info::AbstractString;
-                            mip::Int=1, fillMissing::Bool=DEFAULT_FILL_MISSING,
+                            mip::Integer=1, fillMissing::Bool=DEFAULT_FILL_MISSING,
                             mode::Symbol=DEFAULT_MODE)  
     BigArray(d, Info(info), mip, fillMissing, mode)
 end 
 
 @inline function BigArray( d::AbstractBigArrayBackend, infoConfig::Dict{Symbol, Any};
-                            mip::Int=1, fillMissing::Bool=DEFAULT_FILL_MISSING, 
+                            mip::Integer=1, fillMissing::Bool=DEFAULT_FILL_MISSING, 
                             mode::Symbol=DEFAULT_MODE) 
     BigArray(d, Info(infoConfig)info, mip, fillMissing, mode) 
 end
@@ -73,13 +73,13 @@ Parameters:
     mode: the io mode with options in {multithreading, sequential, multiprocesses, sharedarray}
 """
 function BigArray( d::AbstractBigArrayBackend, info::Info{T,N};
-                  mip::Int=1, fillMissing::Bool=DEFAULT_FILL_MISSING,
+                  mip::Integer=1, fillMissing::Bool=DEFAULT_FILL_MISSING,
                   mode::Symbol=DEFAULT_MODE) where {T,N} 
     BigArray(d, info, mip, fillMissing, mode) 
 end
 
 """
-    BigArray(info::Info; fillMissing::Bool=DEFAULT_FILL_MISSING, mode=DEFAULT_MODE)
+    BigArray(info::Info; mip::Integer=1, fillMissing::Bool=DEFAULT_FILL_MISSING, mode=DEFAULT_MODE)
     
 create a new directory with random name. 
 this function was designed for test and benchmark.

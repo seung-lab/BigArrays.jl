@@ -1,9 +1,7 @@
+__precompile__()
 module BigArrays
 
 abstract type AbstractBigArray <: AbstractArray{Any,Any} end
-# import ImageMagick first to avoid a zlib version issue 
-# https://github.com/JuliaIO/ImageMagick.jl/issues/130
-using ImageMagick
 
 using Distributed
 using OffsetArrays 

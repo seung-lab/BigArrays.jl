@@ -17,7 +17,7 @@ function setindex_sequential!( ba::BigArray{D,T,N}, buf::Array{T,N},
 end 
 
 """
-    get_index_sequential(ba::BigArray, idxes::Union{UnitRange, Int}...) 
+    getindex_sequential(ba::BigArray, idxes::Union{UnitRange, Int}...) 
 sequential implementation for debuging 
 """
 function getindex_sequential(ba::BigArray{D, T, N}, 
@@ -41,7 +41,8 @@ function getindex_sequential(ba::BigArray{D, T, N},
         try 
             #println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))")
             key = cartesian_range2string(chunkGlobalRange)
-            v = ba.kvStore[joinpath(mipLevelName, cartesian_range2string(chunkGlobalRange))]
+            keyPath = joinpath(mipLevelName, cartesian_range2string(chunkGlobalRange))
+            v = ba.kvStore[keyPath]
             v = Codings.decode(v, C)
             chk = reinterpret(T, v) |> Vector
             chk = reshape(chk, chunkSize)

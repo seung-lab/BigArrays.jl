@@ -22,7 +22,7 @@ export InfoScale
 
 const ENCODING_MAP = Dict{String,Any}(
     # note that the raw encoding in cloud storage will be automatically gzip encoded!
-    "raw"       => RawCoding,
+    "raw"       => GzipCoding,
     "jpeg"      => JPEGCoding,
     "blosclz"   => BlosclzCoding,
     "gzip"      => GzipCoding, 

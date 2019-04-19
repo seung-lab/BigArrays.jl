@@ -7,7 +7,7 @@ CodecZlib
 CodecZstd
 OffsetArrays
 JSON
-#ImageMagick 
+ImageMagick 
 
 AWSCore
 AWSS3
