@@ -24,7 +24,7 @@ include("backends/include.jl")
 
 const WORKER_POOL = WorkerPool( workers() )
 const GZIP_MAGIC_NUMBER = UInt8[0x1f, 0x8b, 0x08]  
-const TASK_NUM = 4
+const TASK_NUM = 8
 const CHUNK_CHANNEL_SIZE = 2
 
 include("type.jl")

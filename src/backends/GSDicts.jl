@@ -51,7 +51,7 @@ end
     storage(:Object, :delete, d.bucketName, joinpath(d.keyPrefix, key))
 end
 
-function Base.setindex!( d::GSDict, value::Vector{UInt8}, key::String )
+function Base.setindex!( d::GSDict, value::Vector{UInt8}, key::AbstractString )
 	#authorize( d.googleSession )
     if all(value[1:3] .== GZIP_MAGIC_NUMBER)
         return storage(:Object, :insert, d.bucketName; 
@@ -68,7 +68,7 @@ function Base.setindex!( d::GSDict, value::Vector{UInt8}, key::String )
     end 
 end
 
-function Base.setindex!( d::GSDict, value::Dict, key::String )
+function Base.setindex!( d::GSDict, value::Dict, key::AbstractString )
 	#authorize( d.googleSession )
     response = storage(:Object, :insert, d.bucketName; 
                        name=joinpath(d.keyPrefix, key), 
@@ -76,7 +76,7 @@ function Base.setindex!( d::GSDict, value::Dict, key::String )
                        content_type="application/json")
 end
 
-function Base.setindex!( d::GSDict, value::AbstractString, key::String )
+function Base.setindex!( d::GSDict, value::AbstractString, key::AbstractString )
 	#authorize( d.googleSession )
     response = storage(:Object, :insert, d.bucketName; 
                        name=joinpath(d.keyPrefix, key), 
@@ -84,7 +84,7 @@ function Base.setindex!( d::GSDict, value::AbstractString, key::String )
                        content_type="text/plain")
 end
 
-function Base.getindex( d::GSDict, key::String)
+function Base.getindex( d::GSDict, key::AbstractString)
     try
 
         return storage(:Object, :get, d.bucketName, joinpath(d.keyPrefix, key))
@@ -122,10 +122,10 @@ function get_credential_filename()
         return expanduser("~/.google_credentials.json")
     elseif isfile(joinpath(dirname(@__FILE__), "../.google_credentials.json"))
         return joinpath(dirname(@__FILE__), "../.google_credentials.json")
-    elseif isfile("/secrets/google-secret.json")
-        return "/secrets/google-secret.json"
     elseif isfile(expanduser("~/.cloudvolume/secrets/google-secret.json"))
         return expanduser("~/.cloudvolume/secrets/google-secret.json")
+    elseif isfile("/secrets/google-secret.json")
+        return "/secrets/google-secret.json"
     else
         # to enable building of this package 
         @warn("google credential file is not in default place!")
