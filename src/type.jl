@@ -1,5 +1,5 @@
 
-const DEFAULT_MODE = :multithreads 
+const DEFAULT_MODE = :taskthreads 
 const DEFAULT_FILL_MISSING = true 
 
 """
@@ -134,16 +134,12 @@ end
 """
     Base.setindex!( ba::BigArray{D,T,N}, buf::Array{T,N},
 
-setindex with different mode: sharedarray, multithreads, multiprocesses, sequential 
+setindex with different mode: taskthreads, sequential 
 """
 @inline function Base.setindex!( ba::BigArray{D,T,N}, buf::Array{T,N},
             idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N}
-    if ba.mode == :multithreads 
-        setindex_multithreads!(ba, buf, idxes...)
-    elseif ba.mode == :multiprocesses 
-        setindex_multiprocesses!(ba, buf, idxes...)
-    elseif ba.mode == :sharedarray 
-        setindex_sharedarray!(ba, buf, idxes...,)
+    if ba.mode == :taskthreads 
+        setindex_taskthreads!(ba, buf, idxes...)
     elseif ba.mode == :sequential 
         setindex_sequential!(ba, buf, idxes...)
     else 
@@ -208,15 +204,11 @@ end
 """
     Base.getindex( ba::BigArray, idxes::Union{UnitRange, Int}...) 
 
-get index with different modes: sharedarray, multi_processes, multithreads, sequential 
+get index with different modes: taskthreads, sequential 
 """
 @inline function Base.getindex( ba::BigArray, idxes::Union{UnitRange, Int}...) 
-    if ba.mode == :sharedarray 
-        getindex_sharedarray(ba, idxes...,)
-    elseif ba.mode == :multi_processes 
-        getindex_multiprocesses(ba, idxes...)
-    elseif ba.mode == :multithreads 
-        getindex_multithreads(ba, idxes...)
+    if ba.mode == :taskthreads 
+        getindex_taskthreads(ba, idxes...)
     elseif ba.mode == :sequential 
         getindex_sequential(ba, idxes...)
     else 
