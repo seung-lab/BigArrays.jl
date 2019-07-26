@@ -1,3 +1,5 @@
+const TASK_NUM = 8
+const CHUNK_CHANNEL_SIZE = 2
 
 function setindex_multithreads_worker( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N} ) where {D,T,N}
     C = get_encoding(ba)

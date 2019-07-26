@@ -1,5 +1,5 @@
 
-const DEFAULT_MODE = :taskthreads 
+const DEFAULT_MODE = :multithreads 
 const DEFAULT_FILL_MISSING = true 
 
 """
@@ -134,17 +134,20 @@ end
 """
     Base.setindex!( ba::BigArray{D,T,N}, buf::Array{T,N},
 
-setindex with different mode: taskthreads, sequential 
+setindex with different mode: taskthreads, multithreads, sequential 
 """
 @inline function Base.setindex!( ba::BigArray{D,T,N}, buf::Array{T,N},
             idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N}
     if ba.mode == :taskthreads 
-        setindex_taskthreads!(ba, buf, idxes...)
+        setindex_fun! = setindex_taskthreads!
+    elseif ba.mode == :multithreads
+        setindex_fun! = setindex_multithreads!
     elseif ba.mode == :sequential 
-        setindex_sequential!(ba, buf, idxes...)
+        setindex_fun! = setindex_sequential!
     else 
         error("only support modes of multithreads, multiprocesses, sharedarray, sequential")
-    end 
+    end
+    setindex_fun!(ba, buf, idxes...) 
 end 
 
 @inline function Base.CartesianIndices(ba::BigArray{D,T,N}) where {D,T,N}
@@ -204,16 +207,19 @@ end
 """
     Base.getindex( ba::BigArray, idxes::Union{UnitRange, Int}...) 
 
-get index with different modes: taskthreads, sequential 
+get index with different modes: taskthreads, multithreads, sequential 
 """
 @inline function Base.getindex( ba::BigArray, idxes::Union{UnitRange, Int}...) 
     if ba.mode == :taskthreads 
-        getindex_taskthreads(ba, idxes...)
+        getindex_fun = getindex_taskthreads
+    elseif ba.mode == :multithreads
+        getindex_fun = getindex_multithreads
     elseif ba.mode == :sequential 
-        getindex_sequential(ba, idxes...)
+        getindex_fun = getindex_sequential
     else 
         error("only support mode of (sharedarray, multi_processes, multithreads, sequential)")
-    end 
+    end
+    getindex_fun(ba, idxes...) 
 end
 
 @inline function get_key_value_store(ba::BigArray) ba.kvStore end 

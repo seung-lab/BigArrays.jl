@@ -4,7 +4,7 @@ using Test
 # test storage utility first
 #include(joinpath(dirname(@__FILE__), "google_cloud/storage_util.jl"))
 
-@testset "test gsdict io" begin 
+@testset "\ntest gsdict io" begin 
     kv  = GSDict("gs://seunglab/jpwu/test/image")
 
     println("test fakekey error capture")
