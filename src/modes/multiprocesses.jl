@@ -71,7 +71,7 @@ function getindex_multiprocesses( ba::BigArray{D, T, N}, idxes::Union{UnitRange,
     jobs    = RemoteChannel(()->Channel{Tuple}( channelSize ));
     results = RemoteChannel(()->Channel{OffsetArray}( channelSize ));
     
-    baIter = ChunkIterator(idxes, ba.chunkSize; offset=ba.offset)
+    baIter = ChunkIterator(idxes, ba.chunkSize; offset=get_offset(ba))
     
     @sync begin
         @async begin

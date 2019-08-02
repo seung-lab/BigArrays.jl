@@ -1,34 +1,35 @@
-function setindex_taskthreads_worker!(buf::Array{T,N}, ba::BigArray{D,T,N}, iter::Tuple ) where {D,T,N}
+mutex = Threads.ReentrantLock()
+#iomutex = Threads.ReentrantLock()
+
+function setindex_taskthreads_encode_worker( channel::Channel{Tuple}, buf::Array{T,N}, 
+                                        ba::BigArray{D,T,N}, iter::Tuple) where {D,T,N}
+    println("encode worker at ", Threads.threadid())
     C = get_encoding(ba)
+    (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) = iter 
+    chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = adjust_volume_boundary(ba, 
+                                    chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer)
+    chk = buf[rangeInBuffer]
     mipLevelName = get_mip_level_name(ba)
-    (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) = iter
-    # println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))")
-    chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = adjust_volume_boundary(ba, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer)
-    delay = 0.05
-    for t in 1:4
-        try
-            chk = buf[rangeInBuffer]
-            key = joinpath(mipLevelName, cartesian_range2string( chunkGlobalRange ) )
-            ba.kvStore[ key ] = encode( chk, C)
-            # for the GSDicts backend, the haskey function will really download the object!
-            #@assert haskey(ba.kvStore, key)
-            return 
-        catch err 
-            println("catch an error while saving in BigArray: $err")
-            @show typeof(err)
-            @show stacktrace()
-            if t==4
-                println("rethrow the error: $err")
-                rethrow()
-            else 
-                @warn("retry for the $(t)'s time.")
-            end 
-            sleep(delay*(0.8+(0.4*rand())))
-            delay *= 10
-            println("retry for the $(t)'s time: $(string(chunkGlobalRange))")
-        end
-    end
+    key = joinpath(mipLevelName, cartesian_range2string( chunkGlobalRange ) )
+    data = encode( chk, C)
+    
+    println("encode worker at ", Threads.threadid(), " start ingesting data to channel")
+    Threads.lock(mutex)
+    put!(channel, (data, iter))
+    Threads.unlock(mutex)
+    println("encode worker at ", Threads.threadid(), " finished work.")
 end 
+
+function upload_worker(channel::Channel{Tuple}, ba::BigArray{D,T,N}) where {D,T,N}
+    println("upload worker at ", Threads.threadid())
+    #Threads.lock(mutex)
+    (data, iter) = take!(channel)
+    #Threads.unlock(mutex)
+    println("upload worker at ", Threads.threadid(), " have get the data from channel.")
+    (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) = iter 
+    ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = data
+    println("upload worker at ", Threads.threadid(), " finished work.")
+end
 
 """
     put array in RAM to a BigArray backend
@@ -45,71 +46,85 @@ function setindex_taskthreads!( ba::BigArray{D,T,N}, buf::Array{T,N},
                     "the start of index should align with BigArray chunk size"
     t1 = time()
     baIter = ChunkIterator(idxes, chunkSize; offset=offset)
-
-    tasks = Threads.Task[]
-    for iter in baIter
-        task = Threads.@spawn setindex_taskthreads_worker!(buf, ba, iter)
-        push!(tasks, task)
-    end
-    for task in tasks
-        wait(task)
-    end
+    channel = Channel{Tuple}( CHUNK_CHANNEL_SIZE )
+    @sync begin
+        @async begin
+            for iter in baIter
+                Threads.@spawn setindex_taskthreads_encode_worker(channel, buf, ba, iter)
+            end
+        end
+        for iter in baIter
+            @async upload_worker(channel, ba)
+        end
+        close(channel)
+    end 
     elapsed = time() - t1 # sec
     println("saving speed: $(sizeof(buf)/1024/1024/elapsed) MB/s")
 end 
 
-function getindex_taskthreads_worker!(buf::Array{T,N}, ba::BigArray{D,T,N}, iter::Tuple) where {D,T,N}
+function getindex_taskthreads_download_worker(channel::Channel{Tuple}, 
+                                        ba::BigArray{D,T,N}, iter::Tuple) where {D,T,N} 
     baRange = CartesianIndices(ba)
-    C = get_encoding(ba)
-    mipLevelName = get_mip_level_name(ba)
-    (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) = iter
-    if any(map((x,y)->x>y, first(globalRange).I, last(baRange).I)) ||
-        any(map((x,y)->x<y, last(globalRange).I, first(baRange).I))
+    blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = iter
+    chunkSize = (last(chunkGlobalRange) - first(chunkGlobalRange) + one(CartesianIndex{N})).I
+    if any(map((x,y)->x>y, first(globalRange).I, last(baRange).I)) || 
+                        any(map((x,y)->x<y, last(globalRange).I, first(baRange).I))
         @warn("out of volume range, keep it as zeros")
-        return  
+        return
     end
-    chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = 
-        adjust_volume_boundary(ba, chunkGlobalRange, globalRange, 
-                                rangeInChunk, rangeInBuffer)
-    chunkSize = (last(chunkGlobalRange) - first(chunkGlobalRange) + 
-                    one(CartesianIndex{N})).I
-    try 
-        #println("global range of chunk: $(cartesian_range2string(chunkGlobalRange))")
-        key = cartesian_range2string(chunkGlobalRange)
-        v = ba.kvStore[joinpath(mipLevelName, cartesian_range2string(chunkGlobalRange))]
-        v = Codings.decode(v, C)
-        chk = reinterpret(T, v)
-        chk = reshape(chk, chunkSize)
-        @inbounds buf[rangeInBuffer] = chk[rangeInChunk]
-    catch err 
-        if isa(err, KeyError) && ba.fillMissing
-            println("no suck key in kvstore: $(err), will fill this block as zeros")
-            return
-        else
-            println("catch an error while getindex in BigArray: $err with type of $(typeof(err))")
-            rethrow()
-        end
-    end 
+    chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = adjust_volume_boundary(ba, 
+                                    chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer)
+    data = ba.kvStore[ cartesian_range2string(chunkGlobalRange) ]
+
+    Threads.lock(mutex)
+    put!(channel, (data, iter))
+    Threads.unlock(mutex)
 end
 
-function getindex_taskthreads( ba::BigArray, idxes::Union{UnitRange, Int}...)
+function getindex_taskthreads_decode_worker!(dataChannel::Channel{Tuple}, ret::OffsetArray{T,N}) where {T,N}
+    Threads.lock(mutex)
+    data, iter = take!(dataChannel)
+    Threads.unlock(mutex)
+
+    blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = iter
+    chk = Codings.decode(data, get_encoding(ba))
+    chk = reshape(reinterpret(T, chk), chunkSize)
+    chk = chk[rangeInChunk]
+    block = OffsetArray(chk, cartesian_range2unit_range(globalRange)...) 
+    ret[axes(block)...] = parent(block)
+end 
+
+function getindex_taskthreads( ba::BigArray{D, T, N}, idxes::Union{UnitRange, Int}...) where {D,T,N}
     t1 = time()
     sz = map(length, idxes)
-    buf = zeros(eltype(ba), sz)
-    baIter = ChunkIterator(idxes, get_chunk_size(ba); offset=get_offset(ba))
-    
-    tasks = Threads.Task[]
-    for iter in baIter
-        task = Threads.@spawn getindex_taskthreads_worker!(buf, ba, iter)
-        push!(tasks, task)
-    end
-    for task in tasks
-        wait(task)
-    end
+    ret = OffsetArray(zeros(T, sz), idxes...)
 
-    for iter in baIter
+    channelSize = cld( nworkers(), 2 )
+    channel = Channel{OffsetArray}( channelSize );
+    
+    baIter = ChunkIterator(idxes, ba.chunkSize; offset=get_offset(ba))
+    
+    @sync begin
+        @async begin
+            for iter in baIter
+                @async getindex_taskthreads_download_worker(channel, ba) 
+            end
+            close(channel)
+        end
+        # control the number of concurrent requests here
+        for iter in baIter
+            Threads.@spawn getindex_taskthreads_decode_worker(ret, channel)
+        end
+
+        @async begin 
+            for iter in baIter
+                block = take!(results)
+                ret[axes(block)...] = parent(block)
+            end
+        end
     end
     elapsed = time() - t1 # seconds 
-    println("cutout speed: $(sizeof(buf)/1024/1024/elapsed) MB/s")
-    OffsetArray(buf, idxes...)
-end
+    println("cutout speed: $(sizeof(ret)/1024/1024/elapsed) MB/s")
+    # handle single element indexing, return the single value
+    ret 
+end 

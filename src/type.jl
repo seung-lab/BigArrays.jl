@@ -1,5 +1,5 @@
 
-const DEFAULT_MODE = :multithreads 
+const DEFAULT_MODE = :taskthreads 
 const DEFAULT_FILL_MISSING = true 
 
 """
