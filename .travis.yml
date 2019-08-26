@@ -15,7 +15,7 @@ before_install:
     - sudo apt install -y libmagickwand-dev
 
 script:
-    - julia -e 'import Pkg; Pkg.add(pwd()); Pkg.test("BigArrays", coverage=true)'
+    - julia -e 'import Pkg; Pkg.add(PackageSpec(path=pwd())); Pkg.test("BigArrays", coverage=true)'
 
 matrix:
     allow_failures:
