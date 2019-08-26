@@ -182,27 +182,19 @@ end # end of InfoScales module
 
 using .InfoScales 
 
-mutable struct Info{T,N} 
+mutable struct Info{T} 
     mesh        ::String 
     numChannels ::Int 
     scales      ::Vector{InfoScale}
     skeletons   ::String 
     layerType   ::Symbol
     function Info(dataType::DataType, mesh::String, 
-                  numChannels::Int, scales::Vector{InfoScale},
-                 skeletons::String, layerType::Symbol)
-        if numChannels == 1
-            # this is a 3D volume 
-            N = 3
-        elseif numChannels > 1
-            # we have multiple channels, this should be a 4D volume 
-            N = 4
-        else 
-            @error "num of channels should be a positive integer."
-        end 
-        new{dataType, N}(mesh,numChannels, scales, skeletons, layerType)
+                    numChannels::Int, scales::Vector{InfoScale},
+                    skeletons::String, layerType::Symbol)
+        new{dataType}(mesh, numChannels, scales, skeletons, layerType)
     end 
 end
+
 
 """
     Info(; 
@@ -323,7 +315,7 @@ end
 @inline function get_offset(self::Info, mip::Integer=1) 
     InfoScales.get_offset( self.scales[mip] ) 
 end
-@inline function set_offset!(self::Info{N,T}, offset::CartesianIndex{N}, mip::Integer) where {T,N}
+@inline function set_offset!(self::Info{T}, offset::CartesianIndex{N}, mip::Integer) where {T,N}
     InfoScales.set_offset!( self.scales[mip], offset) 
 end
 
@@ -346,6 +338,23 @@ end
 
 @inline function get_num_channels(self::Info) self.numChannels end 
 @inline function set_num_channels!(self::Info, numChannels::Int) self.numChannels=numChannels end 
+
+@inline function get_data_type(info::Info{T}) where T 
+    T 
+end
+
+@inline function Base.size(self::Info)
+    get_volume_size(self, 0)
+end
+
+function Base.ndims(info::Info) 
+    numChannels = get_num_channels(info)
+    if numChannels == 1
+        return 3
+    else
+        return 4
+    end
+end
 
 @inline function get_scales(self::Info) self.scales end 
 @inline function set_scales!(self::Info, scales::Vector{InfoScale}) self.scales=scales end 

@@ -1,7 +1,7 @@
 """
 sequential function, good for debuging
 """
-function setindex_sequential!( ba::BigArray{D,T,N}, buf::Array{T,N},
+function setindex_sequential!( ba::BigArray{D,T}, buf::Array{T,N},
                              idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N}
     idxes = colon2unit_range(buf, idxes)
     C = get_encoding(ba)
@@ -20,7 +20,7 @@ end
     getindex_sequential(ba::BigArray, idxes::Union{UnitRange, Int}...) 
 sequential implementation for debuging 
 """
-function getindex_sequential(ba::BigArray{D, T, N}, 
+function getindex_sequential(ba::BigArray{D,T}, 
                              idxes::Union{UnitRange, Int}...) where {D,T,N}
     t1 = time()
     sz = map(length, idxes)

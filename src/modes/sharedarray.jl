@@ -16,7 +16,7 @@
 #	setindex!(S.s, x, i...)
 #end
 
-function setindex_sharedarray_worker(ba::BigArray{D,T,N}, 
+function setindex_sharedarray_worker(ba::BigArray{D,T}, 
                                 sharedBuffer::OffsetArray{T,N,SharedArray{T,N}},
                                 chunkGlobalRange::CartesianIndices{N},
                                 rangeInBuffer::CartesianIndices{N}) where {D,T,N}
@@ -35,7 +35,7 @@ end
     put array in RAM to a BigArray
 this version uses channel to control the number of asynchronized request
 """
-function setindex_sharedarray!( ba::BigArray{D,T,N}, buf::Array{T,N},
+function setindex_sharedarray!( ba::BigArray{D,T}, buf::Array{T,N},
                        idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N}
     idxes = colon2unit_range(buf, idxes)
     sharedBuffer = OffsetArray(SharedArray(buf), idxes...)
@@ -57,7 +57,7 @@ function setindex_sharedarray!( ba::BigArray{D,T,N}, buf::Array{T,N},
     println("saving speed: $(sizeof(sharedBuffer)/1024/1024/elapsed) MB/s")
 end 
 
-function getindex_sharedarray_worker!(ba::BigArray{D,T,N}, jobs::RemoteChannel, 
+function getindex_sharedarray_worker!(ba::BigArray{D,T}, jobs::RemoteChannel, 
                                 sharedBuffer::OffsetArray{T,N,SharedArray{T,N}}) where {D,T,N}
     baRange = CartesianIndices(ba)
     blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = take!(jobs)

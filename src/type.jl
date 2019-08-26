@@ -7,12 +7,31 @@ const DEFAULT_FILL_MISSING = true
 currently, assume that the array dimension (x,y,z,...) is >= 3
 all the manipulation effects in the x,y,z dimension
 """
-struct BigArray{D<:AbstractBigArrayBackend, T<:Real, N} <: AbstractBigArray
+struct BigArray{D<:AbstractBigArrayBackend, T<:Real} <: AbstractBigArray
     kvStore     :: D
-    info        :: Info{T,N}
+    info        :: Info{T}
     mip         :: Integer
     fillMissing :: Bool 
     mode        :: Symbol
+end
+
+"""
+    BigArray( d::AbstractBigArrayBackend, info::Info;
+                  fillMissing::Bool=fillMissing,
+                  mode::Symbol=DEFAULT_MODE)
+
+Parameters:
+    d: the bigarray storage backend 
+    info: the info containing the metadata
+    mip: mip level. Note that mip 1 is the highest resolution. 
+            the mip level is like a image pyramid with difference downsampled levels.
+    fillMissing: whether fill the missing blocks in the storage backend with zeros or not. 
+    mode: the io mode with options in {multithreading, sequential, multiprocesses, sharedarray}
+"""
+function BigArray( d::AbstractBigArrayBackend, info::Info;
+                  mip::Integer=1, fillMissing::Bool=DEFAULT_FILL_MISSING,
+                  mode::Symbol=DEFAULT_MODE) 
+    BigArray(d, info, mip, fillMissing, mode) 
 end
 
 """
@@ -60,34 +79,15 @@ end
 end
 
 """
-    BigArray( d::AbstractBigArrayBackend, info::Info;
-                  fillMissing::Bool=fillMissing,
-                  mode::Symbol=DEFAULT_MODE)
-
-Parameters:
-    d: the bigarray storage backend 
-    info: the info containing the metadata
-    mip: mip level. Note that mip 1 is the highest resolution. 
-            the mip level is like a image pyramid with difference downsampled levels.
-    fillMissing: whether fill the missing blocks in the storage backend with zeros or not. 
-    mode: the io mode with options in {multithreading, sequential, multiprocesses, sharedarray}
-"""
-function BigArray( d::AbstractBigArrayBackend, info::Info{T,N};
-                  mip::Integer=1, fillMissing::Bool=DEFAULT_FILL_MISSING,
-                  mode::Symbol=DEFAULT_MODE) where {T,N} 
-    BigArray(d, info, mip, fillMissing, mode) 
-end
-
-"""
     BigArray(info::Info; mip::Integer=1, fillMissing::Bool=DEFAULT_FILL_MISSING, mode=DEFAULT_MODE)
     
 create a new directory with random name. 
 this function was designed for test and benchmark.
 we need another function the clear the whole array 
 """
-function BigArray(info::Info{T,N}; mip::Integer=1,
+function BigArray(info::Info; mip::Integer=1,
                   fillMissing::Bool=DEFAULT_FILL_MISSING, 
-                  mode=DEFAULT_MODE) where {T,N}
+                  mode=DEFAULT_MODE)
     # prepare directory
     layerDir = tempname()
     datasetDir = joinpath(layerDir, string(Infos.get_key(info, 1))) 
@@ -103,12 +103,13 @@ end
 
 ######################### base functions #######################
 
-function Base.ndims(ba::BigArray{D,T,N}) where {D,T,N}
-    N
+@inline function Base.ndims(ba::BigArray)
+    info = get_info(ba)
+    ndims(info)
 end
 
-function Base.eltype( ba::BigArray{D,T,N} ) where {D, T, N}
-    return T
+@inline function Base.eltype( ba::BigArray{D,T} ) where {D, T}
+    T
 end
 
 function Base.size( ba::BigArray ) 
@@ -132,12 +133,13 @@ function Base.display(ba::BigArray)
 end
 
 """
-    Base.setindex!( ba::BigArray{D,T,N}, buf::Array{T,N},
+    Base.setindex!( ba::BigArray{D,T}, buf::Array{T,N},
 
 setindex with different mode: taskthreads, multithreads, sequential 
 """
-@inline function Base.setindex!( ba::BigArray{D,T,N}, buf::Array{T,N},
+@inline function Base.setindex!( ba::BigArray{D,T}, buf::Array{T,N},
             idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N}
+    @assert N == ndims(ba)
     if ba.mode == :taskthreads 
         setindex_fun! = setindex_taskthreads!
     elseif ba.mode == :multithreads
@@ -150,7 +152,8 @@ setindex with different mode: taskthreads, multithreads, sequential
     setindex_fun!(ba, buf, idxes...) 
 end 
 
-@inline function Base.CartesianIndices(ba::BigArray{D,T,N}) where {D,T,N}
+@inline function Base.CartesianIndices(ba::BigArray)
+    N = ndims(ba)
     offset = get_offset(ba)
     start = offset + one(CartesianIndex{N})
     stop = offset + CartesianIndex(get_volume_size(ba))
@@ -239,9 +242,9 @@ end
     Infos.get_key(get_info(ba), get_mip(ba)) |> string 
 end 
 
-@inline function get_chunk_size(ba::BigArray{D,T,N}) where {D,T,N} 
+@inline function get_chunk_size(ba::BigArray) 
     chunkSize = Infos.get_chunk_size(get_info(ba), get_mip(ba))
-    if N == 3
+    if ndims(ba) == 3
         return chunkSize 
     else 
         return (chunkSize..., get_num_channels(ba))
@@ -254,18 +257,18 @@ end
     Infos.set_chunk_size(info, chunkSize[1:3])
 end 
 
-@inline function get_offset(ba::BigArray{D,T,N}) where {D,T,N}
+@inline function get_offset(ba::BigArray)
     offset = Infos.get_offset(get_info(ba), get_mip(ba))
-    if N == 3
+    if ndims(ba) == 3
         return offset 
     else 
         return CartesianIndex(offset.I..., 0)
     end 
 end
 
-@inline function get_volume_size(ba::BigArray{D,T,N}) where {D,T,N}
+@inline function get_volume_size(ba::BigArray)
     volumeSize = Infos.get_volume_size(get_info(ba), get_mip(ba))
-    if N == 3
+    if ndims(ba) == 3
         return volumeSize 
     else 
         return (volumeSize..., get_num_channels(ba))

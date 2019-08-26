@@ -1,4 +1,4 @@
-function setindex_multiprocesses_worker(block::Array{T,N}, ba::BigArray{D,T,N}, 
+function setindex_multiprocesses_worker(block::Array{T,N}, ba::BigArray{D,T}, 
                                         chunkGlobalRange::CartesianIndices{N}) where {D,T,N}
     C = get_encoding(ba)
     ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = encode( block, C)
@@ -8,7 +8,7 @@ end
     put array in RAM to a BigArray
 this version uses channel to control the number of asynchronized request
 """
-function setindex_multiprocesses!( ba::BigArray{D,T,N}, buf::Array{T,N},
+function setindex_multiprocesses!( ba::BigArray{D,T}, buf::Array{T,N},
                        idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N}
     idxes = colon2unit_range(buf, idxes)
     # check alignment
@@ -29,7 +29,7 @@ function setindex_multiprocesses!( ba::BigArray{D,T,N}, buf::Array{T,N},
     println("saving speed: $(sizeof(buf)/1024/1024/elapsed) MB/s")
 end 
 
-function getindex_multiprocesses_worker(ba::BigArray{D,T,N}, jobs::RemoteChannel, 
+function getindex_multiprocesses_worker(ba::BigArray{D,T}, jobs::RemoteChannel, 
                                 results::RemoteChannel) where {D,T,N}
     baRange = CartesianIndices(ba)
     blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = take!(jobs)

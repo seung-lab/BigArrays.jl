@@ -2,7 +2,7 @@ mutex = Threads.ReentrantLock()
 #iomutex = Threads.ReentrantLock()
 
 function setindex_taskthreads_encode_worker( channel::Channel{Tuple}, buf::Array{T,N}, 
-                                        ba::BigArray{D,T,N}, iter::Tuple) where {D,T,N}
+                                        ba::BigArray{D,T}, iter::Tuple) where {D,T,N}
     println("encode worker at ", Threads.threadid())
     C = get_encoding(ba)
     (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) = iter 
@@ -20,7 +20,7 @@ function setindex_taskthreads_encode_worker( channel::Channel{Tuple}, buf::Array
     println("encode worker at ", Threads.threadid(), " finished work.")
 end 
 
-function upload_worker(channel::Channel{Tuple}, ba::BigArray{D,T,N}) where {D,T,N}
+function upload_worker(channel::Channel{Tuple}, ba::BigArray)
     println("upload worker at ", Threads.threadid())
     #Threads.lock(mutex)
     (data, iter) = take!(channel)
@@ -35,7 +35,7 @@ end
     put array in RAM to a BigArray backend
 this version uses channel to control the number of asynchronized request
 """
-function setindex_taskthreads!( ba::BigArray{D,T,N}, buf::Array{T,N},
+function setindex_taskthreads!( ba::BigArray{D,T}, buf::Array{T,N},
                        idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N}
     idxes = colon2unit_range(buf, idxes)
     offset = get_offset(ba)
@@ -63,7 +63,7 @@ function setindex_taskthreads!( ba::BigArray{D,T,N}, buf::Array{T,N},
 end 
 
 function getindex_taskthreads_download_worker(channel::Channel{Tuple}, 
-                                        ba::BigArray{D,T,N}, iter::Tuple) where {D,T,N} 
+                                        ba::BigArray, iter::Tuple) 
     baRange = CartesianIndices(ba)
     blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = iter
     chunkSize = (last(chunkGlobalRange) - first(chunkGlobalRange) + one(CartesianIndex{N})).I
@@ -94,7 +94,7 @@ function getindex_taskthreads_decode_worker!(dataChannel::Channel{Tuple}, ret::O
     ret[axes(block)...] = parent(block)
 end 
 
-function getindex_taskthreads( ba::BigArray{D, T, N}, idxes::Union{UnitRange, Int}...) where {D,T,N}
+function getindex_taskthreads( ba::BigArray, idxes::Union{UnitRange, Int}...)
     t1 = time()
     sz = map(length, idxes)
     ret = OffsetArray(zeros(T, sz), idxes...)
