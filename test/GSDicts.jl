@@ -4,7 +4,7 @@ using BigArrays.GSDicts
 using OffsetArrays
 
 
-@testset "test 3D image reading and saving" begin  
+@testset "\ntest 3D image reading and saving" begin  
     d = GSDict( "gs://seunglab/jpwu/test/image" )
     ba = BigArray(d; mode=:sequential)
 
@@ -20,7 +20,7 @@ using OffsetArrays
     @test all(a.==b |> parent)
 end
 
-@testset "test UInt32 segmentation" begin 
+@testset "\ntest UInt32 segmentation" begin 
     d = GSDict( "gs://seunglab/jpwu/test/segmentation/" )
     # ba = BigArray( d, configDict )
     ba = BigArray(d)
@@ -31,7 +31,7 @@ end
 end 
 
 
-@testset "test UInt64 segmenation with uint64" begin 
+@testset "\ntest UInt64 segmenation with uint64" begin 
     d = GSDict( "gs://seunglab/jpwu/test/segmentation-uint64/" )
     ba = BigArray(d)
     a = rand(UInt64, 256,256,16)

@@ -6,8 +6,6 @@ abstract type AbstractBigArray <: AbstractArray{Any,Any} end
 using Distributed
 using OffsetArrays 
 using JSON
-using Distributed 
-using SharedArrays 
 
 #import .BackendBase: AbstractBigArrayBackend  
 # Note that DenseArray only works for memory stored Array
@@ -22,9 +20,7 @@ include("ChunkIterators.jl"); using .ChunkIterators;
 include("Infos.jl"); using .Infos;
 include("backends/include.jl") 
 
-const WORKER_POOL = WorkerPool( workers() )
 const GZIP_MAGIC_NUMBER = UInt8[0x1f, 0x8b, 0x08]  
-const TASK_NUM = 8
 const CHUNK_CHANNEL_SIZE = 2
 
 include("type.jl")

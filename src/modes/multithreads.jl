@@ -1,5 +1,5 @@
 
-function setindex_multithreads_worker( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N} ) where {D,T,N}
+function setindex_multithreads_worker( channel::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T} ) where {D,T,N}
     C = get_encoding(ba)
     mipLevelName = get_mip_level_name(ba)
     for (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in channel
@@ -36,7 +36,7 @@ end
     put array in RAM to a BigArray backend
 this version uses channel to control the number of asynchronized request
 """
-function setindex_multithreads!( ba::BigArray{D,T,N}, buf::Array{T,N},
+function setindex_multithreads!( ba::BigArray{D,T}, buf::Array{T,N},
                        idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N}
     idxes = colon2unit_range(buf, idxes)
     offset = get_offset(ba)
@@ -63,7 +63,7 @@ function setindex_multithreads!( ba::BigArray{D,T,N}, buf::Array{T,N},
     println("saving speed: $(sizeof(buf)/1024/1024/elapsed) MB/s")
 end 
 
-function getindex_multithreads_worker!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T,N}) where {D,T,N}
+function getindex_multithreads_worker!(chan::Channel{Tuple}, buf::Array{T,N}, ba::BigArray{D,T}) where {D,T,N}
     baRange = CartesianIndices(ba)
     C = get_encoding(ba)
     mipLevelName = get_mip_level_name(ba)

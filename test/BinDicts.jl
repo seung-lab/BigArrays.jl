@@ -26,7 +26,7 @@ write( joinpath(layerDir, "info"), infoString )
     BigArrays.commit_info(ba)
 end 
 
-@testset "test BinDict" begin 
+@testset "\ntest BinDict" begin 
     h = BinDict(layerDir)
     a = rand(UInt8, 20)
     h["test"] = a
@@ -38,7 +38,7 @@ end
     @test all(a.==b)
 end # testset 
 
-@testset "test file protocol" begin
+@testset "\ntest file protocol" begin
     # use sequential mode for debug
     ba = BigArray( ("file:/" * layerDir); mode=:sequential )
     println("info: ", BigArrays.get_info(ba))
@@ -48,7 +48,7 @@ end # testset
     @test all(a.==parent(b))
 end 
 
-@testset "test IO of BigArray with backend of BinDict" begin
+@testset "\ntest IO of BigArray with backend of BinDict" begin
     ba = BigArray( layerDir )
     a = rand(UInt8, 200,200,10)
     ba[1:200, 1:200, 1:10] = a
@@ -56,7 +56,7 @@ end
     @test all(a.==parent(b))
 end # end of testset
 
-@testset "test negative coordinate" begin 
+@testset "\ntest negative coordinate" begin 
     ba = BigArray( BinDict(layerDir) )
     a = rand(UInt8, 200,200,2000)
     ba[-199:0, -99:100, -4:1995] = a
@@ -73,7 +73,7 @@ end # end of testset
 #end # end of testset
 
 
-@testset "test aligned IO crossing the volume boundary" begin 
+@testset "\ntest aligned IO crossing the volume boundary" begin 
     ba = BigArray( BinDict(layerDir) )
     a = rand(UInt8, 200,200,10)
     # respect the volume size, the chunk range over volume size will not be written
@@ -84,7 +84,7 @@ end # end of testset
     @test all(c.==parent(b))
 end # end of testset
 
-@testset "test nonaligned IO crossing the volume boundary" begin 
+@testset "\ntest nonaligned IO crossing the volume boundary" begin 
     ba = BigArray( BinDict(layerDir) )
     a = rand(UInt8, 190,190,9)
     # respect the volume size, the chunk range over volume size will not be written
