@@ -18,8 +18,8 @@ end
 """
     BigArray(layerPath::AbstractString; mip=1, fillMissing=true, mod::Symbol=DEFAULT_MODE)
 """
-function BigArray(layerPath::AbstractString; mip::Integer=1, fillMissing::Bool=DEFAULT_FILL_MISSING, 
-                  mode::Symbol=DEFAULT_MODE)
+function BigArray(layerPath::AbstractString; mip::Integer=1,                            fillMissing::Bool=DEFAULT_FILL_MISSING, 
+                    mode::Symbol=DEFAULT_MODE)
     if isdir(layerPath) || startswith(layerPath, "file://")
         layerPath = replace(layerPath, "file://"=>"/", count=1)
         d = BinDict(layerPath)
