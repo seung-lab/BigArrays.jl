@@ -22,6 +22,8 @@ include("backends/include.jl")
 
 const GZIP_MAGIC_NUMBER = UInt8[0x1f, 0x8b, 0x08]  
 const CHUNK_CHANNEL_SIZE = 2
+const DEFAULT_MODE = :multithreads 
+const DEFAULT_FILL_MISSING = true 
 
 include("type.jl")
 # the getindex and setindex modes with multithreads, multiprocesses, sequential, sharedarray

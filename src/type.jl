@@ -1,7 +1,4 @@
 
-const DEFAULT_MODE = :multithreads 
-const DEFAULT_FILL_MISSING = true 
-
 """
     BigArray
 currently, assume that the array dimension (x,y,z,...) is >= 3
