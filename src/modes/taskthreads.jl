@@ -69,7 +69,7 @@ function getindex_taskthreads_download_worker(channel::Channel{Tuple},
     chunkSize = (last(chunkGlobalRange) - first(chunkGlobalRange) + one(CartesianIndex{N})).I
     if any(map((x,y)->x>y, first(globalRange).I, last(baRange).I)) || 
                         any(map((x,y)->x<y, last(globalRange).I, first(baRange).I))
-        @warn("out of volume range, keep it as zeros")
+        #@warn("out of volume range, keep it as zeros")
         return
     end
     chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = adjust_volume_boundary(ba, 

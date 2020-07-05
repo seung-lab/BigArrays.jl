@@ -32,7 +32,7 @@ function getindex_sequential(ba::BigArray{D,T},
     for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter  
         if any(map((x,y)->x>y, first(globalRange).I, last(baRange).I)) ||
             any(map((x,y)->x<y, last(globalRange).I, first(baRange).I))
-            @warn("out of volume range, keep it as zeros")
+            # @warn("out of volume range, keep it as zeros")
             continue
         end
         chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = adjust_volume_boundary(ba, 

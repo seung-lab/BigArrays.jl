@@ -34,7 +34,7 @@ function getindex_multiprocesses_worker(ba::BigArray{D,T}, jobs::RemoteChannel,
     baRange = CartesianIndices(ba)
     blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = take!(jobs)
     if any(map((x,y)->x>y, first(globalRange).I, last(baRange).I)) || any(map((x,y)->x<y, last(globalRange).I, first(baRange).I))
-        @warn("out of volume range, keep it as zeros")
+        # @warn("out of volume range, keep it as zeros")
         return
     end
     chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = adjust_volume_boundary(ba, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer)

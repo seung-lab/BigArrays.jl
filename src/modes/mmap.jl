@@ -31,7 +31,7 @@ function getindex_mmap(ba::BigArray{D, T, N, C},
     for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in baIter  
         if any(map((x,y)->x>y, first(globalRange).I, last(baRange).I)) ||
             any(map((x,y)->x<y, last(globalRange).I, first(baRange).I))
-            @warn("out of volume range, keep it as zeros")
+            # @warn("out of volume range, keep it as zeros")
             continue
         end
         chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = 

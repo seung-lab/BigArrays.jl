@@ -70,7 +70,7 @@ function getindex_multithreads_worker!(chan::Channel{Tuple}, buf::Array{T,N}, ba
     for (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) in chan
         if any(map((x,y)->x>y, first(globalRange).I, last(baRange).I)) ||
             any(map((x,y)->x<y, last(globalRange).I, first(baRange).I))
-            @warn("out of volume range, keep it as zeros")
+            @warn("out of volume: ", first(globalRange), ", ", last(globalRange))
             continue
         end
         chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = 
