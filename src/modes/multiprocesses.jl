@@ -62,7 +62,7 @@ function getindex_multiprocesses_worker(ba::BigArray{D,T}, jobs::RemoteChannel,
     end 
 end 
 
-function getindex_multiprocesses( ba::BigArray{D, T, N}, idxes::Union{UnitRange, Int}...) where {D,T,N}
+function getindex_multiprocesses( ba::BigArray, idxes::Union{UnitRange, Int}...)
     t1 = time()
     sz = map(length, idxes)
     ret = OffsetArray(zeros(T, sz), idxes...)

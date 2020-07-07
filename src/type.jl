@@ -141,6 +141,8 @@ setindex with different mode: taskthreads, multithreads, sequential
         setindex_fun! = setindex_taskthreads!
     elseif ba.mode == :multithreads
         setindex_fun! = setindex_multithreads!
+    elseif ba.mode == :multiprocesses 
+        setindex_fun! = setindex_multiprocesses!
     elseif ba.mode == :sequential 
         setindex_fun! = setindex_sequential!
     else 
@@ -214,6 +216,8 @@ get index with different modes: taskthreads, multithreads, sequential
         getindex_fun = getindex_taskthreads
     elseif ba.mode == :multithreads
         getindex_fun = getindex_multithreads
+    elseif ba.mode == :multiprocesses 
+        get_index_fun = getindex_multiprocesses
     elseif ba.mode == :sequential 
         getindex_fun = getindex_sequential
     else 
