@@ -60,16 +60,27 @@ function getindex_taskthreads_download_worker( ba::BigArray{D, T},
 
     blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = iter
     
+    # handle the volume boundary  
     chunkSize = (last(chunkGlobalRange) - first(chunkGlobalRange) + one(CartesianIndex{3})).I
+
     if any(map((x,y)->x>y, first(globalRange).I, last(baRange).I)) || 
                 any(map((x,y)->x<y, last(globalRange).I, first(baRange).I))
         #@warn("out of volume range, keep it as zeros")
         return
     end
     
-    data = ba.kvStore[ cartesian_range2string(chunkGlobalRange) ]
-
-    return data
+    try
+        data = ba.kvStore[ cartesian_range2string(chunkGlobalRange) ]
+        return data
+    catch err 
+        if isa(err, KeyError) && ba.fillMissing
+            println("no suck key in kvstore: $(err), will fill this block as zeros")
+            return nothing
+        else
+            println("catch an error while getindex in BigArray: $err with type of $(typeof(err))")
+            rethrow()
+        end
+    end
 end
 
 function getindex_taskthreads_decode_worker!(
@@ -77,6 +88,9 @@ function getindex_taskthreads_decode_worker!(
             futureData, iter::Tuple) where {D, T,N}
 
     data = fetch(futureData)
+    if data === nothing
+        return nothing
+    end
     # println("data: ", data)
     
     blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = iter
@@ -90,7 +104,7 @@ function getindex_taskthreads_decode_worker!(
     chk = reshape(reinterpret(T, chk), chunkSize)
     @inbounds buf[rangeInBuffer] = chk[rangeInChunk]
     
-    return 1
+    return nothing
 end 
 
 function getindex_taskthreads( ba::BigArray{D, T}, 
