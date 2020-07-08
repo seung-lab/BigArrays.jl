@@ -87,7 +87,6 @@ function getindex_taskthreads_decode_worker!(
     # handle the cross boundary case
     chunkSize = (last(chunkGlobalRange) - first(chunkGlobalRange) + 
                     one(last(chunkGlobalRange))).I
-
     chk = reshape(reinterpret(T, chk), chunkSize)
     @inbounds buf[rangeInBuffer] = chk[rangeInChunk]
     
@@ -110,23 +109,23 @@ function getindex_taskthreads( ba::BigArray{D, T},
             futureData = @async getindex_taskthreads_download_worker(ba, adjustedIter) 
             push!(dataList, (futureData, adjustedIter))
         end
-    end
 
-    #futures = []
-    ## control the number of concurrent requests here
-    #for (futureData, iter) in dataList
-    #    future = Threads.@spawn getindex_taskthreads_decode_worker!(ba, futureData, iter, ret)
-    #    push!(futures, future)
-    #end
-    ## synchronize the futures to wait for all the decoder tasks 
-    #@show futures[1:4]
-    #fetch(futures)
-    
-    # this serial version is used for debug
-    for (futureData, iter) in dataList
-        getindex_taskthreads_decode_worker!(ba, buf, futureData, iter)
+        futures = []
+        # control the number of concurrent requests here
+        for (futureData, iter) in dataList
+            future = Threads.@spawn getindex_taskthreads_decode_worker!(ba, buf, futureData, iter)
+            push!(futures, future)
+        end
+        # synchronize the futures to wait for all the decoder tasks 
+        @show futures[1:4]
+        fetch(futures)
+        
+        # this serial version is used for debug
+        #for (futureData, iter) in dataList
+        #    getindex_taskthreads_decode_worker!(ba, buf, futureData, iter)
+        #end
     end
-    
+        
     elapsed = time() - t1 # seconds 
     println("cutout speed: $(sizeof(buf)/1024/1024/elapsed) MB/s")
     # handle single element indexing, return the single value
