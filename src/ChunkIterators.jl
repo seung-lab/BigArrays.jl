@@ -80,6 +80,8 @@ function Base.iterate(iter::ChunkIterator{N},
     chunkGlobalRange = chunkid2global_range( chunkID, iter.chunkSize; offset=iter.offset )
     
     return (chunkID, chunkGlobalRange, cutoutGlobalRange, rangeInChunk, rangeInBuffer), nextState
-end  
+end 
+
+
 
 end # end of module

@@ -206,6 +206,15 @@ function adjust_volume_boundary(ba::BigArray, chunkGlobalRange::CartesianIndices
     return chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer
 end 
 
+@inline function adjust_iter(ba::BigArray, iter::Tuple)
+    blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = iter
+
+    chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = adjust_volume_boundary(
+        ba, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer)
+
+    return (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer)
+end
+
 """
     Base.getindex( ba::BigArray, idxes::Union{UnitRange, Int}...) 
 
