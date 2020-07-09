@@ -61,7 +61,8 @@ function getindex_taskthreads_download_worker( ba::BigArray{D, T},
     blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = iter
     
     # handle the volume boundary  
-    chunkSize = (last(chunkGlobalRange) - first(chunkGlobalRange) + one(CartesianIndex{3})).I
+    chunkSize = (last(chunkGlobalRange) - first(chunkGlobalRange) 
+                                    + one(last(chunkGlobalRange))).I
 
     if any(map((x,y)->x>y, first(globalRange).I, last(baRange).I)) || 
                 any(map((x,y)->x<y, last(globalRange).I, first(baRange).I))
