@@ -86,17 +86,24 @@ end
 
 function Base.getindex( d::GSDict, key::AbstractString)
     try
-
         return storage(:Object, :get, d.bucketName, joinpath(d.keyPrefix, key))
     catch err 
         if isa(err, HTTP.ExceptionRequest.StatusError) && err.status==404
-            throw(KeyError("NoSuchKey in Google Cloud Storage: $(key)"))
+            # @show d.bucketName, d.keyPrefix
+            @warn "NoSuchKey in Google Cloud Storage: $(key)"
+            return nothing
+        elseif isa(err, UndefVarError)
+            return nothing
         else
             println("get an unknown error: ", err)
             println("error type is: ", typeof(err))
             rethrow
         end 
     end 
+end
+
+@inline function Base.getindex(d::GSDict, key::Symbol)
+    d[string(key)]
 end
 
 function Base.keys( d::GSDict )

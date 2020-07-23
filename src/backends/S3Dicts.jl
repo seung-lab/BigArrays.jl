@@ -86,7 +86,8 @@ function Base.getindex(h::S3Dict, key::AbstractString)
     catch err
         @show err 
         if isa(err, AWSCore.AWSException) && err.code == "NoSuchKey"
-            throw(KeyError("NoSuchKey in AWS S3: $key"))
+            # throw(KeyError("NoSuchKey in AWS S3: $key"))
+            return nothing
         elseif isa(err, HTTP.ClosedError)
             display(err.e)
             rethrow()

@@ -70,18 +70,13 @@ function getindex_taskthreads_download_worker( ba::BigArray{D, T},
         return
     end
     
-    try
-        data = ba.kvStore[ cartesian_range2string(chunkGlobalRange) ]
-        return data
-    catch err 
-        if isa(err, KeyError) && ba.fillMissing
-            println("no suck key in kvstore: $(err), will fill this block as zeros")
-            return nothing
-        else
-            println("catch an error while getindex in BigArray: $err with type of $(typeof(err))")
-            rethrow()
-        end
+    key = joinpath(get_mip_level_name(ba), cartesian_range2string(chunkGlobalRange))
+    # @show ba.kvStore.bucketName, ba.kvStore.keyPrefix, key
+    data = ba.kvStore[ key ]
+    if data === nothing && !ba.fillMissing
+        throw(KeyError("no such key: $chunkGlobalRange"))
     end
+    return data
 end
 
 function getindex_taskthreads_decode_worker!(
@@ -132,7 +127,6 @@ function getindex_taskthreads( ba::BigArray{D, T},
             push!(futures, future)
         end
         # synchronize the futures to wait for all the decoder tasks 
-        @show futures[1:4]
         fetch(futures)
         
         # this serial version is used for debug
