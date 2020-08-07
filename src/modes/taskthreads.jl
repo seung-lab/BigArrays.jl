@@ -1,39 +1,29 @@
-mutex = Threads.ReentrantLock()
+#mutex = Threads.ReentrantLock()
 #iomutex = Threads.ReentrantLock()
 
-function setindex_taskthreads_encode_worker( channel::Channel{Tuple}, buf::Array{T,N}, 
+function setindex_taskthreads_encode_worker( buf::Array{T,N}, 
                                         ba::BigArray{D,T}, iter::Tuple) where {D,T,N}
-    println("encode worker at ", Threads.threadid())
+    #println("encode worker at ", Threads.threadid())
     C = get_encoding(ba)
     (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) = iter 
-    chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = adjust_volume_boundary(ba, 
-                                    chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer)
+    
     chk = buf[rangeInBuffer]
     mipLevelName = get_mip_level_name(ba)
     key = joinpath(mipLevelName, cartesian_range2string( chunkGlobalRange ) )
     data = encode( chk, C)
-    
-    println("encode worker at ", Threads.threadid(), " start ingesting data to channel")
-    Threads.lock(mutex)
-    put!(channel, (data, iter))
-    Threads.unlock(mutex)
-    println("encode worker at ", Threads.threadid(), " finished work.")
+    #println("encode worker at ", Threads.threadid(), " finished work.")
+    return data
 end 
 
-function upload_worker(channel::Channel{Tuple}, ba::BigArray)
-    println("upload worker at ", Threads.threadid())
-    #Threads.lock(mutex)
-    (data, iter) = take!(channel)
-    #Threads.unlock(mutex)
-    println("upload worker at ", Threads.threadid(), " have get the data from channel.")
+function upload_worker(futureData, iter::Tuple, ba::BigArray)
     (blockID, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer) = iter 
+    data = fetch(futureData)
+    # println("save data: ", data)
     ba.kvStore[ cartesian_range2string(chunkGlobalRange) ] = data
-    println("upload worker at ", Threads.threadid(), " finished work.")
 end
 
 """
     put array in RAM to a BigArray backend
-this version uses channel to control the number of asynchronized request
 """
 function setindex_taskthreads!( ba::BigArray{D,T}, buf::Array{T,N},
                        idxes::Union{UnitRange, Int, Colon} ... ) where {D,T,N}
@@ -46,85 +36,113 @@ function setindex_taskthreads!( ba::BigArray{D,T}, buf::Array{T,N},
                     "the start of index should align with BigArray chunk size"
     t1 = time()
     baIter = ChunkIterator(idxes, chunkSize; offset=offset)
-    channel = Channel{Tuple}( CHUNK_CHANNEL_SIZE )
+
+    encodedBlocks = []
+    for iter in baIter
+        adjustedIter = adjust_iter(ba, iter)
+        futureData = Threads.@spawn setindex_taskthreads_encode_worker(
+            buf, ba, adjustedIter)
+        push!(encodedBlocks, (futureData, adjustedIter))
+    end
+
     @sync begin
-        @async begin
-            for iter in baIter
-                Threads.@spawn setindex_taskthreads_encode_worker(channel, buf, ba, iter)
-            end
+        for (futureData, iter) in encodedBlocks
+            @async upload_worker(futureData, iter, ba)
         end
-        for iter in baIter
-            @async upload_worker(channel, ba)
-        end
-        close(channel)
     end 
     elapsed = time() - t1 # sec
     println("saving speed: $(sizeof(buf)/1024/1024/elapsed) MB/s")
 end 
 
-function getindex_taskthreads_download_worker(channel::Channel{Tuple}, 
-                                        ba::BigArray, iter::Tuple) 
+function getindex_taskthreads_download_worker( ba::BigArray{D, T}, 
+                                            iter::Tuple ) where {D, T}
     baRange = CartesianIndices(ba)
+
     blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = iter
-    chunkSize = (last(chunkGlobalRange) - first(chunkGlobalRange) + one(CartesianIndex{N})).I
+    
+    # handle the volume boundary  
+    chunkSize = (last(chunkGlobalRange) - first(chunkGlobalRange) 
+                                    + one(last(chunkGlobalRange))).I
+
     if any(map((x,y)->x>y, first(globalRange).I, last(baRange).I)) || 
-                        any(map((x,y)->x<y, last(globalRange).I, first(baRange).I))
+                any(map((x,y)->x<y, last(globalRange).I, first(baRange).I))
         #@warn("out of volume range, keep it as zeros")
         return
     end
-    chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = adjust_volume_boundary(ba, 
-                                    chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer)
-    data = ba.kvStore[ cartesian_range2string(chunkGlobalRange) ]
-
-    Threads.lock(mutex)
-    put!(channel, (data, iter))
-    Threads.unlock(mutex)
+    
+    key = joinpath(get_mip_level_name(ba), cartesian_range2string(chunkGlobalRange))
+    # @show ba.kvStore.bucketName, ba.kvStore.keyPrefix, key
+    data = ba.kvStore[ key ]
+    if data === nothing && !ba.fillMissing
+        throw(KeyError("no such key: $chunkGlobalRange"))
+    end
+    return data
 end
 
-function getindex_taskthreads_decode_worker!(dataChannel::Channel{Tuple}, ret::OffsetArray{T,N}) where {T,N}
-    Threads.lock(mutex)
-    data, iter = take!(dataChannel)
-    Threads.unlock(mutex)
+function getindex_taskthreads_decode_worker!(
+            ba::BigArray{D, T}, buf::Array{T, N},      
+            futureData, iter::Tuple) where {D, T,N}
 
+    data = fetch(futureData)
+    if data === nothing
+        return nothing
+    end
+    # println("data: ", data)
+    
     blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = iter
+
     chk = Codings.decode(data, get_encoding(ba))
+    chunkSize = get_chunk_size(ba)
+
+    # handle the cross boundary case
+    chunkSize = (last(chunkGlobalRange) - first(chunkGlobalRange) + 
+                    one(last(chunkGlobalRange))).I
     chk = reshape(reinterpret(T, chk), chunkSize)
-    chk = chk[rangeInChunk]
-    block = OffsetArray(chk, cartesian_range2unit_range(globalRange)...) 
-    ret[axes(block)...] = parent(block)
+    @inbounds buf[rangeInBuffer] = chk[rangeInChunk]
+    
+    return nothing
 end 
 
-function getindex_taskthreads( ba::BigArray, idxes::Union{UnitRange, Int}...)
+function getindex_taskthreads( ba::BigArray{D, T}, 
+                                idxes::Union{UnitRange, Int}...) where {D,T}
     t1 = time()
     sz = map(length, idxes)
-    ret = OffsetArray(zeros(T, sz), idxes...)
+    buf = zeros(eltype(ba), sz)
 
-    channelSize = cld( nworkers(), 2 )
-    channel = Channel{OffsetArray}( channelSize );
+    chunkSize = get_chunk_size(ba)
+    baIter = ChunkIterator(idxes, chunkSize; offset=get_offset(ba))
     
-    baIter = ChunkIterator(idxes, ba.chunkSize; offset=get_offset(ba))
+    dataList = []
     
-    @sync begin
-        @async begin
-            for iter in baIter
-                @async getindex_taskthreads_download_worker(channel, ba) 
-            end
-            close(channel)
-        end
-        # control the number of concurrent requests here
-        for iter in baIter
-            Threads.@spawn getindex_taskthreads_decode_worker(ret, channel)
-        end
-
-        @async begin 
-            for iter in baIter
-                block = take!(results)
-                ret[axes(block)...] = parent(block)
-            end
-        end
+    # serial version for debug
+    for iter in baIter
+        adjustedIter = adjust_iter(ba, iter)
+        futureData = @async getindex_taskthreads_download_worker(ba, adjustedIter) 
+        push!(dataList, (futureData, adjustedIter))
     end
+    for (futureData, iter) in dataList
+        getindex_taskthreads_decode_worker!(ba, buf, futureData, iter)
+    end
+
+    # @sync begin
+        # for iter in baIter
+        #    adjustedIter = adjust_iter(ba, iter)
+        #    futureData = @async getindex_taskthreads_download_worker(ba, adjustedIter) 
+        #    push!(dataList, (futureData, adjustedIter))
+        # end
+        # 
+        # futures = []
+        # control the number of concurrent requests here
+        # for (futureData, iter) in dataList
+            # future = Threads.@spawn getindex_taskthreads_decode_worker!(ba, buf, futureData, iter)
+            # push!(futures, future)
+        # end
+        # synchronize the futures to wait for all the decoder tasks 
+        # fetch(futures)
+    # end
+        
     elapsed = time() - t1 # seconds 
-    println("cutout speed: $(sizeof(ret)/1024/1024/elapsed) MB/s")
+    println("cutout speed: $(sizeof(buf)/1024/1024/elapsed) MB/s")
     # handle single element indexing, return the single value
-    ret 
+    OffsetArray(buf, idxes...) 
 end 

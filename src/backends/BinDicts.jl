@@ -35,9 +35,15 @@ end
 end 
 
 @inline function Base.getindex( self::BinDict, key::AbstractString)
-    open( joinpath( get_path(self), key )) do f
-        return read(f)
-        #Libz.inflate(data)
+    filePath = joinpath(get_path(self), key)
+
+    if isfile(filePath)
+        open( joinpath( get_path(self), key )) do f
+            return read(f)
+            #Libz.inflate(data)
+        end
+    else
+        return nothing
     end
 end 
 

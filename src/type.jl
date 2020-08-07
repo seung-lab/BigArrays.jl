@@ -34,8 +34,10 @@ end
 """
     BigArray(layerPath::AbstractString; mip=1, fillMissing=true, mod::Symbol=DEFAULT_MODE)
 """
-function BigArray(layerPath::AbstractString; mip::Integer=1,                            fillMissing::Bool=DEFAULT_FILL_MISSING, 
-                    mode::Symbol=DEFAULT_MODE)
+function BigArray(layerPath::AbstractString; 
+            mip::Integer=1, fillMissing::Bool=DEFAULT_FILL_MISSING, 
+            mode::Symbol=DEFAULT_MODE)
+    
     if isdir(layerPath) || startswith(layerPath, "file://")
         layerPath = replace(layerPath, "file://"=>"/", count=1)
         d = BinDict(layerPath)
@@ -141,6 +143,8 @@ setindex with different mode: taskthreads, multithreads, sequential
         setindex_fun! = setindex_taskthreads!
     elseif ba.mode == :multithreads
         setindex_fun! = setindex_multithreads!
+    elseif ba.mode == :multiprocesses 
+        setindex_fun! = setindex_multiprocesses!
     elseif ba.mode == :sequential 
         setindex_fun! = setindex_sequential!
     else 
@@ -180,10 +184,15 @@ function adjust_volume_boundary(ba::BigArray, chunkGlobalRange::CartesianIndices
         distanceOverBorder = globalRangeStop[i] - s
         if distanceOverBorder > 0
             globalRangeStop[i] -= distanceOverBorder
-            @assert globalRangeStop[i] == s
-            @assert globalRangeStop[i] > first(globalRange).I[i]
-            rangeInBufferStop[i] -= distanceOverBorder
-            rangeInChunkStop[i] -= distanceOverBorder
+            if globalRangeStop[i] > first(globalRange).I[i]
+                @assert globalRangeStop[i] == s
+                # @assert globalRangeStop[i] > first(globalRange).I[i]
+                rangeInBufferStop[i] -= distanceOverBorder
+                rangeInChunkStop[i] -= distanceOverBorder
+            else
+                # the volume size should be 0
+                globalRangeStop[i] = first(globalRange).I[i]
+            end
         end
     end
     start = first(chunkGlobalRange).I
@@ -204,6 +213,15 @@ function adjust_volume_boundary(ba::BigArray, chunkGlobalRange::CartesianIndices
     return chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer
 end 
 
+@inline function adjust_iter(ba::BigArray, iter::Tuple)
+    blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = iter
+
+    chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer = adjust_volume_boundary(
+        ba, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer)
+
+    return (blockId, chunkGlobalRange, globalRange, rangeInChunk, rangeInBuffer)
+end
+
 """
     Base.getindex( ba::BigArray, idxes::Union{UnitRange, Int}...) 
 
@@ -214,6 +232,8 @@ get index with different modes: taskthreads, multithreads, sequential
         getindex_fun = getindex_taskthreads
     elseif ba.mode == :multithreads
         getindex_fun = getindex_multithreads
+    elseif ba.mode == :multiprocesses 
+        get_index_fun = getindex_multiprocesses
     elseif ba.mode == :sequential 
         getindex_fun = getindex_sequential
     else 

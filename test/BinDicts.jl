@@ -53,8 +53,11 @@ end
     a = rand(UInt8, 200,200,10)
     ba[1:200, 1:200, 1:10] = a
     b = ba[1:200, 1:200, 1:10]
+    # println("a: ", a)
+    # println("b: ", b[1:10, 1:10, 1:10])
     @test all(a.==parent(b))
 end # end of testset
+
 
 @testset "\ntest negative coordinate" begin 
     ba = BigArray( BinDict(layerDir) )
@@ -63,14 +66,6 @@ end # end of testset
     b = ba[-199:0, -99:100, -4:1995] 
     @test all(a.==parent(b))
 end # end of testset
-
-#@testset "test sharedarray mode..." begin 
-#    ba = BigArray( BinDict(layerDir); mode=:sharedarray )
-#    a = rand(UInt8, 200,200,2000)
-#    ba[-199:0, -99:100, -4:1995] = a
-#    b = ba[-199:0, -99:100, -4:1995] 
-#    @test all(a.==parent(b))
-#end # end of testset
 
 
 @testset "\ntest aligned IO crossing the volume boundary" begin 
@@ -151,4 +146,4 @@ end # end of testset
 
 
 # clean the temporary directory
-rm(layerDir; recursive=true)
+# rm(layerDir; recursive=true)
