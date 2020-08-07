@@ -113,27 +113,33 @@ function getindex_taskthreads( ba::BigArray{D, T},
     baIter = ChunkIterator(idxes, chunkSize; offset=get_offset(ba))
     
     dataList = []
-    @sync begin
-        for iter in baIter
-            adjustedIter = adjust_iter(ba, iter)
-            futureData = @async getindex_taskthreads_download_worker(ba, adjustedIter) 
-            push!(dataList, (futureData, adjustedIter))
-        end
-
-        futures = []
-        # control the number of concurrent requests here
-        for (futureData, iter) in dataList
-            future = Threads.@spawn getindex_taskthreads_decode_worker!(ba, buf, futureData, iter)
-            push!(futures, future)
-        end
-        # synchronize the futures to wait for all the decoder tasks 
-        fetch(futures)
-        
-        # this serial version is used for debug
-        #for (futureData, iter) in dataList
-        #    getindex_taskthreads_decode_worker!(ba, buf, futureData, iter)
-        #end
+    
+    # serial version for debug
+    for iter in baIter
+        adjustedIter = adjust_iter(ba, iter)
+        futureData = @async getindex_taskthreads_download_worker(ba, adjustedIter) 
+        push!(dataList, (futureData, adjustedIter))
     end
+    for (futureData, iter) in dataList
+        getindex_taskthreads_decode_worker!(ba, buf, futureData, iter)
+    end
+
+    # @sync begin
+        # for iter in baIter
+        #    adjustedIter = adjust_iter(ba, iter)
+        #    futureData = @async getindex_taskthreads_download_worker(ba, adjustedIter) 
+        #    push!(dataList, (futureData, adjustedIter))
+        # end
+        # 
+        # futures = []
+        # control the number of concurrent requests here
+        # for (futureData, iter) in dataList
+            # future = Threads.@spawn getindex_taskthreads_decode_worker!(ba, buf, futureData, iter)
+            # push!(futures, future)
+        # end
+        # synchronize the futures to wait for all the decoder tasks 
+        # fetch(futures)
+    # end
         
     elapsed = time() - t1 # seconds 
     println("cutout speed: $(sizeof(buf)/1024/1024/elapsed) MB/s")

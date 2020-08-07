@@ -97,7 +97,7 @@ function Base.getindex( d::GSDict, key::AbstractString)
         else
             println("get an unknown error: ", err)
             println("error type is: ", typeof(err))
-            rethrow
+            rethrow()
         end 
     end 
 end
@@ -119,7 +119,11 @@ end
 function Base.haskey( d::GSDict, key::String )
     @warn("this haskey function will download the object rather than just check whether it exist or not")
     response = storage(:Object, :get, d.bucketName, joinpath(d.keyPrefix, key))
-    !GoogleCloud.api.iserror(response)
+    if response == nothing
+        return false
+    else
+        return true
+    end
 end
 
 ################### utility functions #################
